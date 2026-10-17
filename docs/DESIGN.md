@@ -140,7 +140,7 @@ If this is not set up, QR codes and pasted codes still work; only the tap-to-ope
 
 ## Hosting your own relay
 
-Assumes the Iroh relay (`iroh-relay`). Verify steps against https://docs.iroh.computer/iroh-services/relays/self-hosted before use; not yet tested by us.
+Written for the Iroh relay (`iroh-relay`). If M0 chooses the WebSocket relay instead, the same VM, domain and TLS steps apply with that program in place of `iroh-relay`. Verify steps against https://docs.iroh.computer/iroh-services/relays/self-hosted before use; not yet tested by us.
 
 Needs:
 - A VM with a public IP. 1 GB RAM is plenty: the relay is stateless and traffic is a few KB per sync.

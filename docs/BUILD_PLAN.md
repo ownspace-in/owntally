@@ -26,7 +26,7 @@ Names marked "candidate" must be confirmed in M0 before depending on them.
 | Crypto | Google Tink or libsodium bindings (candidate): Ed25519 signatures, XChaCha20-Poly1305 or AES-256-GCM, X25519 key exchange, HKDF |
 | Recovery phrase | BIP39 word list, 12 words (candidate: a small Kotlin BIP39 library) |
 | Same-room sync | Google Nearby Connections (`play-services-nearby`), with same-Wi-Fi discovery as fallback |
-| Internet sync | Iroh (Rust) through Kotlin bindings (see risk R1) |
+| Internet sync | Decided in M0 between Iroh (Rust, Kotlin bindings) and a simple WebSocket relay (OkHttp client). Both sit behind one `Transport` interface. See risk R1. |
 | QR | ZXing or ML Kit barcode scanning (candidate) |
 | Build and CI | Gradle Kotlin DSL, GitHub Actions running unit tests and lint on every pull request |
 | DI | Hilt, or manual wiring if that is simpler |
@@ -51,21 +51,38 @@ design/           mockup images
 
 | Id | Risk | Why it matters | How M0 handles it |
 |---|---|---|---|
-| R1 | Iroh's Kotlin bindings may not work on Android out of the box. The published package is reported to cover JVM only, and async calls are reported not to complete on Android. Community builds exist. | Internet sync and the relay depend on it. | M0 proves or disproves it on real phones. |
+| R1 | Iroh's Kotlin bindings may not work on Android out of the box. The published package is reported to cover JVM only, and async calls are reported not to complete on Android. Community builds exist. | Internet sync and the relay depend on it. | M0 tests it on real phones, and builds a WebSocket relay baseline so there is always a working fallback. |
 | R2 | Direct connections fail on many mobile networks. | Some pairs will only work through the relay. | M0 measures it with the real relay. |
 | R3 | Nearby Connections needs Google Play Services. | Phones without it cannot use same-room sync. | Same-Wi-Fi fallback is built in M6. |
 | R4 | Android restricts background work. | Sync only works while the app is open. | Accepted by design. Never promise background sync. |
 
 ## Milestones
 
-### M0. Spike: can two Android phones connect? (risk check, throwaway code)
+### M0. Spike: choose the internet transport (risk check, throwaway code)
 
-Build a tiny test app, not the product. Do these in order and write results into `docs/SPIKE_RESULTS.md`.
-1. Two phones on different mobile networks exchange a small message using Iroh, first directly, then forced through `relay.ownspace.in`. Try the official Kotlin package; if async calls hang on Android, try the community JNI-based build, or build the bindings from source for arm64.
-2. Two phones in the same room exchange a message with Nearby Connections.
-3. Measure and record: success or failure, time to connect, whether the link was direct or relayed, app size added, minimum Android version that worked.
+Build a tiny test app, not the product. Write results into `docs/SPIKE_RESULTS.md`. Define the `Transport` interface first (connect to a member, send bytes, receive bytes, report link type), so that every candidate below is plugged in behind it.
 
-Done when: the results file exists with a clear recommendation, and the owner has chosen the internet transport. If Iroh cannot work on Android, stop and ask the owner. Do not invent a different relay protocol.
+Step 1. Baseline: WebSocket relay (about one day).
+- Write a minimal relay program for `relay/`: phones connect outward over a secure WebSocket, identify by public key, and the relay forwards opaque messages between two phones in the same group room. It stores nothing and never decrypts.
+- Two phones on different mobile networks exchange a message through it, using OkHttp on Android.
+- This is the guaranteed fallback. Keep it small (a few hundred lines) and document it.
+
+Step 2. Iroh (time-box: a few days).
+- Two phones on different mobile networks exchange a message, first directly, then forced through `relay.ownspace.in`.
+- Try the official Kotlin package. If async calls hang on Android, try a community JNI-based build, or build the bindings from source for arm64.
+- Pass only if all of these hold: connection completes on real phones, no hanging calls, a relayed connection works through our relay, and app size growth is acceptable (record it).
+- If it fails, record why and stop. Do not spend more than the time-box.
+
+Step 3. Same room: two phones exchange a message with Nearby Connections.
+
+Step 4. Record, for each candidate: success or failure, time to connect, direct or relayed, app size added, minimum Android version that worked, number of runs.
+
+Decision rule (the owner approves):
+- If Iroh passes: use Iroh as the main transport, and keep the WebSocket relay behind the same interface as a backup.
+- If Iroh fails: use the WebSocket relay. Direct links across networks are then not available, and same-room sync stays on Nearby.
+- libp2p and WebRTC are not tested in M0. Try one only if Iroh fails and the owner decides direct links across networks are a must-have.
+
+Done when: `docs/SPIKE_RESULTS.md` has the numbers and a recommendation, the owner has chosen the transport, and the `Transport` interface is committed.
 
 ### M1. Core domain (pure Kotlin, JVM tests only)
 
@@ -115,7 +132,7 @@ Acceptance (two real phones): invite by QR, scan, approve, history arrives, add 
 
 ### M7. Internet sync and relay setting
 
-Iroh transport (as chosen in M0), per-group relay switch (admin only), default `https://relay.ownspace.in`, custom address field, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
+Internet transport (as chosen in M0), per-group relay switch (admin only), default `https://relay.ownspace.in`, custom address field, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
 
 Acceptance: two phones on different mobile networks sync, the status shows the right chip, and turning the relay off makes relay-only pairs show "Needs relay" instead of failing silently.
 
@@ -127,7 +144,7 @@ Acceptance: every state in screens 4 and 15 reachable and persisted, events merg
 
 ### M9. Relay and invite page (can run in parallel with M6 to M8)
 
-`relay/`: install steps, config, systemd unit, firewall notes, health check and uptime alert, written as a runbook that someone who has not seen the project can follow. `site/`: static page for `/j`, `/.well-known/assetlinks.json` (filled after the first signed build), hosted with HTTPS on `joinowntally.ownspace.in`.
+`relay/`: install steps for the chosen relay (the Iroh relay program, or the WebSocket relay from M0), config, systemd unit, firewall notes, health check and uptime alert, written as a runbook that someone who has not seen the project can follow. `site/`: static page for `/j`, `/.well-known/assetlinks.json` (filled after the first signed build), hosted with HTTPS on `joinowntally.ownspace.in`.
 
 Acceptance: from a fresh VM, the runbook produces a working relay. Tapping an invite link on a phone with the app opens it directly, and on a phone without it shows the install page.
 
