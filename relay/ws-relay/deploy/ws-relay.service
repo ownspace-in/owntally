@@ -1,0 +1,25 @@
+[Unit]
+Description=OwnTally WebSocket relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ws-relay -addr 127.0.0.1:8080 -trust-proxy
+Restart=on-failure
+RestartSec=2
+
+# Runs as a throwaway user with almost no access to the machine
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+LimitNOFILE=65536
+MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target

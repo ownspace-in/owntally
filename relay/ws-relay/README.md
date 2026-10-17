@@ -52,6 +52,8 @@ It speaks plain WebSocket and expects a TLS reverse proxy (Caddy) in front. Use 
 
 Flags: `-addr`, `-max-per-room`, `-trust-proxy`, `-connects-per-min`.
 
+Deploying on a VM: see [RUNBOOK.md](RUNBOOK.md). `go run ./tools/smoke -url wss://host/ws` checks a running relay.
+
 ## Test
 
 ```
@@ -63,4 +65,4 @@ Memory check: `tools/idleconns` opens many idle connections. With 100 idle conne
 ## Not in the spike, needed for production
 
 - **Authentication.** Today anyone can join any room by guessing its id, and can claim any `id`. Production must have each client prove it holds its private key by signing a challenge the relay sends on connect, and must tie the room to the group (for example, the relay only admits keys the group has announced). Without this, a stranger who learns a room id could send junk into the room or squat on a member's key. The payloads are still encrypted and signed, so they cannot read or forge expenses, but they could disrupt sync.
-- **TLS.** Terminated by the proxy. See the runbook (task T0.4).
+- **TLS.** Terminated by the proxy. See [RUNBOOK.md](RUNBOOK.md).

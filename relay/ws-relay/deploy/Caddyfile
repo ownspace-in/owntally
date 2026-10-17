@@ -1,0 +1,10 @@
+relay.ownspace.in {
+	# Caddy gets and renews the HTTPS certificate by itself.
+	# WebSocket upgrades are proxied automatically.
+	reverse_proxy 127.0.0.1:8080
+
+	log {
+		output stderr
+		format console
+	}
+}
