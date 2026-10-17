@@ -14,6 +14,5 @@ Rules:
 - If a requirement is unclear or seems wrong, stop and ask in the pull request. Do not guess.
 - One milestone per pull request. All tests and lint must pass.
 
-Commands (fill in once the Gradle project exists):
-- Test: `./gradlew test`
-- Lint: `./gradlew lint`
+Commands:
+- Test: `./gradlew :app:core-model:test` (more modules later)
