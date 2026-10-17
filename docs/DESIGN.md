@@ -23,7 +23,7 @@ UI mockups: see the design/ folder (screens to be exported there).
 | Join approval | Admin approves or declines. No fingerprint check. Tickets: single use, 8 hours; an admin sends a new one if expired. |
 | Removal with unsettled balance | Allowed. Balances are rebalanced as if the removed member were never in the group; their entries and payments involving them stay in history but are excluded. Before-and-after shown to the admin, who must confirm. |
 | Recovery phrase step | Required at first run, cannot be skipped. |
-| Invite link domain | `owntallyjoin.ownspace.in`, static page only. |
+| Invite link domain | `joinowntally.ownspace.in`, static page only. |
 | Pairing method | Ticket shared via tappable link, copy-paste text, or QR (see below). |
 | Profile data | Name and phone number only, nothing else. Set per group, visible to members of that group. The phone number is not verified (no OTP, no server): it is a label. |
 | Settlement scope | Group level, payment by payment, no frozen round. See Profile and settling. |
@@ -43,7 +43,7 @@ UI mockups: see the design/ folder (screens to be exported there).
 A ticket is about 150 characters: host id, connection hint, group id, group key.
 
 Ways to share it, in order of preference:
-1. Tappable link `https://owntallyjoin.ownspace.in/j#<ticket>`, with the ticket after `#` (never sent to the web host). Needs a small static page on that domain to hand off to the app (see Invite link page). WhatsApp only linkifies `https://`, not `owntally://`.
+1. Tappable link `https://joinowntally.ownspace.in/j#<ticket>`, with the ticket after `#` (never sent to the web host). Needs a small static page on that domain to hand off to the app (see Invite link page). WhatsApp only linkifies `https://`, not `owntally://`.
 2. Plain-text ticket through the share sheet, pasted into "Join group".
 3. QR code, for people in the same room. QR holds under about 2.9 KB, so it carries the ticket only, never data.
 
@@ -129,10 +129,10 @@ Limits:
 
 ## Invite link page
 
-Domain: `owntallyjoin.ownspace.in`. Static hosting only (for example GitHub Pages with a DNS CNAME); no server code, no database, no logging of the ticket, which stays after the `#` and is never sent to the host.
+Domain: `joinowntally.ownspace.in`. Static hosting only (for example GitHub Pages with a DNS CNAME); no server code, no database, no logging of the ticket, which stays after the `#` and is never sent to the host.
 
 Needs:
-1. DNS record for `owntallyjoin.ownspace.in` pointing at the static host, with HTTPS.
+1. DNS record for `joinowntally.ownspace.in` pointing at the static host, with HTTPS.
 2. A static page at `/j` for people without the app: install button (Play Store), "copy code" fallback, and a note to paste the code in "Join with link or code".
 3. `/.well-known/assetlinks.json` with the app's package name and signing certificate SHA-256, so Android opens the app directly on tap. This can only be filled in once the app exists and is signed.
 
