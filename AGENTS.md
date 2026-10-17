@@ -4,7 +4,7 @@ This project is OwnTally: an Android app for splitting expenses with friends, wi
 
 Read in this order before changing anything:
 1. `docs/DESIGN.md`: the decisions. Do not change them without the owner's approval.
-2. `docs/BUILD_PLAN.md`: the milestones. Work on one milestone at a time, in order.
+2. `docs/BUILD_PLAN.md`: the milestones. Work on one milestone at a time, in order. Detailed task lists live in `docs/tasks/`.
 3. `design/README.md`: the screens, as images.
 
 Rules:

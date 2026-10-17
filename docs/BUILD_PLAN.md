@@ -60,6 +60,8 @@ design/           mockup images
 
 ### M0. Spike: choose the internet transport (risk check, throwaway code)
 
+Step-by-step tasks: [tasks/M0-spike.md](tasks/M0-spike.md).
+
 Build a tiny test app, not the product. Write results into `docs/SPIKE_RESULTS.md`. Define the `Transport` interface first (connect to a member, send bytes, receive bytes, report link type), so that every candidate below is plugged in behind it.
 
 Step 1. Baseline: WebSocket relay (about one day).
@@ -86,12 +88,14 @@ Done when: `docs/SPIKE_RESULTS.md` has the numbers and a recommendation, the own
 
 ### M1. Core domain (pure Kotlin, JVM tests only)
 
+Step-by-step tasks: [tasks/M1-core-domain.md](tasks/M1-core-domain.md).
+
 Build and test: the event types in DESIGN.md, the log (append only, identified by device key and counter, merge is a union), replay to current state, balance calculation, equal and exact splits, the group-level settlement plan (fewest payments), deletion rules, and member removal with rebalancing (their expenses and payments excluded, shares re-split for equal splits). Write `docs/PROTOCOL.md` describing the event format and rules you chose, and have the owner approve it.
 
 Acceptance:
 - Replaying the same events in any order gives identical balances (property test).
 - The settlement plan always sums to zero and clears every balance (property test over random groups).
-- The numbers in the Remove screen mockup are reproducible from a test fixture.
+- A removal fixture with hand-computed before and after balances passes. The numbers in the Remove mockup are illustrative.
 - Deleting an expense removes it from balances but keeps it in history.
 - A removed member's later events are ignored.
 
