@@ -1,6 +1,6 @@
 # OwnTally mockups
 
-Screens at phone size (390 x 844). Names, numbers and the 12 recovery words are examples. The QR code is a drawing, and the invite domain is a placeholder.
+Screens at phone size (390 x 844). Names, numbers and the 12 recovery words are examples. The QR code is a drawing,.
 
 | Screen | Image |
 |---|---|
