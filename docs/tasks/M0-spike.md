@@ -14,7 +14,10 @@ Each task below ends with "Done when", which must be checkable.
 | T0.2 `Transport` interface | Done, in `app/sync` with an in-memory fake and 4 passing tests. |
 | T0.3 WebSocket relay in Go | Done, in `relay/ws-relay` with 14 passing tests (race detector on). 100 idle connections used about 11 MB. |
 | T0.4 deploy the relay | Runbook, systemd unit, Caddyfile and a smoke-test tool written. Not yet run on a real VM. |
-| T0.5 to T0.8 | Not started. Need two phones. |
+| T0.5 WebSocket transport on Android | Code done and tested: 17 tests in `app/sync` including against the real relay, and the spike app ran the full probe on an Android emulator (30 of 30). Not yet run on two real phones on mobile data. |
+| T0.6 Iroh attempt | Not started. |
+| T0.7 Nearby Connections | Code written (`spike/.../NearbyTransport.kt`) and compiles. Never run. Needs two phones. |
+| T0.8 results and decision | Template in `docs/SPIKE_RESULTS.md`, with a preliminary emulator row. Waiting on phone results. |
 
 ---
 

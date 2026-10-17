@@ -50,6 +50,8 @@ go build -ldflags="-s -w" -o ws-relay .
 
 It speaks plain WebSocket and expects a TLS reverse proxy (Caddy) in front. Use `-trust-proxy` only when behind that proxy, so rate limits use the client address from `X-Forwarded-For`. `GET /healthz` returns `ok`.
 
+Test helpers in `tools/`: `smoke` (checks a running relay), `idleconns` (memory check), `responder` (plays phone B for the spike app).
+
 Flags: `-addr`, `-max-per-room`, `-trust-proxy`, `-connects-per-min`.
 
 Deploying on a VM: see [RUNBOOK.md](RUNBOOK.md). `go run ./tools/smoke -url wss://host/ws` checks a running relay.
