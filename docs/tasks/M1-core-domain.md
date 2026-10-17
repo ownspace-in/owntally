@@ -40,7 +40,7 @@ Event bodies (from DESIGN.md)
 - `MemberRemoved(member, lastSeenCounter)`: events by that member with a counter above `lastSeenCounter` are ignored.
 
 Authorization (checked at replay)
-- Only the owner adds or removes admins and offers ownership. The new owner must accept, and the offer must come from the current owner. Any admin may also transfer ownership to another admin when the owner has been unreachable (the owner role moves; model this as `OwnershipOffered` by an admin, allowed only if the app marks the owner unreachable; the unreachable flag is a UI input, so for the core, accept it as an event field `ownerUnreachable = true` and test both cases).
+- Only the owner adds or removes admins and offers ownership. The new owner must accept, and the offer must come from the current owner. Admin takeover when the owner is unreachable is not part of v1. Do not build it.
 - Any member adds expenses and settlements. Delete: the creator or any admin or the owner. Remove member: owner or any admin. The owner cannot be removed or leave while owner.
 - An event that fails authorization is kept in the log but has no effect.
 
@@ -53,7 +53,7 @@ Rounding
 - For `Equal`, divide in paise. The leftover paise (at most participants minus 1) go one each to participants in ascending public key order. Every device must get identical results.
 
 Settlement plan
-- Compute net balance per remaining member. Repeatedly match the member who is owed most with the member who owes most (ties broken by public key order), pay `min` of the two, until all are zero. This gives at most (members minus 1) payments. It is not always the absolute minimum; document this, and tell the owner, since DESIGN.md says "fewest payments".
+- Compute net balance per remaining member. Repeatedly match the member who is owed most with the member who owes most (ties broken by public key order), pay `min` of the two, until all are zero. This gives at most (members minus 1) payments. It is not always the absolute minimum. The owner has accepted this; document it in PROTOCOL.md.
 
 Encoding for signing (needed by M2)
 - Proposed: deterministic CBOR (RFC 8949 section 4.2). Library to be confirmed in M2.

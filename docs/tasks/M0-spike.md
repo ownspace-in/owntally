@@ -45,7 +45,7 @@ Done when: the interface compiles, and a fake in-memory implementation passes a 
 
 ## T0.3 WebSocket relay program
 
-Language: Go, as a single static binary, unless the owner says otherwise (one small file to deploy, low memory). Put it in `relay/ws-relay/`.
+Language: Go (decided by the owner), as a single static binary (one small file to deploy, low memory). Put it in `relay/ws-relay/`.
 
 Behaviour:
 - Listens for secure WebSocket connections at `/ws?room=<roomId>&id=<publicKeyHex>`.

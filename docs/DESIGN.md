@@ -18,7 +18,9 @@ UI mockups: see the design/ folder (screens to be exported there).
 | Edit expenses? | Not allowed. To fix a mistake, delete and re-add. |
 | Delete expenses? | Creator, or an admin/owner. Entry stays in history, struck through, excluded from balances. Warn if it changes settled amounts. |
 | Remove members? | Owner or any admin. Removal records which of the member's entries were seen; newer ones are ignored. |
-| Transfer ownership? | Yes: owner signs `OwnershipTransferred`, new owner accepts. Owner can name co-admins, any of whom can remove members or transfer ownership, so a lost owner phone does not strand the group. |
+| Settlement plan | Simple matching: at most members minus 1 payments, not always the absolute minimum. |
+| WebSocket relay language | Go. |
+| Transfer ownership? | Yes: owner signs `OwnershipTransferred`, new owner accepts. Ownership moves only when the owner offers it and the new owner accepts. No admin takeover in v1. The owner can name co-admins, who can approve joins and remove members, so a group whose owner loses their phone can still run. |
 | Sign-up / identity | No global account. A master seed is created on first run. Each group gets its own keypair derived from the seed, so members of different groups cannot link you. Only a name and a phone number are collected, set per group on join. The phone adds up cross-group totals locally. One seed backup restores every group. |
 | Join approval | Admin approves or declines. No fingerprint check. Tickets: single use, 8 hours; an admin sends a new one if expired. |
 | Removal with unsettled balance | Allowed. Balances are rebalanced as if the removed member were never in the group; their entries and payments involving them stay in history but are excluded. Before-and-after shown to the admin, who must confirm. |
@@ -115,7 +117,7 @@ Limits:
 
 ## Profile and settling
 
-- Settling is at group level, not person level. Balances are per group; groups are never netted against each other (the home screen may show totals only). The app computes each member's net balance in the group and suggests the fewest payments that clear everyone, so a member may be asked to pay someone they never spent with. All phones compute the same plan from the same log.
+- Settling is at group level, not person level. Balances are per group; groups are never netted against each other (the home screen may show totals only). The app computes each member's net balance in the group and suggests a short list of payments that clear everyone (at most members minus 1, using a simple matching method that is not always the absolute minimum), so a member may be asked to pay someone they never spent with. All phones compute the same plan from the same log.
 - Payments are recorded one by one (no frozen "settlement round"). Each suggested payment is marked "I paid" and "Received" separately. The group is settled when all balances reach zero.
 - The plan updates when an expense is added or deleted. Payments already marked stay in the log and are counted.
 
@@ -213,7 +215,7 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
 - Owner opens Members, picks a person, chooses "Make owner". Sheet explains: you become an admin, they become owner. The target gets a request and must accept; until then nothing changes.
 - On acceptance, `OwnershipTransferred` is recorded (signed by the old owner, accepted by the new one). Offline phones converge on the next sync.
 - Make admin / remove admin: owner only. Admins can approve joins, remove members, delete any entry and edit the relay setting.
-- If the owner is unreachable, any admin can transfer ownership to another admin after a confirmation that explains the old owner loses ownership. This avoids a stranded group.
+- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins keep the group running (approve joins, remove members, delete entries); the owner can restore their identity with the recovery phrase.
 
 ### Delete expense
 Creator or an admin. Shows "This changes balances" when the entry is part of settled amounts. The entry stays in the list as struck through with who deleted it and when.

@@ -90,7 +90,7 @@ Done when: `docs/SPIKE_RESULTS.md` has the numbers and a recommendation, the own
 
 Step-by-step tasks: [tasks/M1-core-domain.md](tasks/M1-core-domain.md).
 
-Build and test: the event types in DESIGN.md, the log (append only, identified by device key and counter, merge is a union), replay to current state, balance calculation, equal and exact splits, the group-level settlement plan (fewest payments), deletion rules, and member removal with rebalancing (their expenses and payments excluded, shares re-split for equal splits). Write `docs/PROTOCOL.md` describing the event format and rules you chose, and have the owner approve it.
+Build and test: the event types in DESIGN.md, the log (append only, identified by device key and counter, merge is a union), replay to current state, balance calculation, equal and exact splits, the group-level settlement plan (simple matching, at most members minus 1 payments), deletion rules, and member removal with rebalancing (their expenses and payments excluded, shares re-split for equal splits). Write `docs/PROTOCOL.md` describing the event format and rules you chose, and have the owner approve it.
 
 Acceptance:
 - Replaying the same events in any order gives identical balances (property test).
