@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 
 include(":app:core-model")
+include(":app:sync")

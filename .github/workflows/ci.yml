@@ -16,4 +16,19 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Test core model
-        run: ./gradlew :app:core-model:test --console=plain
+        run: ./gradlew :app:core-model:test :app:sync:test --console=plain
+
+  ws-relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay/ws-relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: relay/ws-relay/go.mod
+      - name: Vet and test
+        run: |
+          go vet ./...
+          go test -race -count=1 ./...

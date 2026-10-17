@@ -6,6 +6,15 @@ What you need from the owner before starting: two Android phones (Android 8 or l
 
 Each task below ends with "Done when", which must be checkable.
 
+## Progress
+
+| Task | Status |
+|---|---|
+| T0.1 spike project | Built (debug APK, 9 MB). Not yet installed on two phones. |
+| T0.2 `Transport` interface | Done, in `app/sync` with an in-memory fake and 4 passing tests. |
+| T0.3 WebSocket relay in Go | Done, in `relay/ws-relay` with 14 passing tests (race detector on). 100 idle connections used about 11 MB. |
+| T0.4 to T0.8 | Not started. Need the VM, DNS and two phones. |
+
 ---
 
 ## T0.1 Spike project

@@ -19,3 +19,6 @@ keystore.properties
 
 # OS
 .DS_Store
+
+# Spike keeps its own local.properties
+spike/local.properties
