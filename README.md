@@ -15,7 +15,7 @@ Status: design stage. Read [docs/DESIGN.md](docs/DESIGN.md).
 | `docs/` | Design and decisions |
 | `app/` | Android app (not started) |
 | `relay/` | Config and setup for the relay at relay.ownspace.in |
-| `design/` | UI mockups |
+| `design/` | UI mockups (PNG images) |
 
 ## License
 
