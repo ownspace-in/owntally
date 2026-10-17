@@ -13,7 +13,7 @@ Each task below ends with "Done when", which must be checkable.
 | T0.1 spike project | Built (debug APK, 9 MB). Not yet installed on two phones. |
 | T0.2 `Transport` interface | Done, in `app/sync` with an in-memory fake and 4 passing tests. |
 | T0.3 WebSocket relay in Go | Done, in `relay/ws-relay` with 14 passing tests (race detector on). 100 idle connections used about 11 MB. |
-| T0.4 deploy the relay | Runbook, systemd unit, Caddyfile and a smoke-test tool written. Not yet run on a real VM. |
+| T0.4 deploy the relay | Runbook, systemd unit, nginx configs (relay and invite site) and a smoke-test tool written; nginx configs tested locally. Not yet run on a real VM. |
 | T0.5 WebSocket transport on Android | Code done and tested: 17 tests in `app/sync` including against the real relay, and the spike app ran the full probe on an Android emulator (30 of 30). Not yet run on two real phones on mobile data. |
 | T0.6 Iroh attempt | Not started. |
 | T0.7 Nearby Connections | Code written (`spike/.../NearbyTransport.kt`) and compiles. Never run. Needs two phones. |
@@ -66,7 +66,7 @@ Behaviour:
 - Messages are binary frames. A frame sent by one client is forwarded unchanged to every other client in the same room. If the frame starts with a 32 byte target public key, forward it only to that client. Document which you chose.
 - Stores nothing. Never decrypts. Logs only counts and errors, never contents or keys.
 - Limits: 64 KB per frame, 20 clients per room, ping every 30 seconds, close idle connections after 90 seconds, simple per-address rate limit.
-- TLS is handled by a reverse proxy (Caddy or nginx) or by the program itself using Let's Encrypt. Pick one and document it.
+- TLS is handled by nginx in front of the program (decided: the VM already runs nginx).
 - Authentication is out of scope for the spike, but write down in `relay/ws-relay/README.md` what production needs (each client proves it holds its key by signing a server challenge).
 
 Tests: a Go test that starts the relay, connects three clients, and checks forwarding, targeting, size limit, room isolation (a client in another room receives nothing).

@@ -48,7 +48,7 @@ go build -ldflags="-s -w" -o ws-relay .
 ./ws-relay -addr 127.0.0.1:8080
 ```
 
-It speaks plain WebSocket and expects a TLS reverse proxy (Caddy) in front. Use `-trust-proxy` only when behind that proxy, so rate limits use the client address from `X-Forwarded-For`. `GET /healthz` returns `ok`.
+It speaks plain WebSocket and expects a TLS reverse proxy (nginx, config in `deploy/nginx/`) in front. Use `-trust-proxy` only when behind that proxy, so rate limits use the client address from `X-Forwarded-For`. `GET /healthz` returns `ok`.
 
 Test helpers in `tools/`: `smoke` (checks a running relay), `idleconns` (memory check), `responder` (plays phone B for the spike app).
 

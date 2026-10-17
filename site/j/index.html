@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Join a group on OwnTally</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>You were invited to a group on OwnTally</h1>
+    <p>OwnTally splits expenses between friends. Your data stays on your phone.</p>
+
+    <div class="card">
+      <p><strong>If you already have OwnTally</strong>, open this link again on your Android phone and the app will take you straight to the invite. If it doesn't, copy the code below and paste it into the app under <em>Join with link or code</em>.</p>
+      <div class="code" id="code" aria-live="polite">Reading the invite code…</div>
+      <button type="button" id="copy" hidden>Copy invite code</button>
+      <p class="muted" id="copied" hidden>Copied.</p>
+    </div>
+
+    <div class="card">
+      <p><strong>If you don't have the app yet</strong></p>
+      <ol>
+        <li>Install OwnTally on your Android phone. <span class="muted">(The install link will be added here before release.)</span></li>
+        <li>Open this link again, or paste the code into the app.</li>
+        <li>Wait for the group admin to approve you.</li>
+      </ol>
+    </div>
+
+    <p class="muted">The invite code is only used on your phone. It is never sent to this website. It works once and expires after 8 hours. Don't share it publicly.</p>
+  </main>
+  <script src="/j/invite.js"></script>
+</body>
+</html>
