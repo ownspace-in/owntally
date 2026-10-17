@@ -8,6 +8,7 @@ UI mockups: see the design/ folder (screens to be exported there).
 | Question | Decision |
 |---|---|
 | Both phones online at the same moment to sync? | Yes, acceptable. No mailbox. |
+| License | MIT. |
 | Third party (relay) allowed? | Off by default. Admin can enable a relay per group (see Relay). |
 | Google Play Services? | Optional. Use Nearby Connections when available, fall back to same-Wi-Fi discovery. |
 | Encryption | Signed events, group-key encryption, encrypted transport (see Encryption). |
