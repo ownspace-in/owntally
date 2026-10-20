@@ -13,7 +13,7 @@ Each task below ends with "Done when", which must be checkable.
 | T0.1 spike project | Built (debug APK, 9 MB). Not yet installed on two phones. |
 | T0.2 `Transport` interface | Done, in `app/sync` with an in-memory fake and 4 passing tests. |
 | T0.3 WebSocket relay in Go | Done, in `relay/ws-relay` with 14 passing tests (race detector on). 100 idle connections used about 11 MB. |
-| T0.4 deploy the relay | Runbook, systemd unit, nginx configs (relay and invite site) and a smoke-test tool written; nginx configs tested locally. Not yet run on a real VM. |
+| T0.4 deploy the relay | Done on 20 Oct 2026. `wss://relay.ownspace.in/ws` passes the smoke test from a laptop (3 of 3). The invite site is deployed at `https://joinowntally.ownspace.in/j` (checked: 200, CSS type, http redirects to https; port 80 config plus `certbot --nginx`, without the stricter CSP headers). |
 | T0.5 WebSocket transport on Android | Code done and tested: 17 tests in `app/sync` including against the real relay, and the spike app ran the full probe on an Android emulator (30 of 30). Not yet run on two real phones on mobile data. |
 | T0.6 Iroh attempt | Not started. |
 | T0.7 Nearby Connections | Code written (`spike/.../NearbyTransport.kt`) and compiles. Never run. Needs two phones. |

@@ -32,8 +32,20 @@ Run on 17 Oct 2026. Android 16 emulator (API 36) on the development machine, tal
 
 Also checked on the development machine (not on phones): the transport reconnects after the relay closes the socket, and after the relay process is killed and restarted (`app/sync` tests, including one against the real relay binary).
 
+## Relay deployed (T0.4)
+
+Run on 20 Oct 2026 from the development laptop against the real VM (`wss://relay.ownspace.in/ws`, nginx plus certbot, relay under systemd). `https://relay.ownspace.in/healthz` prints `ok`. `go run ./tools/smoke`, three runs:
+
+| Run | Connect | Round trip |
+|---|---|---|
+| 1 | 249 ms | 19 ms |
+| 2 | 139 ms | 20 ms |
+| 3 | 145 ms | 14 ms |
+
+This is a laptop on a fixed line, not a phone on mobile data.
+
 ## Not yet tested
 
-- Real phones on mobile data (WebSocket relay).
+- Real phones on mobile data (WebSocket relay). The relay itself is now deployed.
 - Nearby Connections: the code compiles but has never run. Emulators cannot test it.
 - Iroh: not started (T0.6).
