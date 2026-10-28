@@ -1,3 +1,6 @@
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 plugins {
     id("com.android.application")
     kotlin("android")
@@ -14,6 +17,22 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.0.1"
+        buildConfigField("String", "BUILT_AT", "\"${LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM HH:mm"))}\"")
+        // Emulators are x86_64: build them with -PallAbis.
+        if (!project.hasProperty("allAbis")) ndk { abiFilters += listOf("arm64-v8a") }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    packaging {
+        resources.excludes += listOf("darwin-*/**", "linux-*/**", "win32-*/**", "android-*/**", "freebsd-*/**", "sunos-*/**", "dragonwood-*/**")
     }
 
     compileOptions {
@@ -23,6 +42,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -36,6 +56,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("computer.iroh:iroh-android:1.1.0")
     implementation("com.google.android.gms:play-services-nearby:19.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")

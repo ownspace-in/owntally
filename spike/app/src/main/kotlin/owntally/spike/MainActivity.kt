@@ -52,12 +52,14 @@ import owntally.sync.Probe
 import owntally.sync.RelayStatus
 import owntally.sync.WebSocketTransport
 
+private val BUILD_LABEL = "${BuildConfig.VERSION_NAME} ${BuildConfig.BUILT_AT} ${if (BuildConfig.DEBUG) "debug" else "release"}"
+
 enum class Role(val label: String, val key: PublicKey) {
     A("Phone A: starts the test", PublicKey(ByteArray(32) { 0xA1.toByte() })),
     B("Phone B: answers", PublicKey(ByteArray(32) { 0xB2.toByte() })),
 }
 
-enum class Mode(val label: String) { RELAY("Relay (WebSocket)"), NEARBY("Nearby") }
+enum class Mode(val label: String) { RELAY("Relay (WebSocket)"), NEARBY("Nearby"), IROH("Iroh") }
 
 class MainActivity : ComponentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -71,11 +73,13 @@ class MainActivity : ComponentActivity() {
 
     private var relay: WebSocketTransport? = null
     private var nearby: NearbyTransport? = null
+    private var iroh: IrohTransport? = null
     private var jobs = mutableListOf<Job>()
 
     private val clock = SimpleDateFormat("HH:mm:ss", Locale.US)
     private fun note(text: String) {
         log.add("${clock.format(Date())}  $text")
+        android.util.Log.i("spike", text)
     }
 
     private val room get() = GroupRoom.fromGroupId(roomName.trim().toByteArray())
@@ -106,12 +110,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun nearbyPermissions(): List<String> = buildList {
+        // Play services Nearby still reports MISSING_PERMISSION_ACCESS_COARSE_LOCATION on Android 15 and 16 without these.
+        add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= 31) {
             add(Manifest.permission.BLUETOOTH_ADVERTISE)
             add(Manifest.permission.BLUETOOTH_CONNECT)
             add(Manifest.permission.BLUETOOTH_SCAN)
-        } else {
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
         if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.NEARBY_WIFI_DEVICES)
     }
@@ -131,10 +136,35 @@ class MainActivity : ComponentActivity() {
     private fun start() {
         if (running) return
         running = true
-        note("start: ${mode.label}, ${role.name}, room '${roomName.trim()}'. ${context()}")
+        note("start: build $BUILD_LABEL, ${mode.label}, ${role.name}, room '${roomName.trim()}'. ${context()}")
+        if (mode == Mode.NEARBY) {
+            val states = nearbyPermissions().joinToString(", ") {
+                it.substringAfterLast('.') + "=" + (checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            }
+            note("permissions: $states")
+        }
         when (mode) {
             Mode.RELAY -> startRelay()
             Mode.NEARBY -> startNearby()
+            Mode.IROH -> startIroh()
+        }
+    }
+
+    private fun irohSecret(r: Role) = ByteArray(32) { r.key.bytes[0] }
+
+    private fun startIroh() {
+        val transport = IrohTransport(irohSecret(role), relayUrl.trim().takeIf { it.startsWith("http") }, scope) { line -> runOnUiThread { note(line) } }.also { iroh = it }
+        jobs += scope.launch {
+            try {
+                transport.start()
+                note("iroh: ready as ${transport.publicKey}")
+                transport.incoming(room).collect { link ->
+                    note("iroh: ${link.peer.toString().take(6)} connected, link=${link.kind}")
+                    launch { try { Probe.serve(link) { note("  $it") } } catch (e: Exception) { note("iroh: link ended: ${e.javaClass.simpleName}: ${e.message}") } }
+                }
+            } catch (e: Throwable) {
+                note("iroh: start failed: ${e.javaClass.simpleName}: ${e.message}")
+            }
         }
     }
 
@@ -190,12 +220,13 @@ class MainActivity : ComponentActivity() {
                         t.connect(room, other.key)
                     }
                     Mode.NEARBY -> nearby!!.connectAny(room)
+                    Mode.IROH -> iroh!!.connect(room, IrohTransport.publicKeyOf(irohSecret(other)))
                 }
                 val connectMs = (System.nanoTime() - started) / 1_000_000
                 note("connected in ${connectMs}ms, link=${link.kind}. Sending 10 each of 1, 1000 and 50000 bytes")
                 val result = Probe.run(link, repeats = 10, timeoutMillis = 10_000) { note("  $it") }
                 note("RESULT ${mode.name} link=${link.kind} connect=${connectMs}ms ${result.summary()} | ${context()}")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 note("test failed after ${(System.nanoTime() - started) / 1_000_000}ms: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
@@ -208,6 +239,8 @@ class MainActivity : ComponentActivity() {
         relay = null
         nearby?.stop()
         nearby = null
+        iroh?.let { t -> scope.launch { runCatching { t.stop() } } }
+        iroh = null
         if (running) note("stopped")
         running = false
     }
@@ -222,6 +255,7 @@ class MainActivity : ComponentActivity() {
 
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("OwnTally transport spike", style = MaterialTheme.typography.titleLarge)
+            Text("build $BUILD_LABEL", fontSize = 12.sp)
 
             Role.entries.forEach { r ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -229,7 +263,7 @@ class MainActivity : ComponentActivity() {
                     Text(r.label)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column {
                 Mode.entries.forEach { m ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = mode == m, onClick = { if (!running) mode = m }, enabled = !running)
@@ -237,7 +271,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            if (mode == Mode.RELAY) {
+            if (mode == Mode.RELAY || mode == Mode.IROH) {
                 OutlinedTextField(
                     value = relayUrl, onValueChange = { relayUrl = it }, label = { Text("Relay address") },
                     singleLine = true, enabled = !running, modifier = Modifier.fillMaxWidth(),
