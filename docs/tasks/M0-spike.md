@@ -14,9 +14,9 @@ Each task below ends with "Done when", which must be checkable.
 | T0.2 `Transport` interface | Done, in `app/sync` with an in-memory fake and 4 passing tests. |
 | T0.3 WebSocket relay in Go | Done, in `relay/ws-relay` with 14 passing tests (race detector on). 100 idle connections used about 11 MB. |
 | T0.4 deploy the relay | Done on 20 Oct 2026. `wss://relay.ownspace.in/ws` passes the smoke test from a laptop (3 of 3). The invite site is deployed at `https://joinowntally.ownspace.in/j` (checked: 200, CSS type, http redirects to https; port 80 config plus `certbot --nginx`, without the stricter CSP headers). |
-| T0.5 WebSocket transport on Android | Code done and tested: 17 tests in `app/sync` including against the real relay, and the spike app ran the full probe on an Android emulator (30 of 30). Not yet run on two real phones on mobile data. |
-| T0.6 Iroh attempt | Not started. |
-| T0.7 Nearby Connections | Code written (`spike/.../NearbyTransport.kt`) and compiles. Never run. Needs two phones. |
+| T0.5 WebSocket transport on Android | Done on real phones: Redmi 23053RN02I (Android 15) and Galaxy S24 SM-S928B (Android 16 and 17) on mobile data, 30 of 30 messages, 0 corrupt. Ten runs in a row reported by the owner; per-run numbers still to paste into `docs/SPIKE_RESULTS.md`. |
+| T0.6 Iroh attempt | Step 1 (official package) in progress. Works on emulators only intermittently; see `docs/SPIKE_RESULTS.md`. Not yet tried on phones. |
+| T0.7 Nearby Connections | Works on the same two phones. Needs the Location switch on for discovery (see `docs/SPIKE_RESULTS.md`). Ten runs reported by the owner (setup not recorded); Wi-Fi off and airplane mode setups not yet confirmed. |
 | T0.8 results and decision | Template in `docs/SPIKE_RESULTS.md`, with a preliminary emulator row. Waiting on phone results. |
 
 ---
