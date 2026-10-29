@@ -4,12 +4,13 @@ Goal: phones that use Iroh can reach `https://relay.ownspace.in` as their relay,
 
 **Status: written, not yet run on a real VM, and the relay program has not been run by us at all.** Several details come from the `iroh-relay` v1.4.1 source and docs, not from experience. Every step below has a check. If a check does not give the expected answer, stop, undo that step (section "Undo") and report the exact output. Fix this runbook in the same change.
 
-What is not verified yet:
-- The URL paths the relay serves (`/relay`, `/ping`, `/generate_204`). Step 5 checks them.
-- That nginx can proxy to the relay's HTTPS listener on loopback. Step 6 checks it.
-- That the default QUIC port is 7842. The config sets it explicitly, so it does not matter, but the firewall step uses that number.
-- That `cert_mode = "Manual"` loads the certificate files and that QUIC address discovery then starts. Step 4 checks the startup log.
-- That a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0.
+Verified on the VM on 29 Oct 2026 (steps 1 to 5): the program installs and starts under systemd as its own user; with `cert_mode = "Manual"` it loads the certificate and listens on TCP `127.0.0.1:3340` and `127.0.0.1:8443` and UDP `0.0.0.0:7842` (QUIC address discovery); `/healthz` and `/ping` answer 200 on the HTTPS listener; `/relay` exists on the HTTPS listener and demands a `sec-websocket-protocol` header (so a bare test gets 400, which is correct); `/generate_204` is served only on the plain HTTP listener (3340) and answers 204.
+
+Not verified yet:
+- That nginx can proxy `/relay` to the relay's HTTPS listener on loopback, including the WebSocket upgrade (step 6).
+- That the UDP port is reachable from the internet (step 7) and that phones then form direct links.
+- That the certbot hook works (step 8).
+- That a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0 (step 9).
 
 ## 0. What you need
 
@@ -85,7 +86,7 @@ curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8443/generate_204
 curl -sk -i -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' https://127.0.0.1:8443/relay | head -5
 ```
 
-Expected: `200` for `/healthz`, a success code for `/ping`, `204` for `/generate_204`, and for `/relay` either `101 Switching Protocols` or an HTTP error that mentions the handshake (not `404`). If any path answers `404`, the path name is different: send me the output, and change `nginx-locations.conf` to the real name.
+Expected (seen on the VM): `200` for `/healthz`, `200` for `/ping`, `404` for `/generate_204` on 8443 (it is served on the plain HTTP port instead: `curl -s -i http://127.0.0.1:3340/generate_204` gives `204`), and for `/relay` a `400` with the body `missing header: sec-websocket-protocol`. That body means the path is right; real clients send that header. A `404` on `/relay` would mean the path differs.
 
 ## 6. Add the paths to nginx
 
