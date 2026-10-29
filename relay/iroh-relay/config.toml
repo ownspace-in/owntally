@@ -1,0 +1,25 @@
+# Iroh relay for relay.ownspace.in. Install at /etc/iroh-relay/config.toml.
+# nginx owns public TCP 80 and 443 and forwards the relay's web paths to the HTTPS listener below.
+# The relay itself listens on UDP for QUIC address discovery, which nginx cannot proxy.
+# Field names are from iroh-relay v1.4.1 (src/main.rs). See RUNBOOK.md for what is not yet verified.
+
+# Plain HTTP listener, loopback only. Not used by nginx.
+http_bind_addr = "127.0.0.1:3340"
+
+enable_relay = true
+enable_quic_addr_discovery = true
+
+# No metrics server for now.
+enable_metrics = false
+
+[tls]
+# Loopback only: nginx proxies to this. Public TCP 443 stays with nginx.
+https_bind_addr = "127.0.0.1:8443"
+# Public UDP port for QUIC address discovery. Open it in the cloud firewall and on the VM.
+quic_bind_addr = "0.0.0.0:7842"
+hostname = "relay.ownspace.in"
+# Copied from certbot's files by the renewal hook; restart the service after a renewal.
+cert_mode = "Manual"
+cert_dir = "/etc/iroh-relay/certs"
+manual_cert_path = "/etc/iroh-relay/certs/default.crt"
+manual_key_path = "/etc/iroh-relay/certs/default.key"

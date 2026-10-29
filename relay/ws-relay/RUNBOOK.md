@@ -1,6 +1,6 @@
 # Runbook: deploy the WebSocket relay on a fresh VM
 
-Goal: `wss://relay.ownspace.in/ws` accepts connections, restarts if it crashes, and starts at boot. The same nginx also serves the static invite page at `joinowntally.ownspace.in` (see `site/README.md`). Written so someone who has not seen the project can follow it. Status of these steps: the program, its tests, the smoke tool, the unit file syntax and both nginx configs (routing, WebSocket upgrade, redirects, content types, checked with a self-signed certificate) are verified on a development machine. The steps on a real VM, and the certbot steps, have not been run yet. If a step fails, fix the runbook as part of the same change.
+Goal: `wss://relay.ownspace.in/ws` accepts connections, restarts if it crashes, and starts at boot. The same nginx also serves the static invite page at `joinowntally.ownspace.in` (see `site/README.md`). Written so someone who has not seen the project can follow it. Status of these steps: the relay, nginx and certbot steps were run on the real VM on 20 Oct 2026 using the shortcut below, and the smoke test passed. The program, its tests, the smoke tool, the unit file syntax and both nginx configs (routing, WebSocket upgrade, redirects, content types, checked with a self-signed certificate) are verified on a development machine. The steps on a real VM, and the certbot steps, have not been run yet. If a step fails, fix the runbook as part of the same change.
 
 ## 0. What you need
 
@@ -26,7 +26,7 @@ Find the VM's CPU type with `uname -m` on the VM: `x86_64` means `amd64`, `aarch
 
 ```
 cd relay/ws-relay
-GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ws-relay .
+GOOS=linux GOARCH=amd64 go build -buildvcs=false -ldflags="-s -w" -o ws-relay .
 scp ws-relay deploy/ws-relay.service deploy/nginx/*.conf ../../site/nginx/*.conf <user>@<vm>:~
 ```
 
@@ -94,6 +94,8 @@ sudo certbot renew --dry-run
 Two details in `relay.ownspace.in.conf` matter. It sets `X-Forwarded-For` to the client address instead of adding to it, because the relay uses that value for rate limits and a client must not be able to fake it. And it turns access logging off, because the room and key are in the query string.
 
 **4d. Put the invite page in place** (it can wait until the page is final): copy the contents of `site/` to `/var/www/joinowntally/`, as described in `site/README.md`.
+
+**Shortcut when nginx and certbot already run on the VM (this is what was actually done):** write plain port 80 server blocks for the two names (the `/ws` and `/healthz` proxy blocks from `relay.ownspace.in.conf`, and the static site from `joinowntally.ownspace.in.conf`, both without the `ssl` lines), run `sudo nginx -t && sudo systemctl reload nginx`, then `sudo certbot --nginx -d relay.ownspace.in -d joinowntally.ownspace.in`. Certbot adds HTTPS, the redirect and automatic renewal, so 4c is not needed. The invite site was deployed this way too and checked with `curl -sI` (200 on `/j` and `/style.css`, 301 from http). The stricter headers in `site/nginx/joinowntally.ownspace.in.conf` (CSP, `X-Frame-Options`) were left out of that port 80 config and should be added back before the invite page is announced.
 
 ## 5. Firewall on the VM
 
