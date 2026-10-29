@@ -8,9 +8,10 @@ Verified on the VM on 29 Oct 2026 (steps 1 to 5): the program installs and start
 
 Also verified through nginx from outside on 29 Oct 2026 (step 6): `https://relay.ownspace.in/generate_204` gives 204, `/ping` 200, `/healthz` ok, and `/relay` with `Sec-WebSocket-Protocol: iroh-relay-v1` gives `101 Switching Protocols`. The WebSocket relay smoke test still passes afterwards (connect 204 ms, round trip 17 ms).
 
+Also verified on 29 Oct 2026: UDP 7842 packets from outside reach the VM (tcpdump), and `ufw` already allows `7842/udp`; the renewal hook runs by hand without errors and the relay restarts with the copied certificate; `certbot renew --dry-run` succeeds for all four certificates (an earlier run failed with `Timeout during connect` on every certificate, then passed on retry, with Let's Encrypt's validation servers seen reaching port 80, so the cause was temporary and not the relay setup).
+
 Not verified yet:
-- That the UDP port is reachable from the internet (step 7) and that phones then form direct links.
-- That the certbot hook works (step 8).
+- That the relay answers QUIC address discovery from phones and that phones then form direct links (step 9).
 - That a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0 (step 9).
 
 ## 0. What you need
