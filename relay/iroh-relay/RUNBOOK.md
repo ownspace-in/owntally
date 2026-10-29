@@ -6,8 +6,9 @@ Goal: phones that use Iroh can reach `https://relay.ownspace.in` as their relay,
 
 Verified on the VM on 29 Oct 2026 (steps 1 to 5): the program installs and starts under systemd as its own user; with `cert_mode = "Manual"` it loads the certificate and listens on TCP `127.0.0.1:3340` and `127.0.0.1:8443` and UDP `0.0.0.0:7842` (QUIC address discovery); `/healthz` and `/ping` answer 200 on the HTTPS listener; `/relay` exists on the HTTPS listener and demands a `sec-websocket-protocol` header (a bare test gets 400, which is correct, and with `Sec-WebSocket-Protocol: iroh-relay-v1` it answers `101 Switching Protocols`; `curl` then waits, so use `--max-time 3`); `/generate_204` is served only on the plain HTTP listener (3340) and answers 204.
 
+Also verified through nginx from outside on 29 Oct 2026 (step 6): `https://relay.ownspace.in/generate_204` gives 204, `/ping` 200, `/healthz` ok, and `/relay` with `Sec-WebSocket-Protocol: iroh-relay-v1` gives `101 Switching Protocols`. The WebSocket relay smoke test still passes afterwards (connect 204 ms, round trip 17 ms).
+
 Not verified yet:
-- That nginx can proxy `/relay` to the relay's HTTPS listener on loopback, including the WebSocket upgrade (step 6).
 - That the UDP port is reachable from the internet (step 7) and that phones then form direct links.
 - That the certbot hook works (step 8).
 - That a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0 (step 9).
