@@ -171,7 +171,7 @@ Checks (step 5's header test still gives 101, because the token is checked after
 - Phones **with** the token connect as in step 9.
 - Also test that the placeholder text from `config.toml` does NOT work as a token. If it does, the environment variable did not replace the list, and the relay is protected by a publicly known string.
 
-Phone side (not written yet): the Iroh Kotlin package 1.1.0 has `RelayConfig(url, quicPort, authToken)` and `RelayMode.custom(RelayMap)`, which is how the app sends the token (the relay reads it as `Authorization: Bearer`). Only the class signatures were checked, not a working connection. The token goes into the build from a git-ignored local file.
+Phone side (not written yet): the Iroh Kotlin package 1.1.0 has `RelayConfig(url, quicPort, authToken)` and `RelayMode.custom(RelayMap)`, which is how the app sends the token (the relay reads it as `Authorization: Bearer`). Checked in the library itself (2 Nov 2026): the Kotlin classes exist, and the native library `libiroh_ffi.so` is built on the `iroh-relay` 1.0.2 client, contains an `auth_token` setting documented as an `Authorization: Bearer ...` header on the upgrade request, and an error for a token that is not a valid header value. Not checked: a working connection with a token. The token goes into the build from a git-ignored local file.
 
 Rate limit: `bytes_per_second = 262144` and `max_burst_bytes = 1048576` per client (what the relay reads from one connection). The values are a first guess from the 0.5 MB test. Run the phone test again and confirm 30 of 30 still pass; raise them if a large sync is slowed. `accept_conn_limit` is not implemented in v1.4.1.
 
