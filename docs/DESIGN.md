@@ -62,6 +62,12 @@ Safety:
 3. Different networks or cities: direct internet connection via hole punching. Needs STUN for discovery, which is a third party. Expect roughly 60 to 80 percent of phone pairs to connect. Carrier-grade NAT blocks the rest.
 4. Fallback: if unreachable, tell the user to meet up or enable a relay for that group.
 
+**Owner decision, 2 Nov 2026 (supersedes the order above; the other sections below are not yet updated to match):** the app tries transports in this order: 1. Nearby (same room, no server), 2. the WebSocket relay at `wss://relay.ownspace.in/ws`, 3. Iroh (direct, with our Iroh relay at `relay.ownspace.in`). All three stay behind the `Transport` interface. Consequences still to settle with the owner:
+- The WebSocket relay carries all data every time and never forms a direct link, so the "Relay" section's rule that nothing goes through a relay unless a group admin enables it needs rewording (or the relay becomes the default for internet sync).
+- The relay then sees every user's IP address, timing and data volume on every sync, not only for users who cannot connect directly.
+- Server load is higher than with Iroh first; the nginx limits and rate cap in `relay/iroh-relay/` and `relay/ws-relay/` matter more.
+- Each transport that fails costs its timeout before the next one is tried; the timeouts are not chosen yet.
+
 ## Relay
 
 A relay forwards encrypted bytes between two phones that cannot reach each other directly (for example, both on carrier-grade NAT). It stores nothing and cannot read content.

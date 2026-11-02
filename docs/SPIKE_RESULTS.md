@@ -2,6 +2,8 @@
 
 **Decision (owner, 28 Oct 2026):** support all three. Iroh is the main internet transport, the WebSocket relay stays as a backup behind the same `Transport` interface, and Nearby is used for same-room sync. We run our own Iroh relay at `relay.ownspace.in` (the WebSocket relay stays on the same host under `/ws`). Until our Iroh relay is running, Iroh uses the public n0 relays, as the design allows for development.
 
+**Order update (owner, 2 Nov 2026):** the app tries Nearby first, then the WebSocket relay, then Iroh. Recorded in `docs/DESIGN.md`, section "Sync transports".
+
 Rule from [BUILD_PLAN.md](BUILD_PLAN.md): if Iroh passes, it is the main transport and the WebSocket relay stays as a backup behind the same `Transport` interface. If Iroh fails, the WebSocket relay is the main transport.
 
 ## How to run the phone tests
