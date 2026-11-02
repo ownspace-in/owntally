@@ -6,6 +6,8 @@ Wants=network-online.target
 [Service]
 User=iroh-relay
 Group=iroh-relay
+# Holds IROH_RELAY_ACCESS_TOKEN=... (root-owned, 0600, created on the VM; never in git).
+EnvironmentFile=/etc/iroh-relay/env
 ExecStart=/usr/local/bin/iroh-relay -c /etc/iroh-relay/config.toml
 Restart=on-failure
 RestartSec=2

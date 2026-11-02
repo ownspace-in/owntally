@@ -146,10 +146,38 @@ echo | openssl s_client -connect relay.ownspace.in:443 -servername relay.ownspac
 sudo openssl x509 -in /etc/iroh-relay/certs/default.crt -noout -dates
 ```
 
-## 10. Not decided yet
+## 10. Access token and rate limit (decided 2 Nov 2026, not yet run)
 
-- **Who may use the relay.** The config leaves access open to everyone, so anyone could use our bandwidth. The program supports a shared token, an allowlist and a webhook (`access` in the config). Pick one before announcing the relay. Do not put a token in the repo.
-- **Rate limits** (`limits` in the config). Not set.
+Decision: a shared token plus per-client rate limits. The relay supports only one access mode at a time (`everyone`, `allowlist`, `denylist`, `http` or `shared_token`), so a denylist is not used alongside the token. To cut off abuse, rotate the token: the setting takes a list, so add the new token next to the old one, ship an app update, then drop the old one.
+
+Know the limits: the token ships inside the APK, so anyone can extract it. It stops casual use, not a determined person. Rate limits cap the damage either way.
+
+On the VM, after copying the new `config.toml` and `iroh-relay.service`:
+
+```
+TOKEN=$(openssl rand -hex 24)
+echo "IROH_RELAY_ACCESS_TOKEN=$TOKEN" | sudo tee /etc/iroh-relay/env >/dev/null
+sudo chown root:root /etc/iroh-relay/env && sudo chmod 0600 /etc/iroh-relay/env
+echo "$TOKEN"    # copy it to a safe place; it goes into the app build, never into git
+sudo install -m 0644 ~/config.toml /etc/iroh-relay/config.toml
+sudo install -m 0644 ~/iroh-relay.service /etc/systemd/system/iroh-relay.service
+sudo systemctl daemon-reload && sudo systemctl restart iroh-relay
+systemctl status iroh-relay --no-pager; sudo journalctl -u iroh-relay -n 20 --no-pager
+```
+
+Checks (step 5's header test still gives 101, because the token is checked after the upgrade, so test with phones):
+- The service stays running. If it complains about the token list, the env var did not take effect as expected: stop and report the log.
+- Phones **without** the token cannot connect through `https://relay.ownspace.in` (log shows dial failures or never reaches `online`).
+- Phones **with** the token connect as in step 9.
+- Also test that the placeholder text from `config.toml` does NOT work as a token. If it does, the environment variable did not replace the list, and the relay is protected by a publicly known string.
+
+Phone side (not written yet): the Iroh Kotlin package 1.1.0 has `RelayConfig(url, quicPort, authToken)` and `RelayMode.custom(RelayMap)`, which is how the app sends the token (the relay reads it as `Authorization: Bearer`). Only the class signatures were checked, not a working connection. The token goes into the build from a git-ignored local file.
+
+Rate limit: `bytes_per_second = 262144` and `max_burst_bytes = 1048576` per client (what the relay reads from one connection). The values are a first guess from the 0.5 MB test. Run the phone test again and confirm 30 of 30 still pass; raise them if a large sync is slowed. `accept_conn_limit` is not implemented in v1.4.1.
+
+## 11. Not decided yet
+
+- **Who may use the relay.** Decided: shared token, see step 10. A different relay address entered by a group admin (`docs/DESIGN.md`) has its own token, so the app needs a place for the admin to enter it.
 - **Version mismatch.** The relay is v1.4.1 and the phone library is 1.1.0.
 - **Second relay for failover.** `docs/DESIGN.md` suggests one on a different server later.
 
