@@ -6,6 +6,8 @@ import computer.iroh.Endpoint
 import computer.iroh.EndpointAddr
 import computer.iroh.EndpointId
 import computer.iroh.EndpointOptions
+import computer.iroh.RelayConfig
+import computer.iroh.RelayMap
 import computer.iroh.RelayMode
 import computer.iroh.SecretKey
 import computer.iroh.presetN0
@@ -31,11 +33,13 @@ import owntally.sync.Transport
  * messages framed as a 4-byte length plus payload. The room is ignored: every link shares one ALPN.
  *
  * [relayUrl] null uses the n0 preset (Iroh's public relays and discovery). A URL replaces the relay list
- * with our own relay, and also tells the dialer which relay to try first.
+ * with our own relay, and also tells the dialer which relay to try first. A non-empty [relayToken] is sent to
+ * that relay as `Authorization: Bearer`.
  */
 class IrohTransport(
     private val secret: ByteArray,
     private val relayUrl: String?,
+    private val relayToken: String,
     private val scope: CoroutineScope,
     private val log: (String) -> Unit,
 ) : Transport {
@@ -50,7 +54,7 @@ class IrohTransport(
             preset = presetN0(),
             secretKey = secret,
             alpns = listOf(ALPN),
-            relayMode = relayUrl?.let { RelayMode.customFromUrls(listOf(it)) },
+            relayMode = relayUrl?.let(::relayModeFor),
         )
         val ep = Endpoint.bind(options)
         endpoint = ep
@@ -72,6 +76,13 @@ class IrohTransport(
                 }
             }
         }
+    }
+
+    private fun relayModeFor(url: String): RelayMode {
+        if (relayToken.isEmpty()) return RelayMode.customFromUrls(listOf(url))
+        val map = RelayMap.empty()
+        map.insert(RelayConfig(url, QUIC_PORT, relayToken))
+        return RelayMode.custom(map)
     }
 
     override suspend fun connect(room: GroupRoom, peer: PublicKey): Link {
@@ -145,6 +156,7 @@ class IrohTransport(
 
     companion object {
         val ALPN = "owntally/spike/0".toByteArray()
+        private val QUIC_PORT: UShort = 7842u
         private const val CONNECT_WINDOW_NANOS = 30_000_000_000L
 
         fun publicKeyOf(secret: ByteArray) = PublicKey(SecretKey.fromBytes(secret).public().toBytes())

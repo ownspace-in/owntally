@@ -10,7 +10,7 @@ Also verified through nginx from outside on 29 Oct 2026 (step 6): `https://relay
 
 Also verified on 29 Oct 2026: UDP 7842 packets from outside reach the VM (tcpdump), and `ufw` already allows `7842/udp`; the renewal hook runs by hand without errors and the relay restarts with the copied certificate; `certbot renew --dry-run` succeeds for all four certificates (an earlier run failed with `Timeout during connect` on every certificate, then passed on retry, with Let's Encrypt's validation servers seen reaching port 80, so the cause was temporary and not the relay setup).
 
-Verified with phones on 2 Nov 2026 (step 9): a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0. Redmi (Android 15) and Galaxy S24 (Android 17), both on mobile data, both report `home relay https://relay.ownspace.in/`; the link started RELAYED and ended DIRECT; 30 of 30 messages, 0 corrupt, average round trip 222 ms. Other rooms and swapped roles also worked (owner-reported).
+Verified with phones on 2 Nov 2026 (step 9, before the token existed): a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0. Redmi (Android 15) and Galaxy S24 (Android 17), both on mobile data, both report `home relay https://relay.ownspace.in/`; the link started RELAYED and ended DIRECT; 30 of 30 messages, 0 corrupt, average round trip 222 ms. Other rooms and swapped roles also worked (owner-reported).
 
 Not verified yet:
 - That the direct link came from our relay's QUIC address discovery. The phones' logs do not say how the direct path was found. To check: look at `sudo journalctl -u iroh-relay` and `sudo tcpdump -ni any udp port 7842` on the VM during a run, or test with two phones on different carriers.
@@ -148,32 +148,50 @@ sudo openssl x509 -in /etc/iroh-relay/certs/default.crt -noout -dates
 
 ## 10. Access token and rate limit (decided 2 Nov 2026, not yet run)
 
-Decision: a shared token plus per-client rate limits. The relay supports only one access mode at a time (`everyone`, `allowlist`, `denylist`, `http` or `shared_token`), so a denylist is not used alongside the token. To cut off abuse, rotate the token: the setting takes a list, so add the new token next to the old one, ship an app update, then drop the old one.
+Decision: a shared token plus per-client rate limits. The relay supports only one access mode at a time (`everyone`, `allowlist`, `denylist`, `http` or `shared_token`), so a denylist is not used alongside the token. Abuse is handled by rotating the token (below).
 
-Know the limits: the token ships inside the APK, so anyone can extract it. It stops casual use, not a determined person. Rate limits cap the damage either way.
+Know the limits: the token ships inside the APK, so anyone can extract it. It stops casual use, not a determined person, and a new APK carries the new token too. The rate limits cap the damage either way.
 
-On the VM, after copying the new `config.toml` and `iroh-relay.service`:
+**Where tokens live.** Only in `/etc/iroh-relay/tokens` on the VM (one per line, `0600`, root) and in KeePass (one entry per token). The repo holds a template (`config.toml`, with a placeholder) and `render-config.sh`, which writes the real `/etc/iroh-relay/config.toml` (`0640`, root:iroh-relay) from the template and the token list. The script never prints a token.
 
-```
-TOKEN=$(openssl rand -hex 24)
-echo "IROH_RELAY_ACCESS_TOKEN=$TOKEN" | sudo tee /etc/iroh-relay/env >/dev/null
-sudo chown root:root /etc/iroh-relay/env && sudo chmod 0600 /etc/iroh-relay/env
-echo "$TOKEN"    # copy it to a safe place; it goes into the app build, never into git
-sudo install -m 0644 ~/config.toml /etc/iroh-relay/config.toml
-sudo install -m 0644 ~/iroh-relay.service /etc/systemd/system/iroh-relay.service
-sudo systemctl daemon-reload && sudo systemctl restart iroh-relay
-systemctl status iroh-relay --no-pager; sudo journalctl -u iroh-relay -n 20 --no-pager
-```
+**First setup**, after copying `config.toml`, `render-config.sh` and `iroh-relay.service` to the VM:
 
-Checks (step 5's header test still gives 101, because the token is checked after the upgrade, so test with phones):
-- The service stays running. If it complains about the token list, the env var did not take effect as expected: stop and report the log.
-- Phones **without** the token cannot connect through `https://relay.ownspace.in` (log shows dial failures or never reaches `online`).
-- Phones **with** the token connect as in step 9.
-- Also test that the placeholder text from `config.toml` does NOT work as a token. If it does, the environment variable did not replace the list, and the relay is protected by a publicly known string.
+1. In KeePass, make an entry `OwnTally relay token 1` and generate a 48-character hex password.
+2. On the VM, create the token file without leaving the token in shell history, and paste the token when `sudoedit` opens it:
+   ```
+   sudo install -m 0600 -o root -g root /dev/null /etc/iroh-relay/tokens
+   sudoedit /etc/iroh-relay/tokens
+   ```
+3. Install and render:
+   ```
+   sudo install -m 0644 ~/config.toml /etc/iroh-relay/config.template.toml
+   sudo install -m 0750 ~/render-config.sh /usr/local/sbin/iroh-relay-render-config
+   sudo install -m 0644 ~/iroh-relay.service /etc/systemd/system/iroh-relay.service
+   sudo iroh-relay-render-config
+   sudo systemctl daemon-reload && sudo systemctl restart iroh-relay
+   systemctl status iroh-relay --no-pager; sudo journalctl -u iroh-relay -n 20 --no-pager
+   ls -l /etc/iroh-relay
+   ```
 
-Phone side (not written yet): the Iroh Kotlin package 1.1.0 has `RelayConfig(url, quicPort, authToken)` and `RelayMode.custom(RelayMap)`, which is how the app sends the token (the relay reads it as `Authorization: Bearer`). Checked in the library itself (2 Nov 2026): the Kotlin classes exist, and the native library `libiroh_ffi.so` is built on the `iroh-relay` 1.0.2 client, contains an `auth_token` setting documented as an `Authorization: Bearer ...` header on the upgrade request, and an error for a token that is not a valid header value. Not checked: a working connection with a token. The token goes into the build from a git-ignored local file.
+Checks:
+- The service stays running, `config.toml` is `-rw-r-----` root:iroh-relay and `tokens` is `-rw-------` root. The journal must not show the token.
+- Step 5's header test still gives 101, because the token is checked after the upgrade, so test with phones.
+- A phone **without** the token cannot connect through `https://relay.ownspace.in` (it never reaches `online`, or dials fail).
+- A phone **with** the token connects as in step 9.
+- The placeholder text from the template does **not** work as a token.
 
-Rate limit: `bytes_per_second = 262144` and `max_burst_bytes = 1048576` per client (what the relay reads from one connection). The values are a first guess from the 0.5 MB test. Run the phone test again and confirm 30 of 30 still pass; raise them if a large sync is slowed. `accept_conn_limit` is not implemented in v1.4.1.
+**Rotating a token** (a leaked token, or a retired app version):
+1. KeePass: new entry `OwnTally relay token 2`. Set the old entry's expiry to the planned removal date.
+2. VM: add the new token as a second line in `tokens` (`sudoedit`), then `sudo iroh-relay-render-config && sudo systemctl restart iroh-relay`. Phones reconnect by themselves. Both tokens work now.
+3. Build and ship an app with the new token (`spike/local-secrets.properties`, key `irohRelayToken`).
+4. Wait. There is no analytics, so you cannot see who has updated: choose a date.
+5. VM: delete the old line, render, restart. Apps with the old token lose the relay but can still use Nearby or the WebSocket relay.
+
+Never put a token in git, a command line, a URL or a chat. The app sends it as an `Authorization: Bearer` header (not in the nginx access log).
+
+**Phone side.** The Iroh Kotlin package 1.1.0 has `RelayConfig(url, quicPort, authToken)` and `RelayMode.custom(RelayMap)`. Checked in the library itself (2 Nov 2026): the native library `libiroh_ffi.so` is built on the `iroh-relay` 1.0.2 client and contains an `auth_token` setting documented as an `Authorization: Bearer ...` header on the upgrade request, and an error for a token that is not a valid header value. The spike app reads the token from the git-ignored `spike/local-secrets.properties`. Not checked until the phone test: a working connection with a token, and the refusal without one.
+
+**Rate limit.** `bytes_per_second = 262144` and `max_burst_bytes = 1048576` per client (what the relay reads from one connection). The values are a first guess from the 0.5 MB test. Run the phone test again and confirm 30 of 30 still pass; raise them if a large sync is slowed. `accept_conn_limit` is not implemented in v1.4.1. QUIC address discovery on UDP 7842 is not known to be covered by the token.
 
 ## 11. Not decided yet
 

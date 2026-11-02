@@ -1,5 +1,11 @@
+import java.util.Properties
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+
+// Relay token for the Iroh test: from the git-ignored spike/local-secrets.properties, never from git.
+val irohRelayToken: String = Properties().also { props ->
+    rootProject.file("local-secrets.properties").takeIf { it.exists() }?.reader()?.use(props::load)
+}.getProperty("irohRelayToken", "").trim()
 
 plugins {
     id("com.android.application")
@@ -17,6 +23,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.0.1"
+        buildConfigField("String", "IROH_RELAY_TOKEN", "\"$irohRelayToken\"")
         buildConfigField("String", "BUILT_AT", "\"${LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM HH:mm"))}\"")
         // Emulators are x86_64: build them with -PallAbis.
         if (!project.hasProperty("allAbis")) ndk { abiFilters += listOf("arm64-v8a") }

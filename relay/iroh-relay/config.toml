@@ -1,4 +1,4 @@
-# Iroh relay for relay.ownspace.in. Install at /etc/iroh-relay/config.toml.
+# Iroh relay for relay.ownspace.in. TEMPLATE: install at /etc/iroh-relay/config.template.toml, then run render-config.sh.
 # nginx owns public TCP 80 and 443 and forwards the relay's web paths to the HTTPS listener below.
 # The relay itself listens on UDP for QUIC address discovery, which nginx cannot proxy.
 # Field names are from iroh-relay v1.4.1 (src/main.rs). See RUNBOOK.md for what is not yet verified.
@@ -13,10 +13,10 @@ enable_quic_addr_discovery = true
 enable_metrics = false
 
 # Who may connect: only clients that send one of these bearer tokens. The relay allows ONE access mode
-# at a time, so a denylist cannot be combined with this. The value below is a PLACEHOLDER, not a secret:
-# the real token is set on the VM through IROH_RELAY_ACCESS_TOKEN (see iroh-relay.service and RUNBOOK.md
-# step 10), which replaces this list. Never put the real token in this file or in git.
-access.shared_token = ["placeholder-replaced-by-IROH_RELAY_ACCESS_TOKEN"]
+# at a time, so a denylist cannot be combined with this. This file is a TEMPLATE: the value below is a
+# placeholder, not a secret. On the VM, render-config.sh replaces this line with the tokens from
+# /etc/iroh-relay/tokens and writes /etc/iroh-relay/config.toml. Never put a real token in git.
+access.shared_token = ["placeholder-replaced-by-render-config"]
 
 # Per-client cap on what the relay reads from one connection. Sync traffic is small (a 30-message test
 # with ten 50 KB messages was about 0.5 MB); this stops one client using the relay as a free tunnel.

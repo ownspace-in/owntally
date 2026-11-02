@@ -153,7 +153,8 @@ class MainActivity : ComponentActivity() {
     private fun irohSecret(r: Role) = ByteArray(32) { r.key.bytes[0] }
 
     private fun startIroh() {
-        val transport = IrohTransport(irohSecret(role), relayUrl.trim().takeIf { it.startsWith("http") }, scope) { line -> runOnUiThread { note(line) } }.also { iroh = it }
+        note("iroh: relay token ${if (BuildConfig.IROH_RELAY_TOKEN.isEmpty()) "not set" else "set (${BuildConfig.IROH_RELAY_TOKEN.length} characters)"}")
+        val transport = IrohTransport(irohSecret(role), relayUrl.trim().takeIf { it.startsWith("http") }, BuildConfig.IROH_RELAY_TOKEN, scope) { line -> runOnUiThread { note(line) } }.also { iroh = it }
         jobs += scope.launch {
             try {
                 transport.start()
