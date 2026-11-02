@@ -10,9 +10,10 @@ Also verified through nginx from outside on 29 Oct 2026 (step 6): `https://relay
 
 Also verified on 29 Oct 2026: UDP 7842 packets from outside reach the VM (tcpdump), and `ufw` already allows `7842/udp`; the renewal hook runs by hand without errors and the relay restarts with the copied certificate; `certbot renew --dry-run` succeeds for all four certificates (an earlier run failed with `Timeout during connect` on every certificate, then passed on retry, with Let's Encrypt's validation servers seen reaching port 80, so the cause was temporary and not the relay setup).
 
+Verified with phones on 2 Nov 2026 (step 9): a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0. Redmi (Android 15) and Galaxy S24 (Android 17), both on mobile data, both report `home relay https://relay.ownspace.in/`; the link started RELAYED and ended DIRECT; 30 of 30 messages, 0 corrupt, average round trip 222 ms. Other rooms and swapped roles also worked (owner-reported).
+
 Not verified yet:
-- That the relay answers QUIC address discovery from phones and that phones then form direct links (step 9).
-- That a v1.4.1 relay works with phones built on the Iroh Kotlin package 1.1.0 (step 9).
+- That the direct link came from our relay's QUIC address discovery. The phones' logs do not say how the direct path was found. To check: look at `sudo journalctl -u iroh-relay` and `sudo tcpdump -ni any udp port 7842` on the VM during a run, or test with two phones on different carriers.
 
 ## 0. What you need
 
