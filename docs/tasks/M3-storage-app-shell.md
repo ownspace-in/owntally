@@ -12,7 +12,8 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 |---|---|
 | T3.1 plan and decisions | Drafted. Owner answers recorded (application id, test members, app lock, bottom bar). Still open: approval of the PIN design in T3.11, the defaults, and what the Settle tab shows. |
 | T3.2 Android build in the root project | Done (4 Nov 2026), see below. |
-| T3.3 to T3.12 | Not started. |
+| T3.3 money and text formatting | Done (4 Nov 2026), see below. |
+| T3.4 to T3.12 | Not started. |
 
 ## Decisions
 
@@ -52,6 +53,8 @@ Done when: an empty app installs and starts on the emulator, `./gradlew test` an
 Do: format `Money` as in the mockups (₹3,200; Indian grouping; negative as "you owe"), parse what a person types ("2,400", "2400.50", more than two decimals rejected), dates as in "Today, 13 Oct".
 
 Done when: tests cover grouping, rounding to paise, bad input, and every amount shown in the mockups.
+
+**Result (4 Nov 2026):** in `core-model`, package `owntally.model.format` (plain Kotlin, no `Locale`, so a phone's settings cannot change a number). `MoneyFormat`: ₹2,400, Indian grouping (₹1,00,000, ₹1,00,00,000), paise only when there are some (₹2,400.50), negative as `-₹1,850`, signed as `+₹3,200` (zero has no sign), `describe` giving owed, owes or settled with an unsigned amount for sentences, `editable` for text fields (`2400.50`). `MoneyInput.parse`: accepts `2,400`, `2400.5`, `₹ 2,400.50`, `.5`, `2400.` (while typing); refuses a third decimal instead of rounding; reports bad characters (letters, signs, spaces inside, other-script digits), misplaced separators, and amounts above ₹100 crore; never throws; what `MoneyFormat` prints can always be typed back. `DateText`: "Today, 13 Oct", "Yesterday, 12 Oct", "9 Oct", "31 Dec 2025" for another year, and "Unknown date" (never a crash) for a day off the wire that is not a real date. Every amount drawn in all 22 mockups is in the tests (20 amounts, plus the signed before and after of the remove-member screen). The largest-number test uses a value worked out by hand. Six rules were broken on purpose and the tests caught each. 173 `core-model` tests. Not done here: relative times ("2 hrs ago", "expires in 5 hrs 10 min"); they belong to the milestones that show them (M4, M6).
 
 ## T3.4 Keystore and secret storage
 
