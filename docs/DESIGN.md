@@ -35,7 +35,7 @@ UI mockups: see the design/ folder (screens to be exported there).
 
 - Each phone keeps an append-only, signed event log in a local database.
 - Events: `ExpenseAdded`, `ExpenseDeleted`, `SettlementRecorded`, `PaymentDisputed`, `MemberJoined`, `ProfileUpdated`, `MemberRemoved`, `OwnershipTransferred`.
-- An event is identified by (device id, counter). Deletes are new events, so phones never conflict.
+- An event is identified by (author key, counter). In v1 there is one phone per member, so the author key stands in for the device id (owner decision, 3 Nov 2026). Deletes are new events, so phones never conflict.
 - Sync: swap a version summary (device id to highest counter), then send only the missing events. Merge is a union.
 - Balances are derived by replaying the log, so all phones agree.
 - Each phone has a keypair. Each group has a shared key. Everything sent is encrypted with the group key.
@@ -131,7 +131,7 @@ Limits:
 - The phone number is shown to group members, so the join screen says so. Using a different number or name per group is allowed.
 - The phone number is unverified. It identifies nobody on its own: identity is the key.
 - Settle up shows who pays whom and how much. A UPI payment link needs a UPI id, which we do not store, so the app cannot pre-fill a payment. Instead the debtor taps "Pay Rohan ₹1,850", which shows the phone number with copy and call buttons and opens their UPI app chooser, and pays to that number in their own UPI app.
-- The debtor taps "I paid" and the creditor taps "Received". Until then the settlement is shown as unconfirmed. `SettlementRecorded` stores the amount, from, to, and the confirmation state.
+- The debtor taps "I paid" and the creditor taps "Received". Until then the settlement is shown as unconfirmed, but it counts toward the balances from the moment it is recorded (owner decision, 3 Nov 2026); a dispute stops it counting. `SettlementRecorded` stores the amount, from, to, and the confirmation state.
 - Cash is always an option.
 - Reminders: the creditor can send a message through the share sheet.
 
@@ -207,7 +207,7 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
 1. Admin opens a member, chooses Remove, sees what happens: they stay in history, can no longer add entries, and the group key will change.
 2. Removal rebalances the group. The removed member is taken out of the calculation, as if they had never been part of it:
    - Expenses they paid are excluded, so nobody owes them for those.
-   - Their share is removed from expenses others paid. Equal splits are re-split among the remaining participants. For exact-amount splits, their share is dropped and others' shares stay as entered.
+   - Their share is removed from expenses others paid. Equal splits are re-split among the remaining participants. For exact-amount splits, their share is divided equally among the remaining participants of that expense (owner decision, 3 Nov 2026), so the payer is repaid in full.
    - Settlements (payments) involving them are excluded too. A remaining member who already paid the removed member will owe that amount again in the recalculation, so the before-and-after screen lists these payments and the admin must confirm.
    - Their entries stay in the history, shown as "excluded (member removed)", and are not counted in balances.
    - No `BalanceWrittenOff` event is needed. Balances are derived by replaying the log with the `MemberRemoved` rule, so every phone gets the same result.

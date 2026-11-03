@@ -1,0 +1,285 @@
+{
+ "description": "One rule broken per ignored event. Asha creates the group, makes Ben an admin and hands over ownership to Ben.",
+ "keys": {
+  "asha": "0100000000000000000000000000000000000000000000000000000000000000",
+  "ben": "0200000000000000000000000000000000000000000000000000000000000000",
+  "chitra": "0300000000000000000000000000000000000000000000000000000000000000",
+  "dev": "0400000000000000000000000000000000000000000000000000000000000000",
+  "eve": "0500000000000000000000000000000000000000000000000000000000000000"
+ },
+ "events": [
+  {
+   "author": "asha",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {},
+   "body": {
+    "type": "GroupCreated",
+    "groupId": "09090909090909090909090909090909",
+    "name": "Rules",
+    "currency": "INR"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 1
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "ben",
+    "name": "Ben",
+    "phone": "98765 00002"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 3,
+   "version": 1,
+   "time": 3000,
+   "after": {
+    "asha": 2
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "chitra",
+    "name": "Chitra",
+    "phone": "98765 00003"
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {
+    "asha": 3
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "dev",
+    "name": "Dev",
+    "phone": "98765 00004"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 4,
+   "version": 1,
+   "time": 4000,
+   "after": {
+    "asha": 3,
+    "ben": 1
+   },
+   "body": {
+    "type": "AdminAdded",
+    "member": "ben"
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 4,
+    "ben": 1
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "dev",
+    "name": "Dev",
+    "phone": "98765 00004"
+   }
+  },
+  {
+   "author": "chitra",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {
+    "asha": 4,
+    "ben": 2
+   },
+   "body": {
+    "type": "ExpenseAdded",
+    "description": "Lunch",
+    "total": 5000,
+    "paidBy": "chitra",
+    "day": 1,
+    "split": {
+     "type": "Equal",
+     "participants": [
+      "chitra",
+      "eve"
+     ]
+    }
+   }
+  },
+  {
+   "author": "chitra",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 4,
+    "ben": 2,
+    "chitra": 1
+   },
+   "body": {
+    "type": "SettlementRecorded",
+    "from": "ben",
+    "to": "dev",
+    "amount": 100
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 3,
+   "version": 1,
+   "time": 3000,
+   "after": {
+    "asha": 4,
+    "ben": 2,
+    "chitra": 2
+   },
+   "body": {
+    "type": "MemberRemoved",
+    "member": "asha"
+   }
+  },
+  {
+   "author": "chitra",
+   "counter": 3,
+   "version": 1,
+   "time": 3000,
+   "after": {
+    "asha": 4,
+    "ben": 3,
+    "chitra": 2
+   },
+   "body": {
+    "type": "AdminAdded",
+    "member": "chitra"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 5,
+   "version": 1,
+   "time": 5000,
+   "after": {
+    "asha": 4,
+    "ben": 3,
+    "chitra": 3
+   },
+   "body": {
+    "type": "OwnershipOffered",
+    "to": "ben"
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 4,
+   "version": 1,
+   "time": 4000,
+   "after": {
+    "asha": 5,
+    "ben": 3,
+    "chitra": 3
+   },
+   "body": {
+    "type": "OwnershipAccepted"
+   }
+  },
+  {
+   "author": "chitra",
+   "counter": 4,
+   "version": 1,
+   "time": 4000,
+   "after": {
+    "asha": 5,
+    "ben": 4,
+    "chitra": 3
+   },
+   "body": {
+    "type": "Unknown",
+    "name": "FutureThing"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 6,
+   "version": 1,
+   "time": 6000,
+   "after": {
+    "asha": 5,
+    "ben": 4,
+    "chitra": 4
+   },
+   "body": {
+    "type": "MemberRemoved",
+    "member": "dev"
+   }
+  }
+ ],
+ "expect": {
+  "currentMembers": [
+   "asha",
+   "ben",
+   "chitra"
+  ],
+  "removed": [
+   "dev"
+  ],
+  "owner": "ben",
+  "roles": {
+   "asha": "ADMIN",
+   "ben": "OWNER",
+   "chitra": "MEMBER",
+   "dev": "MEMBER"
+  },
+  "balances": {
+   "asha": 0,
+   "ben": 0,
+   "chitra": 0
+  },
+  "plan": [],
+  "ignored": [
+   [
+    "ben",
+    1,
+    "NOT_ALLOWED"
+   ],
+   [
+    "chitra",
+    1,
+    "INVALID"
+   ],
+   [
+    "chitra",
+    2,
+    "NOT_ALLOWED"
+   ],
+   [
+    "ben",
+    3,
+    "NOT_ALLOWED"
+   ],
+   [
+    "chitra",
+    3,
+    "NOT_ALLOWED"
+   ],
+   [
+    "chitra",
+    4,
+    "UNKNOWN_TYPE"
+   ]
+  ]
+ }
+}
