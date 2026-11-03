@@ -102,8 +102,52 @@ class SettleUpModelTest {
     }
 
     @Test fun actionsAreOffUntilPaymentsCanBeRecorded() {
-        assertTrue(!SettleUpModel.ACTIONS_ENABLED)
-        assertEquals("Recording payments arrives in a later update. For now this is the list of who should pay whom.", SettleUpModel.ACTIONS_NOTE)
+        assertTrue(!SettleUpModel.ACTIONS_ENABLED, "I paid, Send reminder and Mark received stay off")
+        assertEquals("Recording payments arrives in a later update. Pay opens your share sheet with the amount and number; the other buttons wait for that update.", SettleUpModel.ACTIONS_NOTE)
+    }
+}
+
+class SettleTabAndPayTest {
+    @Test fun settleTabListsEveryReadableGroupSettledOrNot() {
+        val w = TestWorld("Asha")
+        val owed = w.sessions.session(w.newGroup("Owed"))
+        w.sessions.session(w.newGroup("Quiet"))
+        val ben = w.addFriend(owed, "Ben", 2_000_001)
+        w.expense(owed, "Tea", w.rupees(100), owed.view.value.me, owed.view.value.me, ben)
+        val cards = GroupsModels.list(w.sessions.summaries.value).cards
+        assertEquals(listOf("Owed", "Quiet"), GroupsModels.settleTabCards(cards).map { it.name })
+    }
+
+    @Test fun settleTabLeavesOutGroupsThatCannotBeOpened() {
+        val ok = GroupCardModel(owntally.model.GroupId(ByteArray(16)), "A", "A", 0, "", owntally.model.format.MoneyFormat.describe(Money.ZERO), true)
+        val lost = ok.copy(id = owntally.model.GroupId(ByteArray(16) { 1 }), name = "B", readable = false)
+        assertEquals(listOf("A"), GroupsModels.settleTabCards(listOf(ok, lost)).map { it.name })
+        assertEquals(emptyList(), GroupsModels.settleTabCards(emptyList()))
+    }
+
+    @Test fun payTextNamesWhoHowMuchWhereAndTheNumber() {
+        val w = TestWorld("Asha")
+        val s = w.sessions.session(w.newGroup("Goa Trip"))
+        val me = s.view.value.me
+        val rohan = w.addFriend(s, "Rohan", 2_000_001)
+        w.expense(s, "Villa", w.rupees(900), rohan, me, rohan)
+        val row = SettleUpModel.build(s.view.value).payments.single()
+        assertEquals(PaymentRole.FROM_ME, row.role)
+        assertEquals("Pay Rohan ₹450 for Goa Trip. Phone: 98765 00001. Sent from OwnTally.", row.payText("Goa Trip"))
+    }
+
+    @Test fun payTextWithoutANumberLeavesItOut() {
+        val k = owntally.model.PublicKey(ByteArray(32))
+        val row = PaymentRow(k, k, Money(100_00), "₹100", "You → Sam", null, PaymentRole.FROM_ME, "You", "Sam")
+        assertEquals("Pay Sam ₹100 for G. Sent from OwnTally.", row.payText("G"))
+    }
+
+    @Test fun onlyMyOwnPaymentsCanBePaid() {
+        val k = owntally.model.PublicKey(ByteArray(32))
+        fun row(role: PaymentRole) = PaymentRow(k, k, Money(1), "₹0.01", "x", null, role, "A", "B")
+        assertTrue(row(PaymentRole.FROM_ME).canPay)
+        assertTrue(!row(PaymentRole.TO_ME).canPay)
+        assertTrue(!row(PaymentRole.BETWEEN_OTHERS).canPay)
     }
 }
 

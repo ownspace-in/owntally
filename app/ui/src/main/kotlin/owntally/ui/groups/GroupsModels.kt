@@ -42,6 +42,9 @@ object GroupsModels {
         return letters.uppercase()
     }
 
+    /** The Settle tab: every group that can be opened, settled or not. */
+    fun settleTabCards(cards: List<GroupCardModel>): List<GroupCardModel> = cards.filter { it.readable }
+
     fun list(summaries: List<GroupSummary>): GroupsListModel {
         val readable = summaries.filter { it.readable }
         val owed = readable.map { it.myBalance }.filter { it.isPositive() }.fold(Money.ZERO) { a, b -> a + b }
@@ -347,15 +350,24 @@ data class PaymentRow(
     /** The phone number of the person on the other side (the one I pay, or the one who pays me), as they entered it. */
     val phone: String?,
     val role: PaymentRole,
-)
+    val fromName: String,
+    val toName: String,
+) {
+    /** Only a payment I have to make can be paid from here. */
+    val canPay: Boolean get() = role == PaymentRole.FROM_ME
+
+    /** The words handed to the share sheet when I tap Pay: who to pay, how much, and the number they gave. */
+    fun payText(groupName: String): String =
+        "Pay $toName $amount for $groupName." + (phone?.let { " Phone: $it." } ?: "") + " Sent from OwnTally."
+}
 
 /** Settle up for the whole group: the core's plan, row for row. */
-data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, val footer: String) {
+data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, val footer: String, val groupName: String = "") {
     companion object {
         const val INTRO = "A short list of payments that clear everyone. Pay in any UPI app or cash. OwnTally never moves or checks money."
         /** Marking payments as paid or received is not built yet, so those buttons are shown switched off. */
         const val ACTIONS_ENABLED = false
-        const val ACTIONS_NOTE = "Recording payments arrives in a later update. For now this is the list of who should pay whom."
+        const val ACTIONS_NOTE = "Recording payments arrives in a later update. Pay opens your share sheet with the amount and number; the other buttons wait for that update."
 
         fun build(view: GroupView): SettleUpModel {
             fun name(k: PublicKey) = if (k == view.me) "You" else view.state.members[k]?.name?.takeIf { it.isNotBlank() } ?: "Someone"
@@ -369,6 +381,7 @@ data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, v
                 PaymentRow(
                     p.from, p.to, p.amount, MoneyFormat.format(p.amount), "${name(p.from)} → ${name(p.to)}",
                     if (role == PaymentRole.BETWEEN_OTHERS) view.state.members[p.to]?.phone else view.state.members[other]?.phone, role,
+                    name(p.from), name(p.to),
                 )
             }
             val inPlan = view.plan.flatMap { listOf(it.from, it.to) }.toSet()
@@ -379,7 +392,7 @@ data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, v
                 free.size == 1 -> "${free[0]} needs no payments."
                 else -> "${free.dropLast(1).joinToString(", ")} and ${free.last()} need no payments."
             }
-            return SettleUpModel("${view.state.name ?: "Group"} · whole group", rows, footer)
+            return SettleUpModel("${view.state.name ?: "Group"} · whole group", rows, footer, view.state.name ?: "Group")
         }
     }
 }

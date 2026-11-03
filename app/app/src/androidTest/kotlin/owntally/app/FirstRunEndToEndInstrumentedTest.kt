@@ -140,7 +140,7 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("₹2,850").assertExists()
             rule.onNodeWithText("Ben (test) → Meera (test)").assertExists()
             rule.onNodeWithText("₹9,550").assertExists()
-            rule.onNodeWithText("Pay").assertIsNotEnabled()
+            rule.onNodeWithText("Pay").assertIsEnabled()
             rule.onNodeWithText("I paid").assertIsNotEnabled()
             rule.onNodeWithText(SETTLE_NOTE).assertExists()
             rule.onNode(hasContentDescription("Back")).performClick()
@@ -170,7 +170,7 @@ class FirstRunEndToEndInstrumentedTest {
     }
 
     private companion object {
-        const val SETTLE_NOTE = "Recording payments arrives in a later update. For now this is the list of who should pay whom."
+        const val SETTLE_NOTE = "Recording payments arrives in a later update. Pay opens your share sheet with the amount and number; the other buttons wait for that update."
     }
 
     private fun container() = (context as OwnTallyApplication).container

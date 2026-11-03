@@ -110,9 +110,9 @@ private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (G
 
 @Composable
 private fun SettleTab(model: GroupsListModel, onOpen: (GroupId) -> Unit) {
-    val open = model.cards.filter { it.readable && it.balance.kind != BalanceKind.SETTLED }
+    val open = GroupsModels.settleTabCards(model.cards)
     if (open.isEmpty()) {
-        MessageTab("Nothing to settle", "All your groups are settled up.")
+        MessageTab("Settle", "You have no groups yet. Make a group on the Groups tab first.")
         return
     }
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -301,5 +301,9 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
     }
     val s = session ?: return Box(Modifier.fillMaxSize())
     val view by s.view.collectAsStateWithLifecycle()
-    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack, onShare = { text ->
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
+        try { context.startActivity(android.content.Intent.createChooser(send, null)) } catch (e: android.content.ActivityNotFoundException) { }
+    })
 }

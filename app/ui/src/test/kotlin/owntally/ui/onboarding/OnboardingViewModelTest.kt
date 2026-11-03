@@ -276,6 +276,7 @@ class OnboardingViewModelTest {
         v.toConfirm()
         v.answerRight()
         val text = v.s.toString()
-        for (w in firstRun.last.words().filter { it.length >= 4 }) assertFalse(w in text, "the state printed \"$w\"")
+        // Whole words only: a phrase word such as "match" must not fail the test because the state has a field called "mismatch".
+        for (w in firstRun.last.words().filter { it.length >= 4 }) assertFalse(Regex("(?<![A-Za-z])${Regex.escape(w)}(?![A-Za-z])").containsMatchIn(text), "the state printed \"$w\"")
     }
 }
