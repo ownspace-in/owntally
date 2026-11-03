@@ -146,6 +146,49 @@ echo | openssl s_client -connect relay.ownspace.in:443 -servername relay.ownspac
 sudo openssl x509 -in /etc/iroh-relay/certs/default.crt -noout -dates
 ```
 
+## 9b. Production update: per-IP limits and rate cap, no token (3 Nov 2026, not yet run)
+
+Decision: ship with limits only (open access, the relay's own per-client cap, and nginx per-IP limits). The token in step 10 stays optional and off. Run this on the VM after steps 1 to 9 are done. Copy the files first, from the development machine:
+
+```
+scp relay/iroh-relay/config.toml relay/iroh-relay/nginx-limits.conf relay/iroh-relay/nginx-locations.conf <user>@<vm>:~
+```
+
+1. **Back up what you change.**
+   ```
+   sudo cp -a /etc/iroh-relay/config.toml ~/config.toml.bak
+   sudo cp -a /etc/nginx/conf.d/relay.ownspace.in.conf ~/relay.ownspace.in.conf.bak
+   ```
+2. **Relay config.** The repo file has no active `access` line, so access stays open.
+   ```
+   ls -l ~/config.toml ~/nginx-limits.conf ~/nginx-locations.conf   # all three must exist; if not, step 0 was not done
+   grep -c '^access' ~/config.toml   # must print 0 (a missing file is an error, not a pass)
+   sudo install -m 0644 ~/config.toml /etc/iroh-relay/config.toml
+   sudo systemctl restart iroh-relay
+   systemctl status iroh-relay --no-pager; sudo journalctl -u iroh-relay -n 20 --no-pager
+   ```
+   Check: `active (running)`, no config error (a complaint about `limits` means a field name is wrong: restore the backup and report the log). Do not continue if the `grep -c` count is not 0, or if the files are missing. The files must come from the commit that has the commented-out `access` line (the first commit that had an active placeholder line is not safe to install).
+3. **nginx zones, as their own file.**
+   ```
+   sudo install -m 0644 ~/nginx-limits.conf /etc/nginx/conf.d/00-iroh-relay-limits.conf
+   ```
+4. **nginx locations.** Open `/etc/nginx/conf.d/relay.ownspace.in.conf` and add these lines inside the existing blocks (compare with `nginx-locations.conf`):
+   - In `location = /relay {`: `limit_req zone=iroh_req burst=20 nodelay;`, `limit_req_status 429;`, `limit_conn iroh_conn 20;`, `limit_conn_status 429;`
+   - In `location = /ping {` and `location = /generate_204 {`: `limit_req zone=iroh_req burst=20 nodelay;` and `limit_req_status 429;`
+   Then `sudo nginx -t`, and only if it passes: `sudo systemctl reload nginx`. If it fails, `sudo cp -a ~/relay.ownspace.in.conf.bak /etc/nginx/conf.d/relay.ownspace.in.conf` and remove the new zones file.
+5. **Check (from your laptop).**
+   ```
+   curl -s -o /dev/null -w '%{http_code}\n' https://relay.ownspace.in/generate_204        # 204
+   curl -s https://relay.ownspace.in/healthz                                                 # ok
+   seq 1 80 | xargs -P 40 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://relay.ownspace.in/generate_204 | sort | uniq -c
+   sleep 5; curl -s -o /dev/null -w '%{http_code}\n' https://relay.ownspace.in/generate_204 # 204 again
+   (cd relay/ws-relay && go run -buildvcs=false ./tools/smoke)
+   ```
+   Expected: the burst shows mostly `204` and some `429` (the limit works); after a pause it is `204` again; the smoke test passes. If the burst shows no `429`, the limit is not in effect: check the `limit_req` lines and the zones file. Run the burst once only, from your own address.
+6. **Phone test.** One run of the Iroh test (step 9, no token, build without `local-secrets.properties`). It must still pass 30 of 30. Afterwards on the VM: `sudo grep -c 'limiting' /var/log/nginx/error.log` should not have grown from real phones; if it has, raise the numbers before announcing.
+
+**Undo:** restore both `.bak` files, `sudo rm /etc/nginx/conf.d/00-iroh-relay-limits.conf`, `sudo nginx -t && sudo systemctl reload nginx`, `sudo systemctl restart iroh-relay`.
+
 ## 10. Access token and rate limit (decided 2 Nov 2026, not yet run)
 
 Decision: a shared token plus per-client rate limits. The relay supports only one access mode at a time (`everyone`, `allowlist`, `denylist`, `http` or `shared_token`), so a denylist is not used alongside the token. Abuse is handled by rotating the token (below).

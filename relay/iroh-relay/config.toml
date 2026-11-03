@@ -12,11 +12,11 @@ enable_quic_addr_discovery = true
 # No metrics server for now.
 enable_metrics = false
 
-# Who may connect: only clients that send one of these bearer tokens. The relay allows ONE access mode
-# at a time, so a denylist cannot be combined with this. This file is a TEMPLATE: the value below is a
-# placeholder, not a secret. On the VM, render-config.sh replaces this line with the tokens from
-# /etc/iroh-relay/tokens and writes /etc/iroh-relay/config.toml. Never put a real token in git.
-access.shared_token = ["placeholder-replaced-by-render-config"]
+# Who may connect. DEFAULT: everyone (the line below is commented out), protected by the limits in this file
+# and the nginx limits. Optional token mode (runbook step 10): render-config.sh turns
+# the line below into a list of the tokens from /etc/iroh-relay/tokens. The placeholder is not a secret, and this
+# file must never be installed as the live config with the line uncommented.
+# access.shared_token = ["placeholder-replaced-by-render-config"]
 
 # Per-client cap on what the relay reads from one connection. Sync traffic is small (a 30-message test
 # with ten 50 KB messages was about 0.5 MB); this stops one client using the relay as a free tunnel.
