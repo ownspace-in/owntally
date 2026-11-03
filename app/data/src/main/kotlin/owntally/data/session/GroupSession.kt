@@ -97,6 +97,13 @@ class GroupSession(
         publish()
     }
 
+    /** The counter the next event written by this phone will get. The Add expense screen needs it to show the rounding exactly. */
+    @Synchronized
+    fun nextCounter(): Long {
+        sync()
+        return (log.summary()[me.publicKey] ?: 0L) + 1
+    }
+
     fun addExpense(description: String, total: Money, paidBy: PublicKey, day: Long, split: Split): AddResult =
         append(EventBody.ExpenseAdded(description, total, paidBy, day, split))
 

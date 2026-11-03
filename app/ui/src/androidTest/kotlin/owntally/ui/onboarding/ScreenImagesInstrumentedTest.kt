@@ -153,4 +153,17 @@ class ScreenImagesInstrumentedTest {
         rule.setContent { OwnTallyTheme { CreateGroupScreen(CreateGroupModel("Goa Trip", 1), { }, { }, { }, null) } }
         save("12-create-group")
     }
+
+    @Test
+    fun saveTheAddExpenseScreen() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        val keys = (1..5).map { PublicKey(ByteArray(32) { _ -> it.toByte() }) }
+        val names = listOf("You", "Rohan", "Meera", "Kabir", "Isha")
+        val people = keys.zip(names) { k, n -> owntally.ui.groups.Person(k, n) }
+        val model = owntally.ui.groups.AddExpenseModel(
+            people, 7, 20_000, keys[0], keys[0], 20_000, "2400", "Seafood lunch", selected = setOf(keys[0], keys[1], keys[2], keys[4]),
+        )
+        rule.setContent { OwnTallyTheme { owntally.ui.groups.AddExpenseScreen(model, "Goa Trip", { }, { }, { }, null, false) } }
+        save("13-add-expense")
+    }
 }

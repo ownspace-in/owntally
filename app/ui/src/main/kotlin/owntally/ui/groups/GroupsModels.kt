@@ -11,6 +11,7 @@ import owntally.model.Split
 import owntally.model.format.BalanceKind
 import owntally.model.format.BalanceView
 import owntally.model.format.MoneyFormat
+import owntally.model.equalShares
 import owntally.model.sharesOf
 import owntally.model.totalSpent
 
@@ -152,11 +153,11 @@ object GroupScreenModels {
         val net = (if (e.paidBy == view.me) e.total else Money.ZERO) - mine
         val d = MoneyFormat.describe(net)
         return ExpenseRow(
-            e.id, e.description, "$payer paid ${MoneyFormat.format(e.total)} · split $ways ways",
+            e.id, e.description, "$payer paid ${MoneyFormat.format(e.total)} · split ${if (ways == 1) "1 way" else "$ways ways"}",
             when (d.kind) {
                 BalanceKind.OWED -> "you lent"
                 BalanceKind.OWES -> "you owe"
-                BalanceKind.SETTLED -> "not involved"
+                BalanceKind.SETTLED -> if (e.paidBy == view.me || mine.isPositive()) "no balance change" else "not involved"
             },
             d.text, d.kind, deleted = false,
         )
@@ -186,5 +187,151 @@ data class CreateGroupModel(val name: String = "", val colourIndex: Int = 0) {
         const val INPUT_LIMIT = 60
         const val COLOURS = owntally.data.session.GroupLooks.PALETTE_SIZE
         const val CURRENCY = "INR"
+    }
+}
+
+enum class SplitMode { EQUAL, EXACT }
+
+data class Person(val key: PublicKey, val label: String)
+
+/**
+ * The Add expense form. The shares shown are worked out with the core's own functions, using the counter the new event will get
+ * (so the leftover paise are shown where they will land), never with a second copy of the rule.
+ */
+data class AddExpenseModel(
+    val people: List<Person>,
+    /** The counter of the event that will be written, from [owntally.data.session.GroupSession.nextCounter]. */
+    val counter: Long,
+    val today: Long,
+    val me: PublicKey,
+    val paidBy: PublicKey,
+    val day: Long,
+    val amountText: String = "",
+    val description: String = "",
+    val mode: SplitMode = SplitMode.EQUAL,
+    val selected: Set<PublicKey> = people.map { it.key }.toSet(),
+    val exactText: Map<PublicKey, String> = emptyMap(),
+) {
+    val trimmedDescription: String get() = description.trim()
+    fun labelOf(key: PublicKey) = people.firstOrNull { it.key == key }?.label ?: "Someone"
+
+    private val parsedAmount: owntally.model.format.ParsedAmount get() = owntally.model.format.MoneyInput.parse(amountText)
+    private val total: Money? get() = (parsedAmount as? owntally.model.format.ParsedAmount.Valid)?.money?.takeIf { it.isPositive() }
+
+    private sealed class Exact {
+        data class Ok(val amounts: Map<PublicKey, Money>) : Exact()
+        data class Bad(val key: PublicKey) : Exact()
+    }
+
+    private fun exact(): Exact {
+        val out = LinkedHashMap<PublicKey, Money>()
+        for (p in people) {
+            when (val v = owntally.model.format.MoneyInput.parse(exactText[p.key].orEmpty())) {
+                is owntally.model.format.ParsedAmount.Empty -> Unit
+                is owntally.model.format.ParsedAmount.Invalid -> return Exact.Bad(p.key)
+                is owntally.model.format.ParsedAmount.Valid -> if (v.money.isPositive()) out[p.key] = v.money
+            }
+        }
+        return Exact.Ok(out)
+    }
+
+    private fun exactSum(): Money? = (exact() as? Exact.Ok)?.amounts?.values?.fold(Money.ZERO) { a, b -> a + b }
+
+    /** What each person pays, as text, or "–" for someone not taking part. */
+    val shareTexts: Map<PublicKey, String>
+        get() {
+            val t = total
+            val shares: Map<PublicKey, Money> = when (mode) {
+                SplitMode.EQUAL -> if (t != null && selected.isNotEmpty()) equalShares(t, selected, counter) else emptyMap()
+                SplitMode.EXACT -> (exact() as? Exact.Ok)?.amounts ?: emptyMap()
+            }
+            return people.associate { it.key to (shares[it.key]?.let { m -> MoneyFormat.format(m) } ?: "–") }
+        }
+
+    /** Under an exact split: how much of the total is still to give out. */
+    val exactStatus: String?
+        get() {
+            val t = total ?: return null
+            val sum = exactSum() ?: return null
+            return when {
+                sum == t -> "All assigned"
+                sum < t -> "${MoneyFormat.format(t - sum)} left to assign"
+                else -> "${MoneyFormat.format(sum - t)} too much"
+            }
+        }
+
+    val problem: String?
+        get() {
+            when (val a = parsedAmount) {
+                is owntally.model.format.ParsedAmount.Invalid -> return when (a.problem) {
+                    owntally.model.format.AmountProblem.TOO_LARGE -> "That amount is too large"
+                    owntally.model.format.AmountProblem.TOO_MANY_DECIMALS -> "Use at most 2 digits after the point"
+                    else -> "Type the amount in numbers, like 2400 or 2400.50"
+                }
+                is owntally.model.format.ParsedAmount.Valid -> if (!a.money.isPositive()) return "The amount must be more than ₹0"
+                else -> Unit
+            }
+            if (trimmedDescription.length > MAX_DESCRIPTION) return "Use at most $MAX_DESCRIPTION letters"
+            val t = total ?: return null
+            if (mode == SplitMode.EQUAL) return if (selected.isEmpty()) "Choose at least one person" else null
+            return when (val e = exact()) {
+                is Exact.Bad -> "Check the amount for ${labelOf(e.key)}"
+                is Exact.Ok -> when {
+                    e.amounts.isEmpty() -> null
+                    exactSum() != t -> "Amounts add up to ${MoneyFormat.format(exactSum()!!)}, not ${MoneyFormat.format(t)}"
+                    else -> null
+                }
+            }
+        }
+
+    /** The split to write, or null if the form is not valid. */
+    fun toSplit(): Split? {
+        val t = total ?: return null
+        return when (mode) {
+            SplitMode.EQUAL -> if (selected.isEmpty()) null else Split.Equal(selected)
+            SplitMode.EXACT -> (exact() as? Exact.Ok)?.amounts?.takeIf { it.isNotEmpty() && exactSum() == t }?.let { Split.Exact(it) }
+        }
+    }
+
+    val canSave: Boolean
+        get() = total != null && trimmedDescription.isNotEmpty() && trimmedDescription.length <= MAX_DESCRIPTION && toSplit() != null
+
+    fun withAmount(text: String) = copy(amountText = text.take(AMOUNT_LIMIT))
+    fun withDescription(text: String) = copy(description = text.take(INPUT_LIMIT))
+    fun withMode(m: SplitMode) = copy(mode = m)
+    fun toggle(key: PublicKey) = if (people.none { it.key == key }) this else copy(selected = if (key in selected) selected - key else selected + key)
+    fun withExact(key: PublicKey, text: String) = if (people.none { it.key == key }) this else copy(exactText = exactText + (key to text.take(AMOUNT_LIMIT)))
+    fun withPaidBy(key: PublicKey) = if (people.none { it.key == key }) this else copy(paidBy = key)
+    fun earlier() = copy(day = day - 1)
+    fun later() = if (day < today) copy(day = day + 1) else this
+
+    companion object {
+        const val MAX_DESCRIPTION = 80
+        const val INPUT_LIMIT = 120
+        const val AMOUNT_LIMIT = 16
+
+        fun start(view: GroupView, counter: Long, today: Long): AddExpenseModel {
+            val others = view.state.currentMembers.values.filter { it.key != view.me }
+                .sortedBy { it.name.lowercase() }.map { Person(it.key, it.name.ifBlank { "Someone" }) }
+            return AddExpenseModel(listOf(Person(view.me, "You")) + others, counter, today, view.me, view.me, today)
+        }
+    }
+}
+
+object DeleteRules {
+    /** Creator or an admin, and not already deleted (the core's rule, so the button is only shown when it would work). */
+    fun canDelete(view: GroupView, e: Expense): Boolean {
+        if (e.deleted) return false
+        val role = view.state.members[view.me]?.takeIf { !it.removed }?.role ?: return false
+        return e.creator == view.me || role.isAdmin
+    }
+
+    /**
+     * True when someone on this expense (who paid or shares it) is in a payment already written for the group, so deleting it
+     * moves amounts that people may have settled by.
+     */
+    fun changesSettledAmounts(view: GroupView, e: Expense): Boolean {
+        val involved = e.split.participantKeys + e.paidBy
+        return view.state.settlements.values.any { it.from in involved || it.to in involved }
     }
 }

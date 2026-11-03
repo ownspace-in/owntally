@@ -118,6 +118,19 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("Goa Trip").performClick()
             rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("You are the owner") == 1 }
             rule.onNodeWithText("No expenses yet.").assertExists()
+
+            // Add an expense: blocked until valid, then saved and listed, then deleted with a confirmation.
+            rule.onNode(hasContentDescription("Add expense")).performClick()
+            rule.onNodeWithText("Save expense").assertIsNotEnabled()
+            rule.onNode(hasContentDescription("Amount") and hasSetTextAction()).performTextInput("2400")
+            rule.onNode(hasContentDescription("What was it for?") and hasSetTextAction()).performTextInput("Seafood lunch")
+            rule.onNodeWithText("Save expense").assertIsEnabled().performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("You paid ₹2,400 · split 1 way") == 1 }
+            rule.onNodeWithText("Seafood lunch").performClick()
+            rule.onNodeWithText("Delete").performClick()
+            rule.onNodeWithText("It stays in the list, struck through, and is no longer counted in the balances.").assertExists()
+            rule.onNodeWithText("Delete expense").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("Deleted by Asha · not counted") == 1 }
             rule.onNode(hasContentDescription("Back")).performClick()
             rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
 

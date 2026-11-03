@@ -128,6 +128,18 @@ class GroupScreenModelsTest {
         assertEquals("not involved", rows[2].caption)
     }
 
+    @Test fun soloExpenseWording() {
+        val w = TestWorld()
+        val s = w.sessions.session(w.newGroup("G"))
+        val me = s.view.value.me
+        w.expense(s, "Tea", w.rupees(100), me, me)
+        val row = GroupScreenModels.build(s.view.value).expenses.single()
+        assertEquals("You paid ₹100 · split 1 way", row.subtitle)
+        assertEquals("no balance change", row.caption)
+        assertEquals("₹0", row.amount)
+        assertEquals(BalanceKind.SETTLED, row.kind)
+    }
+
     @Test fun deletedExpenseIsStruckAndNotCounted() {
         val w = TestWorld()
         val s = w.sessions.session(w.newGroup("G"))

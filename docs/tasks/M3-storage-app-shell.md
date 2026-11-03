@@ -142,6 +142,19 @@ Do: Add expense (amount, description, paid by, date, equal or exact split with l
 
 Done when: tests for the rounding shown to the user matching `core-model`, exact splits that do not add up being blocked, and delete permissions; entries cannot be edited.
 
+### T3.9 result
+
+Add expense and delete work on the emulator (end-to-end test: save is blocked until the form is valid, the expense is listed, delete asks first, the row shows "Deleted by Asha · not counted"). All JVM tests, the release build and lint pass; every new rule was checked by breaking the code on purpose and seeing a test fail.
+
+- **Shown shares equal what the core computes.** The form calls the core's `equalShares` with the counter the new event will get (`GroupSession.nextCounter()`), so the leftover paise are shown on the right people. Tests save an expense and compare the stored shares with the shown ones, for several expenses in a row (the start point rotates).
+- **Exact splits** must add up to the total: Save stays off and the form says "₹300 left to assign" or "₹100 too much". Someone left blank does not take part. A bad amount names the person.
+- **Limits:** description 1 to 80 characters (the core's rule), amount up to ₹100 crore with at most 2 decimals, the date cannot be in the future.
+- **No editing.** The form says so; the row dialog says to delete and add again.
+- **Delete:** only the creator or an admin sees the Delete button (the core's rule); a confirmation always appears first. "This changes balances" is added when a payment in the group already involves someone on that expense. **Owner to confirm this reading** of "warn if it changes settled amounts" in DESIGN.md: payments cannot be recorded until T3.10, so it cannot show yet.
+- Wording: "split 1 way", and "no balance change" for an expense I paid and share fully.
+- The form is kept in a ViewModel (survives turning the phone, never in saved state). Reading the counter touches the database, so the form is built off the main thread.
+- Screenshot `13-add-expense` compared with design/03. Difference: the date wraps onto two lines between its arrows, and the date is changed with arrows, not a calendar.
+
 ## T3.10 Settle up and How it works
 
 Do: Settle up shows the computed plan; buttons are present but do nothing yet (BUILD_PLAN). How it works as in the mockup.

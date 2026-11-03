@@ -158,7 +158,14 @@ fun GroupCard(card: GroupCardModel, onClick: () -> Unit) {
 }
 
 @Composable
-fun GroupScreen(model: GroupScreenModel, onBack: () -> Unit, extra: @Composable () -> Unit = {}) {
+fun GroupScreen(
+    model: GroupScreenModel,
+    onBack: () -> Unit,
+    onAdd: (() -> Unit)? = null,
+    onOpenExpense: (ExpenseRow) -> Unit = {},
+    extra: @Composable () -> Unit = {},
+) {
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 112.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,9 +189,17 @@ fun GroupScreen(model: GroupScreenModel, onBack: () -> Unit, extra: @Composable 
             }
         }
         items(model.expenses, key = { it.id.author.toHex() + it.id.counter }) { row ->
-            ExpenseRowView(row)
+            ExpenseRowView(row, Modifier.clickable { onOpenExpense(row) })
             Spacer(Modifier.height(14.dp))
         }
+    }
+    if (onAdd != null) {
+        Box(
+            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(64.dp).background(OwnTallyColors.Green, CircleShape).clickable(onClick = onAdd)
+                .semantics { contentDescription = "Add expense"; role = SemanticsRole.Button },
+            contentAlignment = Alignment.Center,
+        ) { GlyphIcon(Glyph.PLUS, androidx.compose.ui.graphics.Color.White, 28.dp) }
+    }
     }
 }
 
@@ -223,9 +238,9 @@ private fun BalanceCard(model: GroupScreenModel) {
 }
 
 @Composable
-private fun ExpenseRowView(row: ExpenseRow) {
+private fun ExpenseRowView(row: ExpenseRow, modifier: Modifier = Modifier) {
     val strike = if (row.deleted) TextDecoration.LineThrough else null
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.InfoBackground, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
             Text(row.description.trim().take(1).uppercase(), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
         }
