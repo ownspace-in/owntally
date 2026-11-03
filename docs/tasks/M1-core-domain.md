@@ -98,7 +98,7 @@ Do: `balances(state): Map<PublicKey, Money>` (positive means owed to the member)
 
 Done when:
 - Balances always sum to zero (property test).
-- Equal splits of 10,000 paise among 3 give 3,334, 3,333 and 3,333 to the lowest keys first, on any device.
+- Equal splits of 10,000 paise among 3 give 3,334, 3,333 and 3,333, with the extra paise starting at position `counter mod n` in ascending key order and wrapping (approved PROTOCOL.md section 5), on any device.
 - A deleted expense disappears from balances but stays in history.
 - A disputed settlement stops counting; a confirmed one counts.
 
