@@ -67,6 +67,8 @@ class GroupSession(
     private val secrets: SecretStore,
     identity: IdentityRepository,
     private val clock: Clock,
+    /** Called after every new state is published (for example to refresh a list of groups). */
+    private val onChange: () -> Unit = {},
 ) {
     private val me = checkNotNull(
         repo.group(groupId)?.let { identity.groupIdentity(it.keySlot) },
@@ -178,5 +180,6 @@ class GroupSession(
 
     private fun publish() {
         state.value = compute()
+        onChange()
     }
 }

@@ -71,6 +71,9 @@ interface OwnTallyDao {
 
     @Query("SELECT value FROM settings WHERE `key` = :key")
     fun setting(key: String): String?
+
+    @Query("DELETE FROM settings WHERE `key` = :key")
+    fun deleteSetting(key: String)
 }
 
 @Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class], version = 1, exportSchema = true)

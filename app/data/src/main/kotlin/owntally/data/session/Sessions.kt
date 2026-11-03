@@ -1,0 +1,128 @@
+package owntally.data.session
+
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import owntally.crypto.Clock
+import owntally.data.repo.GroupRepository
+import owntally.data.repo.IdentityRepository
+import owntally.data.secrets.SecretStore
+import owntally.data.store.SettingsStore
+import owntally.model.GroupId
+import owntally.model.Money
+
+/** The local choice of icon colour for a group (not shared with other members). */
+object GroupLooks {
+    const val PALETTE_SIZE = 5
+
+    /** The colour used until one is chosen: always the same for a given group. */
+    fun defaultFor(groupId: GroupId): Int = (groupId.bytes()[0].toInt() and 0xFF) % PALETTE_SIZE
+}
+
+/** One line of the Groups list. A group whose events cannot be opened (no key on this phone) is still listed, with [readable] false. */
+data class GroupSummary(
+    val groupId: GroupId,
+    val name: String,
+    val colourIndex: Int,
+    /** Current members, the person themself included. */
+    val memberCount: Int,
+    /** Expenses that have not been deleted. */
+    val expenseCount: Int,
+    /** Positive: the group owes this person. Negative: they owe the group. */
+    val myBalance: Money,
+    val readable: Boolean,
+)
+
+/**
+ * All the groups on this phone, each as a [GroupSession], and a [StateFlow] of one summary per group that updates whenever any
+ * of them changes. Sessions are made when first needed and kept.
+ */
+class Sessions(
+    private val groups: GroupRepository,
+    private val secrets: SecretStore,
+    private val identity: IdentityRepository,
+    private val clock: Clock,
+    private val settings: SettingsStore,
+) {
+    private val sessions = LinkedHashMap<GroupId, GroupSession>()
+    private val mutableSummaries = MutableStateFlow<List<GroupSummary>>(emptyList())
+    private var batching = false
+
+    val summaries: StateFlow<List<GroupSummary>> get() = mutableSummaries
+
+    init {
+        refresh()
+    }
+
+    private fun colourKey(id: GroupId) = "group_colour_${id.toHex()}"
+
+    fun colourOf(id: GroupId): Int = settings.get(colourKey(id))?.toIntOrNull()?.takeIf { it in 0 until GroupLooks.PALETTE_SIZE } ?: GroupLooks.defaultFor(id)
+
+    /** Looks at the stored groups again (for example after one was added elsewhere) and updates the summaries. */
+    @Synchronized
+    fun refresh() {
+        batching = true
+        try {
+            val rows = groups.listGroups()
+            sessions.keys.retainAll(rows.map { it.groupId }.toSet())
+            for (row in rows) {
+                if (row.groupId !in sessions) {
+                    sessions[row.groupId] = try {
+                        GroupSession(row.groupId, groups, secrets, identity, clock) { recompute() }
+                    } catch (e: IllegalStateException) {
+                        continue // no usable seed: the group is listed as unreadable below
+                    }
+                }
+            }
+        } finally {
+            batching = false
+        }
+        recompute()
+    }
+
+    /** The session of a group, made (and its events opened) the first time. */
+    @Synchronized
+    fun session(id: GroupId): GroupSession {
+        if (id !in sessions) refresh()
+        return checkNotNull(sessions[id]) { "no such group, or no usable seed" }
+    }
+
+    /**
+     * A new group owned by this person. [colourIndex] (null for the default) must be in the palette. Throws
+     * [IllegalArgumentException] for a bad name, currency or colour, in which case nothing is created.
+     */
+    @Synchronized
+    fun createGroup(name: String, currency: String, colourIndex: Int?): GroupId {
+        require(colourIndex == null || colourIndex in 0 until GroupLooks.PALETTE_SIZE) { "colour is not in the palette" }
+        val id = groups.createGroup(name, currency)
+        if (colourIndex != null) settings.put(colourKey(id), colourIndex.toString())
+        refresh()
+        return id
+    }
+
+    @Synchronized
+    fun deleteGroup(id: GroupId) {
+        groups.deleteGroup(id)
+        settings.remove(colourKey(id))
+        sessions.remove(id)
+        refresh()
+    }
+
+    @Synchronized
+    private fun recompute() {
+        if (batching) return
+        mutableSummaries.value = groups.listGroups().map { row ->
+            val session = sessions[row.groupId]
+            val view = session?.view?.value
+            val state = view?.state
+            GroupSummary(
+                groupId = row.groupId,
+                name = state?.name.orEmpty(),
+                colourIndex = colourOf(row.groupId),
+                memberCount = state?.currentMembers?.size ?: 0,
+                expenseCount = state?.expenses?.values?.count { !it.deleted } ?: 0,
+                myBalance = view?.balances?.get(view.me) ?: Money.ZERO,
+                readable = state?.groupId != null,
+            )
+        }
+    }
+}

@@ -4,6 +4,9 @@ package owntally.data.store
 interface SettingsStore {
     fun get(key: String): String?
     fun put(key: String, value: String)
+
+    /** Removing a setting that is not there is fine. */
+    fun remove(key: String)
 }
 
 /** For tests and previews. */
@@ -16,6 +19,11 @@ class InMemorySettingsStore : SettingsStore {
     @Synchronized
     override fun put(key: String, value: String) {
         values[key] = value
+    }
+
+    @Synchronized
+    override fun remove(key: String) {
+        values.remove(key)
     }
 
     @Synchronized

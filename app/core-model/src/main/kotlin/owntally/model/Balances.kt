@@ -67,3 +67,17 @@ internal fun sharesFor(expense: Expense, gone: Set<PublicKey>): Map<PublicKey, M
         }
     }
 }
+
+/**
+ * What each member pays for [expense], counted the same way as the balances (so a removed member's share is divided among the
+ * others), or null when the expense does not count at all: it was deleted, or its payer was removed, or nobody who took part
+ * is left. The shares always add up to the expense's total.
+ */
+fun sharesOf(state: GroupState, expense: Expense): Map<PublicKey, Money>? {
+    if (expense.deleted) return null
+    return sharesFor(expense, state.members.filterValues { it.removed }.keys)
+}
+
+/** The total of the expenses that count (see [sharesOf]). */
+fun totalSpent(state: GroupState): Money =
+    state.expenses.values.filter { sharesOf(state, it) != null }.fold(Money.ZERO) { sum, e -> sum + e.total }

@@ -44,4 +44,5 @@ class RoomSettingsStore(db: OwnTallyDatabase) : SettingsStore {
 
     override fun get(key: String): String? = dao.setting(key)
     override fun put(key: String, value: String) = dao.putSetting(SettingEntity(key, value))
+    override fun remove(key: String) = dao.deleteSetting(key)
 }

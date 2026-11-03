@@ -6,6 +6,7 @@ import io.kotest.property.checkAll
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
@@ -162,6 +163,81 @@ class BalancesTest {
             val balances = balances(state)
             assertEquals(Money.ZERO, balances.values.fold(Money.ZERO) { x, y -> x + y }, "seed $seed")
             assertEquals(state.currentMembers.keys, balances.keys)
+        }
+    }
+}
+
+class SharesTest {
+    private val a = key(1)
+    private val b = key(2)
+    private val c = key(3)
+
+    @Test
+    fun anEqualExpenseGivesEachParticipantTheSameShareAsTheBalancesCount() {
+        val s = standardGroup()
+        val x = s.expense(a, Money(10_000), a, Split.Equal(setOf(a, b, c)))
+        val state = s.state()
+        val shares = sharesOf(state, state.expenses.getValue(x.id))!!
+        assertEquals(equalShares(Money(10_000), listOf(a, b, c), x.counter), shares)
+        assertEquals(Money(10_000), shares.values.fold(Money.ZERO) { p, q -> p + q })
+    }
+
+    @Test
+    fun anExactExpenseGivesTheEnteredAmounts() {
+        val s = standardGroup()
+        val x = s.expense(a, rupees(500), c, Split.Exact(mapOf(a to rupees(200), b to rupees(300))))
+        val state = s.state()
+        assertEquals(mapOf(a to rupees(200), b to rupees(300)), sharesOf(state, state.expenses.getValue(x.id)))
+    }
+
+    @Test
+    fun aDeletedExpenseHasNoShares() {
+        val s = standardGroup()
+        val x = s.expense(a, rupees(100), a, Split.Equal(setOf(a, b)))
+        s.emit(a, EventBody.ExpenseDeleted(x.id))
+        val state = s.state()
+        assertNull(sharesOf(state, state.expenses.getValue(x.id)))
+        assertEquals(Money.ZERO, totalSpent(state))
+    }
+
+    @Test
+    fun anExpenseTheRemovedMemberPaidHasNoShares() {
+        val s = standardGroup()
+        val x = s.expense(c, rupees(300), c, Split.Equal(setOf(a, b, c)))
+        s.remove(a, c)
+        val state = s.state()
+        assertNull(sharesOf(state, state.expenses.getValue(x.id)))
+    }
+
+    @Test
+    fun aRemovedMembersShareIsDividedAmongTheOthers() {
+        val s = standardGroup()
+        val x = s.expense(a, rupees(900), a, Split.Equal(setOf(a, b, c)))
+        s.remove(a, c)
+        val state = s.state()
+        assertEquals(mapOf(a to rupees(450), b to rupees(450)), sharesOf(state, state.expenses.getValue(x.id)))
+    }
+
+    @Test
+    fun theTotalSpentCountsOnlyWhatCounts() {
+        val s = standardGroup()
+        s.expense(a, rupees(900), a, Split.Equal(setOf(a, b, c)))
+        val gone = s.expense(b, rupees(600), b, Split.Equal(setOf(a, b, c)))
+        s.expense(c, rupees(300), c, Split.Equal(setOf(a, b, c)))
+        s.emit(a, EventBody.ExpenseDeleted(gone.id))
+        assertEquals(rupees(1200), totalSpent(s.state()))
+        s.remove(a, c) // C's own expense stops counting
+        assertEquals(rupees(900), totalSpent(s.state()))
+    }
+
+    @Test
+    fun theSharesOfEveryCountedExpenseAddUpToItsTotal() = runBlocking<Unit> {
+        checkAll(300, Arb.long()) { seed ->
+            val state = replay(logOf(randomScenario(Random(seed), steps = 60)))
+            for (e in state.expenses.values) {
+                val shares = sharesOf(state, e)
+                if (shares != null) assertEquals(e.total, shares.values.fold(Money.ZERO) { p, q -> p + q }, "seed $seed")
+            }
         }
     }
 }
