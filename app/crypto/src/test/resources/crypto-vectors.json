@@ -63,6 +63,133 @@
    "hex": "4f540107070707070707070707070707070707ffffffff4c8f3b2ad363adbdaadeb73425fdb41e7412d6ca0b78846fb5068e81acd10f09000001000000000000000000000000000000000000000000000000000000000000000000bb3d027bb3902dd65e6aed33b126d8a1c3bfc2809c5223a05329c8ed248a4953cd5c88e5890dc2a4726c95dd8227975405384008d2f758e61dbdb1681afad305"
   }
  ],
+ "tickets": [
+  {
+   "name": "no-hint",
+   "ticketId": "0102030405060708090a0b0c0d0e0f10",
+   "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "groupId": "09090909090909090909090909090909",
+   "epoch": 2,
+   "groupKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+   "expires": 1793000000,
+   "hint": "",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD9UrIy",
+   "bytes": 114
+  },
+  {
+   "name": "with-hint",
+   "ticketId": "0102030405060708090a0b0c0d0e0f10",
+   "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "groupId": "09090909090909090909090909090909",
+   "epoch": 2,
+   "groupKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+   "expires": 1793028800,
+   "hint": "relay.example.org",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat9ywBFyZWxheS5leGFtcGxlLm9yZ4CJJoM",
+   "bytes": 131
+  },
+  {
+   "name": "longest-hint",
+   "ticketId": "0102030405060708090a0b0c0d0e0f10",
+   "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "groupId": "09090909090909090909090909090909",
+   "epoch": 4294967295,
+   "groupKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+   "expires": 1793000000,
+   "hint": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQn_____AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQGRoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhovIC7sQ",
+   "bytes": 214
+  },
+  {
+   "name": "multibyte-hint",
+   "ticketId": "0102030405060708090a0b0c0d0e0f10",
+   "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "groupId": "09090909090909090909090909090909",
+   "epoch": 2,
+   "groupKey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "expires": 1793000000,
+   "hint": "\u00e9\u20ac",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAAC__________________________________________8AAAAAat8CQAXDqeKCrKR_9nk",
+   "bytes": 119
+  }
+ ],
+ "invalidTickets": [
+  {
+   "name": "changed-check-value",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD9UrIz",
+   "why": "last byte of the CRC changed"
+  },
+  {
+   "name": "changed-secret-byte",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD9UrIy",
+   "why": "a byte of the ticket changed, CRC unchanged"
+  },
+  {
+   "name": "truncated",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD9UrI",
+   "why": "one character missing"
+  },
+  {
+   "name": "extra-character",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD9UrIyA",
+   "why": "one character too many"
+  },
+  {
+   "name": "empty",
+   "text": "",
+   "why": "nothing"
+  },
+  {
+   "name": "unknown-version",
+   "text": "AgECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD_q9St",
+   "why": "version 2, valid CRC"
+  },
+  {
+   "name": "version-zero",
+   "text": "AAECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQABKKpJ4",
+   "why": "version 0, valid CRC"
+  },
+  {
+   "name": "epoch-zero",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAAAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQABkUL2v",
+   "why": "epoch 0, valid CRC"
+  },
+  {
+   "name": "hint-longer-than-allowed",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQGVoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaFSYbfg",
+   "why": "hint of 101 bytes, valid CRC"
+  },
+  {
+   "name": "hint-length-beyond-data",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAWNOEa9",
+   "why": "says a 5 byte hint, none follows, valid CRC"
+  },
+  {
+   "name": "hint-not-utf8",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAL__kNjn3s",
+   "why": "hint bytes are not UTF-8, valid CRC"
+  },
+  {
+   "name": "padding-added",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat9ywBFyZWxheS5leGFtcGxlLm9yZ4CJJoM=",
+   "why": "base64 padding is not used"
+  },
+  {
+   "name": "space-inside",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat8CQAD9UrIy",
+   "why": "whitespace inside"
+  },
+  {
+   "name": "not-base64url",
+   "text": "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++",
+   "why": "characters outside the URL-safe alphabet"
+  },
+  {
+   "name": "non-canonical-base64",
+   "text": "AQECAwQFBgcICQoLDA0ODxCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgkJCQkJCQkJCQkJCQkJCQkAAAACAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8AAAAAat9ywBFyZWxheS5leGFtcGxlLm9yZ4CJJoN",
+   "why": "the last character has a spare bit set"
+  }
+ ],
  "keyDeliveries": [
   {
    "recipientSlot": 1,
