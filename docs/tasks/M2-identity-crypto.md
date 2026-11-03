@@ -17,7 +17,9 @@ Each task ends with "Done when", which must be checkable.
 | T2.3 event model changes | Done: encryption keys, `MemberRemoved` with epoch and sealed keys, `KeyRotated`, numeric `Unknown` (tag and content kept), `epoch` in the state. 127 `core-model` tests. |
 | T2.4 wire codec | Done: `EventCodec` and `Envelope` in `core-model`, 21 valid, 17 invalid payload and 11 envelope vectors from an independent encoder, strictness and "changed bytes are rejected or rewrite identically" property tests. 143 `core-model` tests. |
 | T2.5 phrase and master seed | Done: `Bip39`, `RecoveryPhrase`, `MasterSeed` in `app/crypto`. The word list is the reference list, checked by SHA-256 and compared byte for byte with a second source; the 8 published 12-word BIP39 vectors pass (entropy to words, words to entropy, seed). 24 `crypto` tests. |
-| T2.6 to T2.12 | Not started. |
+| T2.6 per-group keys | Done: `KeyDerivation.groupIdentity` and `GroupIdentity` (redacted `toString`). Keys for 5 slots (0, 1, 2, 255, 2^32 - 1) match an independent Python implementation (`app/crypto/src/test/tools/crypto_vectors.py`). |
+| T2.7 signing and verification | Done: `EnvelopeSigning.sign`, `verify`, `verifyFrom`. Signatures match the independent implementation byte for byte; every changed byte, a moved signature (group, epoch, counter, nonce, ciphertext, version), another signer, the encryption key standing in for the signing key, a missing or different prefix and a non-member author are all rejected. 46 `crypto` tests. |
+| T2.8 to T2.12 | Not started. |
 
 ---
 
