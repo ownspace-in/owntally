@@ -335,3 +335,64 @@ object DeleteRules {
         return view.state.settlements.values.any { it.from in involved || it.to in involved }
     }
 }
+
+enum class PaymentRole { FROM_ME, TO_ME, BETWEEN_OTHERS }
+
+data class PaymentRow(
+    val from: PublicKey,
+    val to: PublicKey,
+    val money: Money,
+    val amount: String,
+    val title: String,
+    /** The phone number of the person on the other side (the one I pay, or the one who pays me), as they entered it. */
+    val phone: String?,
+    val role: PaymentRole,
+)
+
+/** Settle up for the whole group: the core's plan, row for row. */
+data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, val footer: String) {
+    companion object {
+        const val INTRO = "A short list of payments that clear everyone. Pay in any UPI app or cash. OwnTally never moves or checks money."
+        /** Marking payments as paid or received is not built yet, so those buttons are shown switched off. */
+        const val ACTIONS_ENABLED = false
+        const val ACTIONS_NOTE = "Recording payments arrives in a later update. For now this is the list of who should pay whom."
+
+        fun build(view: GroupView): SettleUpModel {
+            fun name(k: PublicKey) = if (k == view.me) "You" else view.state.members[k]?.name?.takeIf { it.isNotBlank() } ?: "Someone"
+            val rows = view.plan.map { p ->
+                val role = when {
+                    p.from == view.me -> PaymentRole.FROM_ME
+                    p.to == view.me -> PaymentRole.TO_ME
+                    else -> PaymentRole.BETWEEN_OTHERS
+                }
+                val other = if (role == PaymentRole.FROM_ME) p.to else p.from
+                PaymentRow(
+                    p.from, p.to, p.amount, MoneyFormat.format(p.amount), "${name(p.from)} → ${name(p.to)}",
+                    if (role == PaymentRole.BETWEEN_OTHERS) view.state.members[p.to]?.phone else view.state.members[other]?.phone, role,
+                )
+            }
+            val inPlan = view.plan.flatMap { listOf(it.from, it.to) }.toSet()
+            val free = view.state.currentMembers.keys.filter { it != view.me && it !in inPlan }.map { name(it) }.sorted()
+            val footer = when {
+                view.plan.isEmpty() -> "Everyone is settled up."
+                free.isEmpty() -> ""
+                free.size == 1 -> "${free[0]} needs no payments."
+                else -> "${free.dropLast(1).joinToString(", ")} and ${free.last()} need no payments."
+            }
+            return SettleUpModel("${view.state.name ?: "Group"} · whole group", rows, footer)
+        }
+    }
+}
+
+data class InfoCard(val number: String, val title: String, val body: String)
+
+/** The How it works screen. Words follow design/06, corrected where the app does not do something yet or DESIGN.md says otherwise. */
+object HowItWorks {
+    val cards = listOf(
+        InfoCard("1", "Everything lives on your phone", "Groups and expenses are saved in a local database. The app works fully in airplane mode."),
+        InfoCard("2", "Every entry is a signed note", "Entries are never edited. A mistake is deleted and added again, so two phones can never conflict."),
+        InfoCard("3", "Friends swap notes directly", "Join with a shared link or QR code, then sync nearby or over the internet. Each phone adds the notes it is missing, then works out the same balances."),
+        InfoCard("4", "Settling is a handoff", "OwnTally suggests a short list of payments, and you pay in any UPI app or cash. It never holds or moves money."),
+    )
+    val note = InfoCard("", "Worth knowing", "If you lose your phone, your data goes with it unless you saved your 12-word recovery phrase. Other members can then send your groups back to you.")
+}

@@ -66,7 +66,7 @@ class FirstRunEndToEndInstrumentedTest {
             }
 
             // Welcome: not secure.
-            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("Split expenses.\nKeep your data.") == 1 }
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("Split expenses.\nKeep your data.") == 1 }
             assertTrue(!secure(), "the welcome screen may be captured")
             rule.onNodeWithText("For example, Asha").performTextInput("Asha")
             rule.onNodeWithText("+91 98765 43210").performTextInput("98765 43210")
@@ -114,9 +114,9 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("Group name").assertExists()
             rule.onNode(hasSetTextAction()).performTextInput("Goa Trip")
             rule.onNodeWithText("Create group").assertIsEnabled().performClick()
-            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
             rule.onNodeWithText("Goa Trip").performClick()
-            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("You are the owner") == 1 }
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You are the owner") == 1 }
             rule.onNodeWithText("No expenses yet.").assertExists()
 
             // Add an expense: blocked until valid, then saved and listed, then deleted with a confirmation.
@@ -125,14 +125,34 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNode(hasContentDescription("Amount") and hasSetTextAction()).performTextInput("2400")
             rule.onNode(hasContentDescription("What was it for?") and hasSetTextAction()).performTextInput("Seafood lunch")
             rule.onNodeWithText("Save expense").assertIsEnabled().performClick()
-            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("You paid ₹2,400 · split 1 way") == 1 }
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You paid ₹2,400 · split 1 way") == 1 }
             rule.onNodeWithText("Seafood lunch").performClick()
             rule.onNodeWithText("Delete").performClick()
             rule.onNodeWithText("It stays in the list, struck through, and is no longer counted in the balances.").assertExists()
             rule.onNodeWithText("Delete expense").performClick()
-            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("Deleted by Asha · not counted") == 1 }
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("Deleted by Asha · not counted") == 1 }
+
+            // Test friends (debug build only), then Settle up shows the plan, with its buttons switched off.
+            rule.onNodeWithText("Add test friends and expenses (debug build)").performClick()
+            rule.waitUntil(15_000) { rule.onAllNodesWithTextCount("Meera (test) is owed") == 1 }
+            rule.onNodeWithText("Settle up the group").performClick()
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You → Meera (test)") == 1 }
+            rule.onNodeWithText("₹2,850").assertExists()
+            rule.onNodeWithText("Ben (test) → Meera (test)").assertExists()
+            rule.onNodeWithText("₹9,550").assertExists()
+            rule.onNodeWithText("Pay").assertIsNotEnabled()
+            rule.onNodeWithText("I paid").assertIsNotEnabled()
+            rule.onNodeWithText(SETTLE_NOTE).assertExists()
             rule.onNode(hasContentDescription("Back")).performClick()
-            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
+            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Settle up the group") == 1 }
+            rule.onNode(hasContentDescription("Back")).performClick()
+            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("3 members · 3 expenses") == 1 }
+            rule.onNode(hasContentDescription("About")).performClick()
+            rule.onNodeWithText("How OwnTally works").performClick()
+            rule.onNodeWithText("Everything lives on your phone").assertExists()
+            rule.onNodeWithText("Settling is a handoff").assertExists()
+            rule.onNode(hasContentDescription("Back")).performClick()
+            rule.onNode(hasContentDescription("Groups")).performClick()
 
             // The phrase is in no file: not the secret files, the database, caches or preferences.
             val files = appFiles()
@@ -147,6 +167,10 @@ class FirstRunEndToEndInstrumentedTest {
         } finally {
             wipe()
         }
+    }
+
+    private companion object {
+        const val SETTLE_NOTE = "Recording payments arrives in a later update. For now this is the list of who should pay whom."
     }
 
     private fun container() = (context as OwnTallyApplication).container

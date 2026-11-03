@@ -161,6 +161,18 @@ Do: Settle up shows the computed plan; buttons are present but do nothing yet (B
 
 Done when: the plan on screen equals `settlementPlan` for the group.
 
+### T3.10 result
+
+Settle up and How it works are done and checked on the emulator. JVM tests, the release build and lint pass; the end-to-end test adds the debug test friends, opens Settle up and checks both plan rows (You → Meera (test) ₹2,850, Ben (test) → Meera (test) ₹9,550), then opens How it works from About. Every rule in the new models was checked by breaking the code on purpose; two gaps were found that way and closed.
+
+- **The plan on screen is the core's `settlementPlan`, row for row and in order**, with the amounts and the two people. A test also adds the rows up and checks they clear every balance.
+- Rows are shown for the whole group, including payments between other people. Under each of my own rows the other person's phone number is shown as they entered it (no "+91" is added).
+- **Buttons are present but switched off**, as BUILD_PLAN says (Pay / I paid when I owe, Send reminder / Mark received when I am owed). They are drawn greyed, announced as disabled to screen readers, and a note says recording payments arrives later. The test that checked this found they were not announced as disabled at first; fixed.
+- Reached from "Settle up the group" on the Group screen (shown when there is someone else in the group) and from the Settle tab, which now opens this screen directly. How it works is a button on the About tab.
+- **How it works wording** follows design/06 with two corrections, both **for the owner to confirm**: card 4 says "a short list of payments" (DESIGN.md says the plan is not always the fewest) and "you pay in any UPI app or cash" (the app does not open UPI apps yet). Card 3 still talks about joining by link and syncing, which arrive in M4.
+- Compared with design/04 and 06 (`14-settle-up`, `15-how-it-works`). Differences: no "payment already confirmed" line (no payments can be recorded yet), and the mockup's tip box is replaced by the note above.
+- A Compose test harness quirk: after work on a background thread, a coroutine can resume off the main thread in tests. Delete and the debug action now return to the main dispatcher explicitly; the end-to-end waits were lengthened because the build host was busy.
+
 ## T3.11 App lock (optional)
 
 Off by default. A setting chooses one of three modes; the app locks when it goes to the background (after a short grace period, default 30 seconds, so switching to a UPI app and back is not annoying).

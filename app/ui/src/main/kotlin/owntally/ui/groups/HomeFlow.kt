@@ -59,10 +59,15 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null) {
     Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) {
         NavHost(nav, startDestination = "home") {
             composable("home") {
-                HomeTabs(sessions, onOpen = { nav.navigate("group/${it.toHex()}") }, onCreate = { nav.navigate("create") })
+                HomeTabs(sessions, onOpen = { nav.navigate("group/${it.toHex()}") }, onSettle = { nav.navigate("group/${it.toHex()}/settle") }, onHow = { nav.navigate("how") }, onCreate = { nav.navigate("create") })
             }
             composable("create") {
                 CreateGroupRoute(sessions, onDone = { nav.popBackStack() })
+            }
+            composable("how") { HowItWorksScreen(onBack = { nav.popBackStack() }) }
+            composable("group/{id}/settle") { entry ->
+                val id = entry.arguments?.getString("id")?.let { GroupId.fromHexOrNull(it) }
+                if (id == null) LaunchedEffect(Unit) { nav.popBackStack() } else SettleUpRoute(sessions, id, onBack = { nav.popBackStack() })
             }
             composable("group/{id}/add") { entry ->
                 val id = entry.arguments?.getString("id")?.let { GroupId.fromHexOrNull(it) }
@@ -70,14 +75,14 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null) {
             }
             composable("group/{id}") { entry ->
                 val id = entry.arguments?.getString("id")?.let { GroupId.fromHexOrNull(it) }
-                if (id == null) LaunchedEffect(Unit) { nav.popBackStack() } else GroupRoute(sessions, id, debugTools, onBack = { nav.popBackStack() }, onAdd = { nav.navigate("group/${id.toHex()}/add") })
+                if (id == null) LaunchedEffect(Unit) { nav.popBackStack() } else GroupRoute(sessions, id, debugTools, onBack = { nav.popBackStack() }, onAdd = { nav.navigate("group/${id.toHex()}/add") }, onSettle = { nav.navigate("group/${id.toHex()}/settle") })
             }
         }
     }
 }
 
 @Composable
-private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onCreate: () -> Unit) {
+private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onCreate: () -> Unit) {
     val ui: HomeViewModel = viewModel()
     val tab = ui.tab
     val summaries by sessions.summaries.collectAsStateWithLifecycle()
@@ -86,12 +91,17 @@ private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onCreate: ()
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
                 Tab.GROUPS -> GroupsScreen(model, onOpen = { onOpen(it.id) }, onCreate = onCreate)
-                Tab.SETTLE -> SettleTab(model, onOpen)
+                Tab.SETTLE -> SettleTab(model, onSettle)
                 Tab.SYNC -> MessageTab("Sync", SyncPlaceholder.TEXT)
-                Tab.ABOUT -> MessageTab(
-                    "About OwnTally",
-                    "OwnTally splits expenses with friends. There is no account and no server of ours: your groups are stored on this phone, and each group's data is encrypted with its own key.",
-                )
+                Tab.ABOUT -> Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) {
+                        MessageTab(
+                            "About OwnTally",
+                            "OwnTally splits expenses with friends. There is no account and no server of ours: your groups are stored on this phone, and each group's data is encrypted with its own key.",
+                        )
+                    }
+                    Box(Modifier.padding(20.dp)) { owntally.ui.components.PrimaryButton("How OwnTally works", onHow, Modifier.fillMaxWidth()) }
+                }
             }
         }
         BottomBar(Tab.entries[tab]) { ui.tab = it.ordinal }
@@ -166,7 +176,7 @@ private fun CreateGroupRoute(sessions: Sessions, onDone: () -> Unit) {
 }
 
 @Composable
-private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?, onBack: () -> Unit, onAdd: () -> Unit) {
+private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?, onBack: () -> Unit, onAdd: () -> Unit, onSettle: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -179,17 +189,17 @@ private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?,
     val model = remember(view) { GroupScreenModels.build(view) }
     val scope = rememberCoroutineScope()
     var opened by remember { mutableStateOf<owntally.model.EventId?>(null) }
-    GroupScreen(model, onBack, onAdd, onOpenExpense = { opened = it.id }) {
+    GroupScreen(model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }) {
         if (debugTools != null) {
             androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
-            owntally.ui.components.TextAction("Add test friends and expenses (debug build)", { scope.launch(Dispatchers.IO) { debugTools.addTestData(s) } })
+            owntally.ui.components.TextAction("Add test friends and expenses (debug build)", { scope.launch { withContext(Dispatchers.IO) { debugTools.addTestData(s) } } })
         }
     }
     val target = opened?.let { view.state.expenses[it] }
     if (target != null) {
         ExpenseDialog(view, target, onClose = { opened = null }, onDelete = {
             opened = null
-            scope.launch(Dispatchers.IO) { s.deleteExpense(target.id) }
+            scope.launch { withContext(Dispatchers.IO) { s.deleteExpense(target.id) } }
         })
     }
 }
@@ -282,4 +292,14 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
         },
         onClose = { vm.model = null; onDone() }, error = error, saving = saving,
     )
+}
+
+@Composable
+private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session ?: return Box(Modifier.fillMaxSize())
+    val view by s.view.collectAsStateWithLifecycle()
+    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack)
 }

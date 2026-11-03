@@ -162,6 +162,7 @@ fun GroupScreen(
     model: GroupScreenModel,
     onBack: () -> Unit,
     onAdd: (() -> Unit)? = null,
+    onSettle: (() -> Unit)? = null,
     onOpenExpense: (ExpenseRow) -> Unit = {},
     extra: @Composable () -> Unit = {},
 ) {
@@ -179,7 +180,7 @@ fun GroupScreen(
                 }
             }
             Spacer(Modifier.height(14.dp))
-            BalanceCard(model)
+            BalanceCard(model, onSettle)
             extra()
             Spacer(Modifier.height(24.dp))
             Text("EXPENSES", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
@@ -204,7 +205,7 @@ fun GroupScreen(
 }
 
 @Composable
-private fun BalanceCard(model: GroupScreenModel) {
+private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
     Column(Modifier.fillMaxWidth().background(OwnTallyColors.Ink, RoundedCornerShape(28.dp)).padding(24.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
@@ -233,6 +234,14 @@ private fun BalanceCard(model: GroupScreenModel) {
                     if (line.amount != null) Text(line.amount, style = MaterialTheme.typography.labelLarge, color = line.kind.colour(onDark = true))
                 }
             }
+        }
+        if (onSettle != null && model.memberLines.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Box(
+                Modifier.fillMaxWidth().height(52.dp).background(OwnTallyColors.Mint, RoundedCornerShape(20.dp)).clickable(onClick = onSettle)
+                    .semantics { role = SemanticsRole.Button },
+                contentAlignment = Alignment.Center,
+            ) { Text("Settle up the group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink) }
         }
     }
 }

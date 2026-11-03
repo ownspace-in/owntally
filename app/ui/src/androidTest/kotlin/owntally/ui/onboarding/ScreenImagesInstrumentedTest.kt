@@ -166,4 +166,37 @@ class ScreenImagesInstrumentedTest {
         rule.setContent { OwnTallyTheme { owntally.ui.groups.AddExpenseScreen(model, "Goa Trip", { }, { }, { }, null, false) } }
         save("13-add-expense")
     }
+
+    @Test
+    fun saveSettleUpAndHowItWorks() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        val a = PublicKey(ByteArray(32) { 1 })
+        val b = PublicKey(ByteArray(32) { 2 })
+        val c = PublicKey(ByteArray(32) { 3 })
+        fun row(from: PublicKey, to: PublicKey, paise: Long, title: String, phone: String, role: owntally.ui.groups.PaymentRole) =
+            owntally.ui.groups.PaymentRow(from, to, Money(paise), MoneyFormat.format(Money(paise)), title, phone, role)
+        rule.setContent {
+            OwnTallyTheme {
+                owntally.ui.groups.SettleUpScreen(
+                    owntally.ui.groups.SettleUpModel(
+                        "Goa Trip · whole group",
+                        listOf(
+                            row(b, a, 1_850_00, "Rohan → You", "+91 98765 43210", owntally.ui.groups.PaymentRole.TO_ME),
+                            row(a, c, 1_350_00, "You → Meera", "+91 99887 76655", owntally.ui.groups.PaymentRole.FROM_ME),
+                        ),
+                        "Kabir and Isha need no payments.",
+                    ),
+                    onBack = { },
+                )
+            }
+        }
+        save("14-settle-up")
+    }
+
+    @Test
+    fun saveHowItWorks() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        rule.setContent { OwnTallyTheme { owntally.ui.groups.HowItWorksScreen { } } }
+        save("15-how-it-works")
+    }
 }

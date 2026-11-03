@@ -34,7 +34,7 @@ class TestWorld(name: String = "Asha", phone: String = "98765 43210") {
     fun addFriend(session: GroupSession, name: String, slot: Long): PublicKey {
         val seed = (secrets.loadMasterSeed() as SecretLoad.Found).value
         val friend = KeyDerivation.groupIdentity(seed, slot)
-        session.append(EventBody.MemberJoined(friend.publicKey, friend.encryptionKey, name, "98765 0000$slot".take(15)))
+        session.append(EventBody.MemberJoined(friend.publicKey, friend.encryptionKey, name, "98765 %05d".format(slot % 100_000)))
         return friend.publicKey
     }
 
