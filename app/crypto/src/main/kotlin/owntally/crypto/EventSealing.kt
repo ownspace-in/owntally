@@ -43,6 +43,8 @@ class GroupKeyring(val groupId: GroupId) {
 
     operator fun get(epoch: Long): GroupKey? = keys[epoch]
     fun epochs(): Set<Long> = keys.keys.toSortedSet()
+
+    override fun toString() = "GroupKeyring(epochs=${epochs()})"
 }
 
 enum class RejectReason { WRONG_GROUP, BAD_SIGNATURE, DECRYPTION_FAILED, MALFORMED }
