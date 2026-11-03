@@ -44,6 +44,8 @@ data class GroupState(
     val pendingOffer: PublicKey?,
     /** The current group key epoch: 1 after the group is created, +1 for each rotation. 0 before the group exists. */
     val epoch: Long,
+    /** For each epoch after the first, the accepted event that started it. Only such an event may deliver that epoch's key. */
+    val epochStarts: Map<Long, EventId>,
     /** All expenses, deleted ones included (they stay in history). */
     val expenses: Map<EventId, Expense>,
     val settlements: Map<EventId, Settlement>,

@@ -478,6 +478,22 @@ class ReplayTest {
     }
 
     @Test
+    fun theStateRecordsWhichEventStartedEachEpoch() {
+        val s = standardGroup()
+        assertEquals(emptyMap(), s.state().epochStarts)
+        val removal = s.remove(a, c)
+        val rotation = s.rotate(a)
+        val ignoredRotation = s.emit(b, EventBody.KeyRotated(4, keysFor(a, b, d)))
+        val state = s.state()
+        assertEquals(mapOf(2L to removal.id, 3L to rotation.id), state.epochStarts)
+        assertEquals(IgnoreReason.NOT_ALLOWED, ignoredRotation.reason(state))
+        // A leave starts no epoch.
+        val t = standardGroup()
+        t.remove(b, b)
+        assertEquals(emptyMap(), t.state().epochStarts)
+    }
+
+    @Test
     fun aRotationAfterARemovalMovesToEpochThree() {
         val s = standardGroup()
         s.remove(a, c)

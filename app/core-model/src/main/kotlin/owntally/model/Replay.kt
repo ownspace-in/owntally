@@ -29,6 +29,7 @@ private class Run(private val forced: Set<EventId>) {
     var owner: PublicKey? = null
     var pendingOffer: PublicKey? = null
     var epoch = 0L
+    val epochStarts = LinkedHashMap<Long, EventId>()
     val expenses = LinkedHashMap<EventId, Expense>()
     val settlements = LinkedHashMap<EventId, Settlement>()
     val removals = LinkedHashMap<PublicKey, Removal>()
@@ -36,7 +37,7 @@ private class Run(private val forced: Set<EventId>) {
     val applied = HashSet<EventId>()
 
     fun state(held: List<EventId>) =
-        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, epoch, expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
+        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
 
     private fun currentKeys() = members.filterValues { !it.removed }.keys
 
@@ -149,6 +150,7 @@ private class Run(private val forced: Set<EventId>) {
                 if (!role.isAdmin) return IgnoreReason.NOT_ALLOWED
                 if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys()) return IgnoreReason.INVALID
                 epoch = body.newEpoch
+                epochStarts[epoch] = event.id
                 null
             }
             is EventBody.MemberRemoved -> {
@@ -168,6 +170,7 @@ private class Run(private val forced: Set<EventId>) {
                 } else {
                     if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys() - target.key) return IgnoreReason.INVALID
                     epoch = body.newEpoch
+                    epochStarts[epoch] = event.id
                 }
                 members[target.key] = target.copy(removed = true)
                 removals[target.key] = Removal(target.key, author, event.id, event.after[target.key] ?: 0L)

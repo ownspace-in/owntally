@@ -20,7 +20,8 @@ Each task ends with "Done when", which must be checkable.
 | T2.6 per-group keys | Done: `KeyDerivation.groupIdentity` and `GroupIdentity` (redacted `toString`). Keys for 5 slots (0, 1, 2, 255, 2^32 - 1) match an independent Python implementation (`app/crypto/src/test/tools/crypto_vectors.py`). |
 | T2.7 signing and verification | Done: `EnvelopeSigning.sign`, `verify`, `verifyFrom`. Signatures match the independent implementation byte for byte; every changed byte, a moved signature (group, epoch, counter, nonce, ciphertext, version), another signer, the encryption key standing in for the signing key, a missing or different prefix and a non-member author are all rejected. 46 `crypto` tests. |
 | T2.8 event encryption | Done: `EventSealing.seal` and `open`, `GroupKey`, `GroupKeyring`, `OpenResult` (opened, rejected with a reason, or "need the key for epoch N"). An event sealed by an independent implementation (HChaCha20 checked against the published vector) opens. A ciphertext re-signed into another epoch, counter, author or group fails to decrypt; a changed nonce or ciphertext fails; the same event sealed twice differs; a wrong key fails; any flipped bit in a stored envelope is refused. 62 `crypto` tests. |
-| T2.9 to T2.12 | Not started. |
+| T2.9 key rotation | Done: `KeyRotation.seal`, `open`, `receive`, `recipients` (HPKE through Tink). `GroupState.epochStarts` (core) records which accepted event started each epoch, and a key is only taken from that event. Keys sealed by an independent RFC 9180 implementation open; every remaining member gets the same key; the removed member reads old-epoch events but gets `NeedKey` for new ones and cannot open another member's sealed key; a sealed key is bound to its group, epoch and recipient; a forged rotation by a plain member and an event that is not in the log deliver nothing. 73 `crypto` and 144 `core-model` tests. |
+| T2.10 to T2.12 | Not started. |
 
 ---
 

@@ -1,9 +1,10 @@
 # Regenerates app/crypto/src/test/resources/crypto-vectors.json.
 # Usage: python3 -I crypto_vectors.py <output path>   (needs Python 3 and the 'cryptography' package)
-# An independent implementation of docs/CRYPTO.md sections 1, 2, 4 and 5 (and the envelope layout of docs/WIRE_FORMAT.md),
+# An independent implementation of docs/CRYPTO.md sections 1, 2, 4, 5 and 6 (and the envelope layout of docs/WIRE_FORMAT.md),
 # written from the specs, not from the Kotlin code. The Kotlin tests compare byte for byte.
 import hashlib, hmac, json, struct, sys
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from cryptography.hazmat.primitives import serialization as S
@@ -65,6 +66,32 @@ def sealed_event(slot, group_id, epoch, counter, group_key, nonce, payload):
     env.update({"groupKey": group_key.hex(), "payload": payload.hex(), "aad": aad.hex()})
     return env
 
+# --- HPKE base mode, DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, ChaCha20-Poly1305 (RFC 9180), docs/CRYPTO.md section 6
+def _hmac(key, data): return hmac.new(key, data, hashlib.sha256).digest()
+def _extract(salt, ikm): return _hmac(salt or bytes(32), ikm)
+def _expand(prk, info, n):
+    out, t, i = b"", b"", 1
+    while len(out) < n:
+        t = _hmac(prk, t + info + bytes([i])); out += t; i += 1
+    return out[:n]
+def _lextract(suite, salt, label, ikm): return _extract(salt, b"HPKE-v1" + suite + label + ikm)
+def _lexpand(suite, prk, label, info, n): return _expand(prk, struct.pack(">H", n) + b"HPKE-v1" + suite + label + info, n)
+_KEM = b"KEM" + struct.pack(">H", 0x0020)
+_SUITE = b"HPKE" + struct.pack(">HHH", 0x0020, 0x0001, 0x0003)
+def hpke_seal(recipient_pub, eph_sk, info, plaintext):
+    eph_pk = X25519PrivateKey.from_private_bytes(eph_sk).public_key().public_bytes(**RAW)
+    dh = X25519PrivateKey.from_private_bytes(eph_sk).exchange(X25519PublicKey.from_public_bytes(recipient_pub))
+    shared = _lexpand(_KEM, _lextract(_KEM, b"", b"eae_prk", dh), b"shared_secret", eph_pk + recipient_pub, 32)
+    ctx = bytes([0]) + _lextract(_SUITE, b"", b"psk_id_hash", b"") + _lextract(_SUITE, b"", b"info_hash", info)
+    secret = _lextract(_SUITE, shared, b"secret", b"")
+    key = _lexpand(_SUITE, secret, b"key", ctx, 32); nonce = _lexpand(_SUITE, secret, b"base_nonce", ctx, 12)
+    return eph_pk + ChaCha20Poly1305(key).encrypt(nonce, plaintext, b"")
+
+def key_delivery(slot, group_id, epoch, group_key, eph_sk):
+    info = b"owntally/v1/key-delivery" + group_id + epoch.to_bytes(4, "big")
+    sealed = hpke_seal(bytes.fromhex(keys_for(slot)["encPub"]), eph_sk, info, group_key)
+    return {"recipientSlot": slot, "groupId": group_id.hex(), "epoch": epoch, "groupKey": group_key.hex(), "info": info.hex(), "sealed": sealed.hex()}
+
 # the 34-byte worked example of docs/WIRE_FORMAT.md (a ProfileUpdated for counter 1)
 EXAMPLE_PAYLOAD = bytes.fromhex("0000" "00000000000003e8" "03" "00000013" "0004" "41736861" "000b" "3938373635203433323130")
 
@@ -76,9 +103,13 @@ out = {
         signed_envelope(0, 1, bytes([9]) * 16, 2, 5, bytes(range(1, 25)), bytes(range(0xA0, 0xB4))),
         signed_envelope(1, 1, bytes([7]) * 16, 4294967295, 1099511627776, bytes(24), b""),
     ],
+    "keyDeliveries": [
+        key_delivery(1, bytes([9]) * 16, 2, bytes(range(32, 64)), bytes([9]) * 32),
+        key_delivery(2, bytes([9]) * 16, 3, bytes(range(64, 96)), bytes([5]) * 32),
+    ],
     "sealed": [
         sealed_event(0, bytes([9]) * 16, 2, 1, bytes(range(32)), bytes(range(0x40, 0x58)), EXAMPLE_PAYLOAD),
     ],
 }
 json.dump(out, open(sys.argv[1], "w"), indent=1)
-print(len(out["slots"]), len(out["envelopes"]), len(out["sealed"]))
+print(len(out["slots"]), len(out["envelopes"]), len(out["sealed"]), len(out["keyDeliveries"]))

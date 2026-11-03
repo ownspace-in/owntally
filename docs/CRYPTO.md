@@ -57,6 +57,8 @@ Order: encrypt first, then sign the whole envelope. A phone can reject forged ev
 `MemberRemoved` (WIRE_FORMAT.md tag 14) now carries `newEpoch` and, for every remaining member, the new group key **sealed** to that member's `encryptionKey` with HPKE (RFC 9180, via Tink: X25519, HKDF-SHA256, ChaCha20-Poly1305). Rules:
 
 - `newEpoch` must be exactly the current epoch plus 1, else the event is `INVALID`.
+- The HPKE context ("info") for every sealed key is the ASCII text `owntally/v1/key-delivery`, then the group id (16 bytes), then the new epoch as 4 bytes big-endian. This ties a sealed key to its group and epoch. (Added while building T2.9; the first draft did not name the context. For the owner to confirm.)
+- A phone takes a new epoch's key only from the event that replay accepted as the start of that epoch (`GroupState.epochStarts`), never from an ignored event or one that is not yet in the log. Otherwise a plain member could hand everyone a key of their choosing.
 - The event itself is encrypted under the current (old) epoch key, like any event. It carries the sealed keys in the clear inside that payload, which is fine: only the recipients can open them.
 - Events written from then on use the new epoch. The removed member holds the old key only, so cannot read them.
 - A remaining member who has not yet synced the removal keeps writing under the old epoch until they see it; those events stay readable by the removed member. This is inherent in the design (DESIGN.md: no forward secrecy in v1) and is accepted.
