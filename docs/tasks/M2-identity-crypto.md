@@ -31,9 +31,9 @@ Done when: each call is shown working, or the builder has stopped and told the o
 
 ## T2.3 Event model changes
 
-Do: update `core-model` as listed in CRYPTO.md section 9: `encryptionKey` on `GroupCreated` and `MemberJoined`, `newEpoch` and sealed keys on `MemberRemoved` with the rule that `newEpoch` is the current epoch plus 1, numeric tag on `Unknown`. Update replay, the M1 fixtures and their tests.
+Do: update `core-model` as listed in CRYPTO.md section 9: `encryptionKey` on `GroupCreated` and `MemberJoined`, `newEpoch` and sealed keys on `MemberRemoved` with the rule that `newEpoch` is the current epoch plus 1, numeric tag on `Unknown`, the new `KeyRotated` event, and the leave rule. Update replay, the M1 fixtures and their tests.
 
-Done when: all M1 tests pass again, with new tests for the epoch rule.
+Done when: all M1 tests pass again, with new tests for the epoch rules (removal by someone else, a leave that does not rotate, `KeyRotated` with a missing member).
 
 ## T2.4 Wire codec (in `core-model`)
 

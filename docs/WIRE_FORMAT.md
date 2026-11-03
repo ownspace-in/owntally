@@ -48,6 +48,7 @@ body    = tag u8 | length u32 | content
 | 12 | `OwnershipOfferCancelled` | empty |
 | 13 | `OwnershipAccepted` | empty |
 | 14 | `MemberRemoved` | `key` member, `u32` newEpoch, `map<key, sealedKey>` (see CRYPTO.md section 6; `sealedKey` is `u16` length and bytes) |
+| 15 | `KeyRotated` | `u32` newEpoch, `map<key, sealedKey>` |
 
 `split` is `u8` kind then: kind 1 (`Equal`) `set<key>` participants; kind 2 (`Exact`) `map<key, i64>` amounts.
 

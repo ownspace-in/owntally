@@ -60,7 +60,9 @@ Order: encrypt first, then sign the whole envelope. A phone can reject forged ev
 - The event itself is encrypted under the current (old) epoch key, like any event. It carries the sealed keys in the clear inside that payload, which is fine: only the recipients can open them.
 - Events written from then on use the new epoch. The removed member holds the old key only, so cannot read them.
 - A remaining member who has not yet synced the removal keeps writing under the old epoch until they see it; those events stay readable by the removed member. This is inherent in the design (DESIGN.md: no forward secrecy in v1) and is accepted.
-- **Open question for the owner (Q1):** when a member **leaves** (removes themselves), should the group key rotate? The leaver cannot be trusted to seal a new key, and an admin may be offline. Proposal: a leave does not rotate by itself; the app tells an admin "Dev left, rotate the key?" and an admin issues a `MemberRemoved`-style rotation. This needs a small new event, `KeyRotated(newEpoch, sealed keys)`. Say whether to add it in v1 or leave it out.
+- **Leaving.** A member who removes themselves (author and `member` are the same) cannot safely hand out a new key, and an admin may be offline. So a leave does not rotate: `newEpoch` must equal the current epoch and the map must be empty. The app then tells the admins "Dev left, rotate the key?" (owner decision, 3 Nov 2026).
+- **`KeyRotated`** (WIRE_FORMAT.md tag 15) is that rotation. Only the owner or an admin may write it. `newEpoch` must be the current epoch plus 1, and the map must hold a sealed key for **exactly** the current members, the author included. Otherwise it is `INVALID`.
+- For `MemberRemoved` by someone else the same two rules apply to the remaining members, so the removal and the new key are one atomic event.
 
 ## 7. Tickets
 
@@ -89,10 +91,13 @@ For the owner to approve together with this file. Nothing in `docs/PROTOCOL.md` 
 2. `MemberRemoved` gains `newEpoch` and the sealed keys (and gets a rule: `newEpoch` is the current epoch plus 1).
 3. `Event.version` becomes the envelope version.
 4. `EventBody.Unknown` carries the numeric tag instead of a name.
-5. DESIGN.md says "Noise or TLS 1.3 / QUIC" for transport. M2 does not touch transport security.
+5. A new event `KeyRotated(newEpoch, sealed keys)`, and the leave rule for `MemberRemoved` (section 6).
+6. DESIGN.md says "Noise or TLS 1.3 / QUIC" for transport. M2 does not touch transport security.
 
-## 10. Questions for the owner
+## 10. Decided and still open
 
-1. **Q1** above: a leave and key rotation.
-2. **Q2:** `after` and `time` are hidden inside the encrypted payload, while `author`, `counter`, `groupId` and `epoch` stay visible (WIRE_FORMAT.md section 3). OK? The alternative is to show `after` too, which makes syncing slightly simpler but tells observers who has seen whose events.
-3. **Q3:** epochs start at 1 and tickets last 8 hours (DESIGN.md). OK?
+Decided by the owner on 3 Nov 2026:
+- A leave does not rotate the key; an admin rotates with `KeyRotated` (section 6).
+- `after` and `time` are hidden inside the encrypted payload. Anyone who is not a member (the relay operator, a network observer, someone holding a stored file) then sees only the author, counter, group and epoch of each event, not who has seen whose events.
+
+Still to confirm: epochs start at 1, and tickets last 8 hours as in DESIGN.md.
