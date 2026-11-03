@@ -1,6 +1,6 @@
 # OwnTally protocol: events, rules and calculations
 
-Status: **DRAFT, waiting for owner approval** (task T1.2 in [tasks/M1-core-domain.md](tasks/M1-core-domain.md)). No code may depend on anything here until it is approved. Behaviour comes from [DESIGN.md](DESIGN.md); where this draft adds or changes something, it is listed in "Changes and additions" at the end.
+Status: **DRAFT 2 (3 Nov 2026), waiting for owner approval**. Updated with the owner's answers of 3 Nov 2026 (listed at the end). (task T1.2 in [tasks/M1-core-domain.md](tasks/M1-core-domain.md)). No code may depend on anything here until it is approved. Behaviour comes from [DESIGN.md](DESIGN.md); where this draft adds or changes something, it is listed in "Changes and additions" at the end.
 
 This file covers the data and rules in the pure Kotlin core. Encryption, signing, transport and storage are other milestones.
 
@@ -22,8 +22,9 @@ Every event has:
 
 | Field | Meaning |
 |---|---|
-| `author` | The member's `PublicKey`. |
-| `counter` | 1 for the author's first event in this group, then +1 each time. No gaps. |
+| `version` | Protocol version, 1 for now. |
+| `author` | The member's `PublicKey`. One phone per member in v1, so this also identifies the device. |
+| `counter` | 1 for the author's first event in this group, then +1 each time. No gaps. A phone restored from the recovery phrase continues from the highest counter its group peers have for that key (needs a sync first; M2). |
 | `after` | Map of author to the highest counter of theirs that the author had seen when writing this event. Includes the author's own previous counter. |
 | `time` | Wall clock milliseconds. Display only. Never used by any rule. |
 | `body` | One of the bodies below. |
@@ -57,7 +58,9 @@ A log is a set of events. Two phones with the same set of events must compute th
 1. **Dependencies.** An event depends on its own previous counter, and on every `(author, c)` with `c <= after[author]`.
 2. **Ready.** An event is applied only when all its dependencies are present. Events whose dependencies are missing are held back and do not affect state until the dependencies arrive.
 3. **Order.** Apply ready events with a deterministic topological order: repeatedly take, from all ready events, the one with the smallest `(author bytes, counter)`.
-4. **Rules** (section 4) are checked against the state at that point in the order. An event that fails a rule stays in the log but has no effect, and is reported with a reason.
+4. **Duplicates.** If two different events have the same `EventId`, both are ignored with `DUPLICATE_ID`, but they still count as present for dependencies.
+5. **Unknown types.** An event with an unknown body type or a newer `version` is kept in the log with no effect (`UNKNOWN_TYPE`), and counts as present for dependencies.
+6. **Rules** (section 4) are checked against the state at that point in the order. An event that fails a rule stays in the log but has no effect, and is reported with a reason.
 
 ## 4. Rules
 
@@ -65,7 +68,7 @@ State: group, members (with name, phone, role), expenses, settlements, pending o
 
 Roles: `OWNER`, `ADMIN`, `MEMBER`. The owner is also an admin.
 
-General: an event's author must be a current member, except `GroupCreated`. Reasons for ignoring an event: `NOT_MEMBER`, `NOT_ALLOWED`, `INVALID`, `UNKNOWN_TARGET`, `ALREADY_DONE`, `AFTER_REMOVAL`.
+General: an event's author must be a current member, except `GroupCreated`. Reasons for ignoring an event: `NOT_MEMBER`, `NOT_ALLOWED`, `INVALID`, `UNKNOWN_TARGET`, `ALREADY_DONE`, `AFTER_REMOVAL`, `DUPLICATE_ID`, `UNKNOWN_TYPE`.
 
 | Body | Rule |
 |---|---|
@@ -95,10 +98,10 @@ For each expense that is not deleted, after applying removals (below):
 - each participant's balance decreases by their share.
 
 Shares:
-- `Equal`: `base = total / n`, `rem = total % n` (integer division). The first `rem` participants, taken in ascending `PublicKey` order, pay `base + 1`; the others pay `base`.
+- `Equal`: `base = total / n`, `rem = total % n` (integer division). Sort the participants by ascending `PublicKey`. Starting at position `counter mod n` (`counter` is the counter of the event that created the expense) and wrapping around, the next `rem` participants pay `base + 1`; the others pay `base`. The starting point moves from expense to expense, so the extra paise do not always fall on the same people.
 - `Exact`: the stated amounts.
 
-Settlements: for a settlement from `f` to `t` of amount `a` that is `PAID_MARKED` or `CONFIRMED`, `f` increases by `a` and `t` decreases by `a`. `DISPUTED` settlements do not count.
+Settlements: for a settlement from `f` to `t` of amount `a` that is `PAID_MARKED` or `CONFIRMED`, `f` increases by `a` and `t` decreases by `a`. A payment counts as soon as it is recorded, still shown as unconfirmed (owner decision, 3 Nov 2026). `DISPUTED` settlements do not count, so a dispute puts the amount back on the plan.
 
 Balances always sum to 0.
 
@@ -106,7 +109,7 @@ Balances always sum to 0.
 
 A removed member is taken out of the calculation, as if they had never been in the group:
 - an expense they paid is excluded entirely;
-- they are dropped from other expenses' participants: `Equal` is re-split among the remaining participants (if none remain, the expense is excluded); for `Exact`, their share is dropped and the others stay as entered (the payer's increase is then the sum of the remaining shares);
+- they are dropped from other expenses' participants: `Equal` is re-split among the remaining participants (if none remain, the expense is excluded); for `Exact`, the removed members' shares add up to an amount `r`, which is divided among the remaining participants the same way as an `Equal` split of `r` (same rounding rule), added to their entered shares; if no participant remains, the expense is excluded (owner decision, 3 Nov 2026). The payer's increase stays equal to the total, so balances still sum to 0;
 - settlements involving them are excluded;
 - their expenses, settlements and profile stay visible in the history, marked as excluded.
 
@@ -138,6 +141,11 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 8. **`PaymentDisputed` has fixed reasons** (matching the three choices in the mockup). Free text is not stored.
 9. **Admin takeover when the owner is unreachable is not included** (owner decision).
 10. **`GroupCreated` carries the group id and name**, and the creator's name and phone come from a second event.
+11. **Exact splits on removal differ from DESIGN.md.** DESIGN.md said the others' shares stay as entered. The owner chose on 3 Nov 2026 to re-split the removed share among the remaining participants, so the payer is repaid in full. DESIGN.md is updated.
+12. **Equal-split rounding rotates.** The leftover paise start at position `counter mod n`, not always at the lowest key. No hashing needed.
+13. **Payments count at once** (section 5), owner decision of 3 Nov 2026.
+14. **One phone per member in v1.** The author key stands in for the device id used in DESIGN.md.
+15. **Added:** a `version` field on every event, `DUPLICATE_ID` and `UNKNOWN_TYPE` handling (section 3).
 
 ## Open questions for the owner
 
