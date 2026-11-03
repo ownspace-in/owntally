@@ -1,6 +1,6 @@
 # OwnTally protocol: events, rules and calculations
 
-Status: **DRAFT 2 (3 Nov 2026), waiting for owner approval**. Updated with the owner's answers of 3 Nov 2026 (listed at the end). (task T1.2 in [tasks/M1-core-domain.md](tasks/M1-core-domain.md)). No code may depend on anything here until it is approved. Behaviour comes from [DESIGN.md](DESIGN.md); where this draft adds or changes something, it is listed in "Changes and additions" at the end.
+Status: **APPROVED by the owner on 3 Nov 2026** (task T1.2 in [tasks/M1-core-domain.md](tasks/M1-core-domain.md)). Incorporates the owner's answers of 3 Nov 2026 (listed at the end). Any change from here needs the owner's approval. (task T1.2 in [tasks/M1-core-domain.md](tasks/M1-core-domain.md)). No code may depend on anything here until it is approved. Behaviour comes from [DESIGN.md](DESIGN.md); where this draft adds or changes something, it is listed in "Changes and additions" at the end.
 
 This file covers the data and rules in the pure Kotlin core. Encryption, signing, transport and storage are other milestones.
 
@@ -154,7 +154,3 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 3. The group limit of 20 members is accepted for v1. Yes.
 
 Also answered on 3 Nov 2026: payments count at once; exact splits are re-split on removal; one phone per member; a removed key never rejoins (changes 5, 11, 13 and 14).
-
-## Still needed
-
-The owner's explicit approval of the whole file ("approved"), which changes the status at the top from DRAFT to APPROVED. No code depends on this file until then.
