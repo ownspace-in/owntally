@@ -16,11 +16,15 @@ import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import owntally.crypto.Clock
 import owntally.crypto.EventSealing
+import owntally.crypto.KeyDerivation
 import owntally.crypto.OpenResult
 import owntally.data.db.OwnTallyDatabase
 import owntally.data.secrets.BoxedSecretStore
 import owntally.data.secrets.FileBlobStore
 import owntally.data.secrets.KeystoreSecretBox
+import owntally.data.secrets.SecretLoad
+import owntally.data.session.AddResult
+import owntally.data.session.GroupSession
 import owntally.data.store.RoomEventStore
 import owntally.data.store.RoomSettingsStore
 import owntally.model.Event
@@ -29,6 +33,7 @@ import owntally.model.EventLog
 import owntally.model.GroupId
 import owntally.model.GroupState
 import owntally.model.Money
+import owntally.model.Payment
 import owntally.model.Role
 import owntally.model.Split
 import owntally.model.replay
@@ -67,12 +72,33 @@ class FullStackInstrumentedTest {
         return replay(log)
     }
 
-    private fun addExpense(s: Stack, group: GroupId, counter: Long) {
-        val slot = s.groups.group(group)!!.keySlot
-        val me = s.identity.groupIdentity(slot)!!
-        val key = s.secrets.loadKeyring(group).keyring[1]!!
-        val event = Event(1, me.publicKey, counter, mapOf(me.publicKey to counter - 1), 5, EventBody.ExpenseAdded("Dinner", Money(60000), me.publicKey, 20000, Split.Equal(setOf(me.publicKey))))
-        assertEquals(AppendResult.Added, s.groups.appendEnvelope(group, EventSealing.seal(me, group, 1, key, event)))
+    private fun session(s: Stack, group: GroupId) = GroupSession(group, s.groups, s.secrets, s.identity, Clock.SYSTEM)
+
+    /** A second member, made from the same seed (a stand-in for a friend until members can join for real). */
+    private fun friend(s: Stack) = KeyDerivation.groupIdentity((s.secrets.loadMasterSeed() as SecretLoad.Found).value, 100)
+
+    /** Asha adds a friend and pays 1,000 for both of them (and a second 400 paid by the friend), so there are real balances. */
+    private fun fill(s: Stack, group: GroupId) {
+        val sess = session(s, group)
+        val me = sess.view.value.me
+        val ben = friend(s)
+        assertTrue(sess.append(EventBody.MemberJoined(ben.publicKey, ben.encryptionKey, "Ben", "98765 00002")) is AddResult.Added)
+        assertTrue(sess.addExpense("Hotel", Money(100_000), me, 20_000, Split.Equal(setOf(me, ben.publicKey))) is AddResult.Added)
+        assertTrue(sess.addExpense("Taxi", Money(40_000), ben.publicKey, 20_001, Split.Equal(setOf(me, ben.publicKey))) is AddResult.Added)
+    }
+
+    /** Hand calculation (paise): Hotel 50,000 each, Taxi 20,000 each. Asha +100,000 -50,000 -20,000 = +30,000; Ben +40,000 -50,000 -20,000 = -30,000. */
+    private fun checkFilled(s: Stack, group: GroupId) {
+        val v = session(s, group).view.value
+        val ben = friend(s).publicKey
+        assertEquals("Goa Trip", v.state.name)
+        assertEquals(2, v.state.expenses.size)
+        assertEquals(emptyList(), v.state.ignored)
+        assertEquals(Money(30_000), v.balances.getValue(v.me))
+        assertEquals(Money(-30_000), v.balances.getValue(ben))
+        assertEquals(listOf(Payment(ben, v.me, Money(30_000))), v.plan)
+        assertEquals("Asha", v.state.members.getValue(v.me).name)
+        assertEquals("Ben", v.state.members.getValue(ben).name)
     }
 
     @Test
@@ -82,17 +108,17 @@ class FullStackInstrumentedTest {
             val first = open()
             first.identity.completeFirstRun(first.identity.newPhrase(), "Asha", "98765 43210")
             val group = first.groups.createGroup("Goa Trip")
-            addExpense(first, group, 3)
+            fill(first, group)
+            val viewBefore = session(first, group).view.value
             first.db.close()
 
             val second = open() // like starting the app again
             assertEquals(IdentityState.READY, second.identity.state())
             assertEquals(listOf(group), second.groups.listGroups().map { it.groupId })
+            checkFilled(second, group)
+            assertEquals(viewBefore, session(second, group).view.value, "the same state after reopening everything")
             val state = replayOf(second, group)
-            assertEquals("Goa Trip", state.name)
-            assertEquals(1, state.expenses.size)
             assertEquals(Role.OWNER, state.members.getValue(state.owner!!).role)
-            assertEquals("Asha", state.members.getValue(state.owner!!).name)
             second.db.close()
         } finally {
             wipe()
@@ -129,8 +155,7 @@ class FullStackInstrumentedTest {
         val s = open()
         s.identity.completeFirstRun(s.identity.newPhrase(), "Asha", "98765 43210")
         val group = s.groups.createGroup("Goa Trip")
-        addExpense(s, group, 3)
-        addExpense(s, group, 4)
+        fill(s, group)
         s.db.close()
     }
 
@@ -140,11 +165,7 @@ class FullStackInstrumentedTest {
         val s = open()
         assertEquals(IdentityState.READY, s.identity.state())
         val group = s.groups.listGroups().single().groupId
-        val state = replayOf(s, group)
-        assertEquals("Goa Trip", state.name)
-        assertEquals(2, state.expenses.size)
-        assertEquals("Asha", state.members.getValue(state.owner!!).name)
-        assertEquals(emptyList(), state.ignored)
+        checkFilled(s, group)
         s.db.close()
     }
 

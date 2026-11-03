@@ -15,7 +15,8 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 | T3.3 money and text formatting | Done (4 Nov 2026), see below. |
 | T3.4 Keystore and secret storage | Done (4 Nov 2026), see below. |
 | T3.5 Room database and repositories | Done (4 Nov 2026), see below. |
-| T3.6 to T3.12 | Not started. |
+| T3.6 App state from the log | Done (4 Nov 2026), see below. |
+| T3.7 to T3.12 | Not started. |
 
 ## Decisions
 
@@ -89,6 +90,10 @@ Lint: no errors (a newer Room patch version exists). Not done here: sealing and 
 Do: a `GroupSession` that decrypts a group's envelopes with its keyring, replays them with `core-model`, and exposes the state, balances and settlement plan as a flow; adds new events (seal, sign, store) for the local user.
 
 Done when: tests show that adding and deleting expenses gives the balances of `core-model`; envelopes that fail to open are kept but not shown; replaying after a restart gives the same state.
+
+**Result (4 Nov 2026):** `GroupSession` in `app/data` (package `owntally.data.session`; no Android code). It opens a group's stored envelopes with the group's keys, replays them with `core-model`, and publishes a `StateFlow<GroupView>` holding the state, this phone's member key, the balances, the settlement plan, and counts of what could not be read. It keeps the opened events in memory and only opens envelopes it has not seen, so adding one event does not re-decrypt everything; `refresh()` picks up newly stored envelopes and newly arrived keys. **New events by the local user** (`append`, `addExpense`, `deleteExpense`) are first put through the core's replay rules on a copy of the log: if the rules would ignore the event (a member who does not exist, deleting something that is not there, deleting twice, a plain member's admin-only action) nothing is sealed or stored and `Refused(reason)` is returned, so the core and not the UI decides; otherwise it is sealed with the current epoch's key, signed, stored, and the new state published once. It uses the next counter and `after` from the opened log. If the key for the current epoch is not on the phone, nothing can be written (`NoKey`). **Envelopes that cannot be opened stay stored and are never shown:** those waiting for an epoch key (listed by epoch, opened when the key arrives), those that do not open with the key held, and stored bytes that cannot be decoded are counted separately, and counted once, not again on every refresh. Cases covered by tests: balances from adding and deleting expenses equal the core's (a hand-calculated example: Hotel 900 and Taxi 600 among three gives +400, +100, -500 and two payments); the view equals what the core computes from the stored events; deleting keeps the entry in the history; a new session over the same storage shows an equal view and continues the counters; after a key rotation new events use the new key only and nothing is written if the new epoch's key is missing even though the old key is there; 24 expenses added from 8 threads get distinct counters and all land.
+
+*JVM:* 83 tests in `app/data` (23 new). Seven protections were broken on purpose; one (always using the epoch 1 key) was first missed because no test wrote after an epoch change, and got two tests. *Emulator:* the 29 instrumented tests pass with the session on the real stack (Room, Keystore, files). The restart test now has real numbers: first run, a group, a friend and two expenses in one process; the process stopped; a new process reads and replays them (Asha +300, Ben -300, one payment of 300 from Ben to Asha) with no ignored event; and the same after rebooting the emulator. Lint: no errors. Not done here: settlements, member changes and key rotation as actions (M4), receiving events from other phones (M5); the debug-only test members are a screen feature (T3.8 onward).
 
 ## T3.7 First run: Welcome and recovery phrase
 

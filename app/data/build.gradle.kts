@@ -40,6 +40,7 @@ dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
     implementation("com.google.crypto.tink:tink-android:1.24.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("androidx.room:room-runtime:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
 
