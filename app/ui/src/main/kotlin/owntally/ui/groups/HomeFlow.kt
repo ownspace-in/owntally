@@ -32,15 +32,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import owntally.data.session.GroupSession
 import owntally.data.session.Sessions
 import owntally.model.GroupId
+import owntally.ui.NavStack
+import owntally.ui.Screen
 import owntally.model.format.BalanceKind
 import owntally.ui.components.Glyph
 import owntally.ui.components.GlyphIcon
@@ -54,29 +53,30 @@ interface DebugTools {
 /** The screens after first run: the four tabs, and the Group and New group screens above them. */
 @Composable
 fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null) {
-    val nav = rememberNavController()
+    val ui: HomeViewModel = viewModel()
+    val nav = ui.nav
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { sessions.refresh() } }
+    androidx.activity.compose.BackHandler(enabled = nav.canGoBack) { ui.nav = nav.pop() }
+    val back = { ui.nav = ui.nav.pop() }
     Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) {
-        NavHost(nav, startDestination = "home") {
-            composable("home") {
-                HomeTabs(sessions, onOpen = { nav.navigate("group/${it.toHex()}") }, onSettle = { nav.navigate("group/${it.toHex()}/settle") }, onHow = { nav.navigate("how") }, onCreate = { nav.navigate("create") })
-            }
-            composable("create") {
-                CreateGroupRoute(sessions, onDone = { nav.popBackStack() })
-            }
-            composable("how") { HowItWorksScreen(onBack = { nav.popBackStack() }) }
-            composable("group/{id}/settle") { entry ->
-                val id = entry.arguments?.getString("id")?.let { GroupId.fromHexOrNull(it) }
-                if (id == null) LaunchedEffect(Unit) { nav.popBackStack() } else SettleUpRoute(sessions, id, onBack = { nav.popBackStack() })
-            }
-            composable("group/{id}/add") { entry ->
-                val id = entry.arguments?.getString("id")?.let { GroupId.fromHexOrNull(it) }
-                if (id == null) LaunchedEffect(Unit) { nav.popBackStack() } else AddExpenseRoute(sessions, id, onDone = { nav.popBackStack() })
-            }
-            composable("group/{id}") { entry ->
-                val id = entry.arguments?.getString("id")?.let { GroupId.fromHexOrNull(it) }
-                if (id == null) LaunchedEffect(Unit) { nav.popBackStack() } else GroupRoute(sessions, id, debugTools, onBack = { nav.popBackStack() }, onAdd = { nav.navigate("group/${id.toHex()}/add") }, onSettle = { nav.navigate("group/${id.toHex()}/settle") })
-            }
+        when (val screen = nav.current) {
+            Screen.Home -> HomeTabs(
+                sessions,
+                onOpen = { ui.nav = ui.nav.push(Screen.Group(it)) },
+                onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(it)) },
+                onHow = { ui.nav = ui.nav.push(Screen.HowItWorks) },
+                onCreate = { ui.nav = ui.nav.push(Screen.CreateGroup) },
+            )
+            Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
+            Screen.HowItWorks -> HowItWorksScreen(onBack = back)
+            Screen.Settings -> MessageTab("Settings", "Settings arrive in the next step.")
+            is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
+            is Screen.AddExpense -> AddExpenseRoute(sessions, screen.id, onDone = back)
+            is Screen.Group -> GroupRoute(
+                sessions, screen.id, debugTools, onBack = back,
+                onAdd = { ui.nav = ui.nav.push(Screen.AddExpense(screen.id)) },
+                onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(screen.id)) },
+            )
         }
     }
 }
@@ -211,6 +211,10 @@ private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?,
 class HomeViewModel : androidx.lifecycle.ViewModel() {
     var tab by mutableStateOf(Tab.GROUPS.ordinal)
     var createForm by mutableStateOf(CreateGroupModel())
+    var nav by mutableStateOf(NavStack())
+
+    /** The Add expense form being filled in, and the group it belongs to (a form for another group is never reused). */
+    var addExpense by mutableStateOf<Pair<GroupId, AddExpenseModel>?>(null)
 }
 
 @Composable
@@ -247,29 +251,24 @@ private fun ExpenseDialog(view: owntally.data.session.GroupView, e: owntally.mod
     )
 }
 
-/** The form lives here so it survives turning the phone. Memory only, never saved state. */
-class AddExpenseViewModel : androidx.lifecycle.ViewModel() {
-    var model by mutableStateOf<AddExpenseModel?>(null)
-}
-
 @Composable
 private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
     val s = session ?: return Box(Modifier.fillMaxSize())
-    val vm: AddExpenseViewModel = viewModel()
+    val ui: HomeViewModel = viewModel()
     val view by s.view.collectAsStateWithLifecycle()
     LaunchedEffect(s) {
         // nextCounter() reads the database, so this is done off the main thread.
-        if (vm.model == null) vm.model = withContext(Dispatchers.IO) { AddExpenseModel.start(s.view.value, s.nextCounter(), java.time.LocalDate.now().toEpochDay()) }
+        if (ui.addExpense?.first != id) ui.addExpense = id to withContext(Dispatchers.IO) { AddExpenseModel.start(s.view.value, s.nextCounter(), java.time.LocalDate.now().toEpochDay()) }
     }
-    val model = vm.model ?: return
+    val model = ui.addExpense?.takeIf { it.first == id }?.second ?: return
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     AddExpenseScreen(
-        model, view.state.name ?: "", onChange = { vm.model = it; error = null },
+        model, view.state.name ?: "", onChange = { ui.addExpense = id to it; error = null },
         onSave = {
             val split = model.toSplit()
             val total = (owntally.model.format.MoneyInput.parse(model.amountText) as? owntally.model.format.ParsedAmount.Valid)?.money
@@ -279,7 +278,7 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
                 try {
                     val r = withContext(Dispatchers.IO) { s.addExpense(model.trimmedDescription, total, model.paidBy, model.day, split) }
                     when (r) {
-                        is owntally.data.session.AddResult.Added -> { vm.model = null; withContext(Dispatchers.Main.immediate) { onDone() } }
+                        is owntally.data.session.AddResult.Added -> { ui.addExpense = null; withContext(Dispatchers.Main.immediate) { onDone() } }
                         is owntally.data.session.AddResult.Refused -> error = "This expense can't be added (${r.reason.name.lowercase().replace('_', ' ')}). Someone may have left the group."
                         owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
                     }
@@ -290,7 +289,7 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
                 }
             }
         },
-        onClose = { vm.model = null; onDone() }, error = error, saving = saving,
+        onClose = { ui.addExpense = null; onDone() }, error = error, saving = saving,
     )
 }
 

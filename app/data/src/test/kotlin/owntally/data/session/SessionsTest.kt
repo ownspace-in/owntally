@@ -183,4 +183,38 @@ class SessionsTest {
         assertEquals(emptyList(), env.groups.envelopes(a).envelopes)
     }
 
+
+    /**
+     * Android backup restores the database (events, group rows, settings) on a new phone, but not the keys, which live in the
+     * Keystore and the no-backup folder. The groups must show as waiting for their key, nothing may break, and new groups must not
+     * reuse a key slot.
+     */
+    @Test
+    fun aRestoredDatabaseWithoutKeysShowsGroupsWaitingForTheirKey() {
+        val oldId = sessions.createGroup("Goa Trip", "INR", 3)
+        sessions.session(oldId).let { s -> s.addExpense("Dinner", rupees(10), s.view.value.me, 1, Split.Equal(setOf(s.view.value.me))) }
+        val oldSlot = env.groups.listGroups().single().keySlot
+
+        // The new phone: its own Keystore box and secret files, but the old phone's database.
+        val phone = TestEnv()
+        val identity = owntally.data.repo.IdentityRepository(phone.secrets, env.settings)
+        val groups = owntally.data.repo.GroupRepository(phone.secrets, env.events, identity, phone.clock, java.security.SecureRandom())
+        assertEquals(owntally.data.repo.IdentityState.NOT_CREATED, identity.state(), "no seed on the new phone, whatever the database holds")
+        identity.completeFirstRun(identity.newPhrase(), "Asha", "98765 43210")
+        val restored = Sessions(groups, phone.secrets, identity, phone.clock, env.settings)
+        restored.refresh()
+
+        val old = restored.summaries.value.single()
+        assertEquals(oldId, old.groupId)
+        assertEquals(false, old.readable, "waiting for the group key")
+        assertEquals(3, old.colourIndex, "the colour setting came back with the database")
+        assertEquals(owntally.data.session.AddResult.NoKey, restored.session(oldId).addExpense("x", rupees(1), restored.session(oldId).view.value.me, 1, Split.Equal(setOf(restored.session(oldId).view.value.me))))
+
+        val fresh = restored.createGroup("New", "INR", null)
+        assertEquals(2, restored.summaries.value.size)
+        val slots = groups.listGroups().map { it.keySlot }
+        assertEquals(slots.size, slots.toSet().size)
+        assertTrue(groups.listGroups().first { it.groupId == fresh }.keySlot > oldSlot, "a slot is never reused")
+        assertEquals(true, restored.summaries.value.first { it.groupId == fresh }.readable)
+    }
 }

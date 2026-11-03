@@ -5,9 +5,9 @@
 
     <application
         android:name=".OwnTallyApplication"
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="false"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/ic_launcher"
         android:label="OwnTally"
         android:supportsRtl="true"

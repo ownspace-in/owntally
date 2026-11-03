@@ -36,19 +36,40 @@ class ManifestRulesTest {
         assertEquals("OwnTally", application.getAttributeNS(ns, "label"))
     }
 
+    /**
+     * Owner decision (3 Nov 2026): Android may back up the database and nothing else. It holds only encrypted events, group ids,
+     * the key slot numbers and a few settings; the keys are in the Keystore and the no-backup folder, which are never backed up.
+     */
     @Test
-    fun noBackupOfAnyKind() {
-        assertEquals("false", application.getAttributeNS(ns, "allowBackup"))
-        assertEquals("false", application.getAttributeNS(ns, "fullBackupContent"), "Android 11 and older read this one")
+    fun onlyTheDatabaseIsBackedUp() {
+        assertEquals("true", application.getAttributeNS(ns, "allowBackup"))
+        assertEquals("@xml/backup_rules", application.getAttributeNS(ns, "fullBackupContent"), "Android 11 and older read this one")
         assertEquals("@xml/data_extraction_rules", application.getAttributeNS(ns, "dataExtractionRules"))
-        val rules = parse("src/main/res/xml/data_extraction_rules.xml")
-        assertEquals(0, rules.getElementsByTagName("include").length, "nothing may be included in a backup")
-        for (section in listOf("cloud-backup", "device-transfer")) {
-            val element = rules.getElementsByTagName(section).item(0) as Element
-            val domains = (0 until element.getElementsByTagName("exclude").length)
-                .map { (element.getElementsByTagName("exclude").item(it) as Element).getAttribute("domain") }
-            assertEquals(setOf("root", "file", "database", "sharedpref", "external"), domains.toSet(), section)
+        for ((file, sections) in mapOf(
+            "src/main/res/xml/data_extraction_rules.xml" to listOf("cloud-backup", "device-transfer"),
+            "src/main/res/xml/backup_rules.xml" to listOf("full-backup-content"),
+        )) {
+            val rules = parse(file)
+            for (section in sections) {
+                val element = rules.getElementsByTagName(section).item(0) as Element
+                val includes = (0 until element.getElementsByTagName("include").length)
+                    .map { element.getElementsByTagName("include").item(it) as Element }
+                assertEquals(listOf("database"), includes.map { it.getAttribute("domain") }, "$file $section: only the database domain is included")
+                assertEquals(listOf("."), includes.map { it.getAttribute("path") }, "$file $section")
+                // Nothing else, by name, even if someone adds a broad include later.
+                val excluded = (0 until element.getElementsByTagName("exclude").length)
+                    .map { (element.getElementsByTagName("exclude").item(it) as Element).getAttribute("domain") }
+                assertEquals(setOf("root", "file", "sharedpref", "external"), excluded.toSet(), "$file $section")
+            }
         }
+    }
+
+    @Test
+    fun theSecretsLiveWhereBackupNeverReaches() {
+        // noBackupFilesDir is never backed up, and the container puts the secret files there.
+        val container = File("src/main/kotlin/owntally/app/AppContainer.kt").readText()
+        assertTrue("noBackupFilesDir" in container)
+        assertEquals(0, Regex("""\bfilesDir\b|getDir\(|cacheDir|getExternal""").findAll(container).count())
     }
 
     @Test

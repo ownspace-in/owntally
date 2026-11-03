@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nothing leaves the phone through Android's backup or phone-to-phone transfer: not data, not keys. -->
+<!--
+  Android may back up and transfer the database only: encrypted events, group ids, key slot numbers and a few settings (including
+  this person's name and phone for their groups). The keys are not here: they are in the Keystore and the no-backup folder, which
+  Android never copies, so a restored database shows its groups as "waiting for the group key".
+-->
 <data-extraction-rules>
     <cloud-backup>
+        <include domain="database" path="." />
         <exclude domain="root" />
         <exclude domain="file" />
-        <exclude domain="database" />
         <exclude domain="sharedpref" />
         <exclude domain="external" />
     </cloud-backup>
     <device-transfer>
+        <include domain="database" path="." />
         <exclude domain="root" />
         <exclude domain="file" />
-        <exclude domain="database" />
         <exclude domain="sharedpref" />
         <exclude domain="external" />
     </device-transfer>
