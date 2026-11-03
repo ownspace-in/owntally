@@ -16,7 +16,8 @@ Each task ends with "Done when", which must be checkable.
 | T2.2 library check | Done, see below. |
 | T2.3 event model changes | Done: encryption keys, `MemberRemoved` with epoch and sealed keys, `KeyRotated`, numeric `Unknown` (tag and content kept), `epoch` in the state. 127 `core-model` tests. |
 | T2.4 wire codec | Done: `EventCodec` and `Envelope` in `core-model`, 21 valid, 17 invalid payload and 11 envelope vectors from an independent encoder, strictness and "changed bytes are rejected or rewrite identically" property tests. 143 `core-model` tests. |
-| T2.5 to T2.12 | Not started. |
+| T2.5 phrase and master seed | Done: `Bip39`, `RecoveryPhrase`, `MasterSeed` in `app/crypto`. The word list is the reference list, checked by SHA-256 and compared byte for byte with a second source; the 8 published 12-word BIP39 vectors pass (entropy to words, words to entropy, seed). 24 `crypto` tests. |
+| T2.6 to T2.12 | Not started. |
 
 ---
 
