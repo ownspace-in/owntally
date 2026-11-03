@@ -4,20 +4,25 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M3. Rules: [DESIGN.md](../D
 
 Goal (BUILD_PLAN): a user can create a group, add and delete expenses and see correct balances, fully offline, and the data survives an app restart. Screens: Welcome, Recovery phrase (show, then confirm, cannot be skipped), Groups, Group, Add expense, Settle up (computed plan, buttons inert), How it works. Optional app lock. Screenshots blocked on the phrase screens.
 
-This file is a draft: **nothing below is built until the owner approves it** (section "Decisions").
+This file is a draft: **nothing below is built until the owner approves it** (section "Decisions"). The owner's answers of 3 Nov 2026 are recorded below.
 
 ## Progress
 
 | Task | Status |
 |---|---|
-| T3.1 plan and decisions | Drafted, waiting for the owner. |
+| T3.1 plan and decisions | Drafted. Owner answers recorded (application id, test members, app lock). Still open: the bottom bar, and approval of the PIN design in T3.11. |
 | T3.2 to T3.12 | Not started. |
 
 ## Decisions
 
 Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Material 3, minSdk 26, Room, the Android Keystore for keys, optional app lock, screenshots blocked on the phrase screen, no network code in M3.
 
-**Needs the owner's answer** (asked on 3 Nov 2026): the permanent application id; how multi-member groups are exercised before M4; how app lock works; which bottom tabs show.
+**Answered by the owner on 3 Nov 2026:**
+1. **Application id: `in.ownspace.owntally`.** Permanent once published; the invite site's `assetlinks.json` is tied to it.
+2. **Test members: debug builds only, groups limited to three members until M4.** A debug-only menu item adds pretend members (real keys, real `MemberJoined` events written by the owner), at most two, so a group has at most three members. Release builds contain no such code and no way to add members until M4 and M6.
+3. **App lock: support all three:** off, the phone's own biometric or screen lock, or our own PIN (details in T3.11).
+
+**Still open:** which tabs the bottom bar shows (only the working ones, or all four with Sync disabled). Until answered, the builder assumes only the working tabs (Groups, Settle, About), which is easy to change.
 
 **Defaults the builder proposes (change any of them):**
 1. **Dependency wiring by hand**, no Hilt. The app is small; Hilt adds annotation processing and build time for little gain. (BUILD_PLAN allows either.)
@@ -86,9 +91,17 @@ Done when: the plan on screen equals `settlementPlan` for the group.
 
 ## T3.11 App lock (optional)
 
-Do: per the owner's decision. Off by default, setting to turn it on, lock when the app goes to the background.
+Off by default. A setting chooses one of three modes; the app locks when it goes to the background (after a short grace period, default 30 seconds, so switching to a UPI app and back is not annoying).
 
-Done when: depends on the decision; tests for the lock state machine on the JVM.
+1. **Phone lock:** Android's own prompt (`BiometricPrompt`) accepting a strong biometric or the phone's PIN, pattern or password. We store nothing and write no lockout rules.
+2. **Our own PIN, 4 to 6 digits.** This is security-sensitive code of our own, so its design needs the owner's approval before it is built:
+   - The PIN is never stored. We store a salted hash made with PBKDF2-HMAC-SHA256 from the JDK (210,000 rounds, random 16-byte salt), then wrapped with the Keystore AEAD like the other secrets. No custom hashing.
+   - Wrong tries are counted and stored: after 5 in a row the lock waits 30 seconds, doubling each further failure (up to 1 hour). The data is never wiped by wrong PINs.
+   - Changing or turning off the PIN needs the current PIN. Forgotten PIN: no reset by us; the person can reinstall and restore from the recovery phrase (the data is re-synced from friends).
+   - Comparison in constant time. No PIN in logs, saved state or screenshots; the PIN screen blocks screenshots like the phrase screen.
+3. **Off.**
+
+Done when: tests on the JVM for the lock state machine (locked, unlocked, grace period, background), for the PIN rules (hash and compare, wrong-try counting, waiting times, persisted counter, constant-time compare) with a fake clock; the real prompt and Keystore are checked on the emulator.
 
 ## T3.12 Hand back
 
