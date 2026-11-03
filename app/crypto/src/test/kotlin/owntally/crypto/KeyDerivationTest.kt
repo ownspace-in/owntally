@@ -115,5 +115,3 @@ class KeyDerivationTest {
     }
 }
 
-private fun PublicKey.toHex() = bytes().joinToString("") { "%02x".format(it) }
-private fun EncryptionKey.toHex() = bytes().joinToString("") { "%02x".format(it) }

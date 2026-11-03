@@ -103,3 +103,17 @@ Decided by the owner on 3 Nov 2026:
 - `after` and `time` are hidden inside the encrypted payload. The author, counter, group and epoch stay readable. Who can see them: the operator of the WebSocket relay (TLS ends at our server, so it forwards the envelopes), and anyone holding a stored copy such as a database file or backup. They see who wrote how many events, not what is in them or who has seen whose events. People on the network (Wi-Fi, ISP, carrier) see only the encrypted connection, with IP addresses, timing and sizes. Iroh's relay forwards end-to-end encrypted QUIC packets and sees none of the envelope.
 
 Still to confirm: epochs start at 1, and tickets last 8 hours as in DESIGN.md.
+
+## 11. Clarifications found while implementing M2 (3 Nov 2026, for the owner to confirm)
+
+None of these changes a decision the owner made. Each has a test.
+
+1. **HPKE context.** The context for a sealed key is `owntally/v1/key-delivery`, the group id and the new epoch (section 6), so a sealed key cannot be used for another epoch or group.
+2. **A key comes only from the event that started the epoch.** The state records it (`epochStarts`); an ignored event, or one not yet in the log, delivers nothing (section 6).
+3. **Nonce.** Tink's `XChaCha20Poly1305` makes the random nonce itself and returns it in front of the ciphertext. The envelope's `nonce` field is those 24 bytes, split out (section 5).
+4. **Only issued tickets are accepted.** Section 7 says the host remembers the tickets it accepted. The host also remembers the ones it issued, and accepts only a ticket identical to one it issued, once, before it expires. Otherwise a well-formed ticket made up by anyone would be taken as new. The records live in memory until the storage milestone (M3).
+5. **Ticket text is exact.** Decoding rejects padding, spaces, characters outside the URL-safe alphabet and base64 with spare bits set, so a ticket has one text. A link is accepted by taking the part after `#`.
+6. **Expiry.** The expiry time is the first second at which the ticket no longer works.
+7. **Verifying.** `verify` answers true or false and never throws. `verifyFrom` also needs the author to be a member the caller lists; whether the member may do the thing is a replay rule.
+8. **Not done in M2.** Recording which slot a group used, and trying slots in order when restoring (section 2), belong to storage (M3) and joining (M6). Android uses the `tink-android` artifact; the APK size it adds is measured in M3.
+9. **Pinned library.** Google Tink 1.24.0 (released 16 Oct 2026).

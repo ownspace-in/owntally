@@ -152,5 +152,4 @@ class EnvelopeSigningTest {
         }
     }
 
-    private fun PublicKey.toHex() = bytes().hex()
 }
