@@ -42,8 +42,14 @@ kotlin {
     jvmToolchain(17)
 }
 
+// One copy of Tink in the APK: the Android artifact (see app/data/build.gradle.kts).
+configurations.configureEach {
+    exclude(group = "com.google.crypto.tink", module = "tink")
+}
+
 dependencies {
     implementation(project(":app:ui"))
+    implementation(project(":app:data"))
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.activity:activity-compose:1.11.0")
 
