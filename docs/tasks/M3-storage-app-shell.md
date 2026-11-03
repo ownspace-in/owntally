@@ -11,7 +11,8 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 | Task | Status |
 |---|---|
 | T3.1 plan and decisions | Drafted. Owner answers recorded (application id, test members, app lock, bottom bar). Still open: approval of the PIN design in T3.11, the defaults, and what the Settle tab shows. |
-| T3.2 to T3.12 | Not started. |
+| T3.2 Android build in the root project | Done (4 Nov 2026), see below. |
+| T3.3 to T3.12 | Not started. |
 
 ## Decisions
 
@@ -41,6 +42,10 @@ Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Materi
 Do: add the Android Gradle plugin to the root build (same versions as the spike: AGP 8.9.2, Kotlin 2.2.0), create `app/data`, `app/ui`, `app/app`, make CI build them (the GitHub runner already has the Android SDK), keep `core-model` and `crypto` free of Android.
 
 Done when: an empty app installs and starts on the emulator, `./gradlew test` and the debug build pass locally and in CI.
+
+**Result (4 Nov 2026):** modules `app/app` (application id `in.ownspace.owntally`, code in `owntally.app` because `in` is a Kotlin keyword), `app/ui` (Compose, placeholder root screen) and `app/data` (empty until T3.4). AGP 8.9.2, Kotlin 2.2.0, **compileSdk and targetSdk 36**, minSdk 26 (Gradle installed the platform 36 package into the SDK on this machine). Compose BOM 2025.09.00 and activity-compose 1.11.0: the newest versions (BOM 2026.09.00) need compile API 37 and a newer Android Gradle plugin, so upgrading them is a separate task. Five rule tests (`ManifestRulesTest`) check that the manifest requests no permission, has no backup of any kind (`allowBackup`, `fullBackupContent`, data extraction rules excluding every domain for cloud backup and device transfer), exports only the launcher activity, has an icon and name, uses the permanent application id, and that the app modules contain no network code. Each rule was broken on purpose and the tests caught it (a first attempt did not, because Gradle did not know the tests read the manifest; the files are now declared as test inputs). Android Lint: 0 errors; the only warnings say newer Compose versions exist. CI has a new `android` job that builds, tests and lints. On the emulator (Android 16, API 36): installed, started in 3.9 s, no crash, screenshot shows the placeholder. The merged manifest has one entry that is not ours, `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, which AndroidX adds for itself; it is not a permission asked of the user.
+
+**Note for the screens (T3.7 onwards):** with target API 36 Android draws apps edge to edge, so the placeholder text sits behind the status bar. Every screen must handle window insets (for example `Scaffold` and `safeDrawingPadding`) and the emulator screenshots must show it.
 
 ## T3.3 Money and text formatting (pure Kotlin)
 
