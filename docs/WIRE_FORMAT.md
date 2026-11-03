@@ -60,7 +60,7 @@ envelope  = 'OT' | version u8 | groupId bytes(16) | epoch u32 | author key | cou
 ```
 
 - `'OT'` is the two ASCII bytes 0x4F 0x54. `version` is 1.
-- `author`, `counter`, `groupId` and `epoch` are in the clear, because syncing needs them before anything is decrypted. `after`, `time` and `body` are inside the ciphertext, so a relay or anyone holding a stored file learns who wrote how many events, but not what.
+- `author`, `counter`, `groupId` and `epoch` are in the clear, because syncing needs them before anything is decrypted. `after`, `time` and `body` are inside the ciphertext, so the WebSocket relay operator or anyone holding a stored file learns who wrote how many events, but not what. (The connection itself is encrypted separately; see CRYPTO.md section 10.)
 - The ciphertext is the encrypted payload (CRYPTO.md section 5). The signature covers every byte before it (CRYPTO.md section 4).
 
 ## 4. Strict decoding

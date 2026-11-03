@@ -98,6 +98,6 @@ For the owner to approve together with this file. Nothing in `docs/PROTOCOL.md` 
 
 Decided by the owner on 3 Nov 2026:
 - A leave does not rotate the key; an admin rotates with `KeyRotated` (section 6).
-- `after` and `time` are hidden inside the encrypted payload. Anyone who is not a member (the relay operator, a network observer, someone holding a stored file) then sees only the author, counter, group and epoch of each event, not who has seen whose events.
+- `after` and `time` are hidden inside the encrypted payload. The author, counter, group and epoch stay readable. Who can see them: the operator of the WebSocket relay (TLS ends at our server, so it forwards the envelopes), and anyone holding a stored copy such as a database file or backup. They see who wrote how many events, not what is in them or who has seen whose events. People on the network (Wi-Fi, ISP, carrier) see only the encrypted connection, with IP addresses, timing and sizes. Iroh's relay forwards end-to-end encrypted QUIC packets and sees none of the envelope.
 
 Still to confirm: epochs start at 1, and tickets last 8 hours as in DESIGN.md.
