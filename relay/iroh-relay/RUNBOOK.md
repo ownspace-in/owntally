@@ -161,12 +161,13 @@ scp relay/iroh-relay/config.toml relay/iroh-relay/nginx-limits.conf relay/iroh-r
    ```
 2. **Relay config.** The repo file has no active `access` line, so access stays open.
    ```
-   grep -n '^access' ~/config.toml || echo "no active access line: good"
+   ls -l ~/config.toml ~/nginx-limits.conf ~/nginx-locations.conf   # all three must exist; if not, step 0 was not done
+   grep -c '^access' ~/config.toml   # must print 0 (a missing file is an error, not a pass)
    sudo install -m 0644 ~/config.toml /etc/iroh-relay/config.toml
    sudo systemctl restart iroh-relay
    systemctl status iroh-relay --no-pager; sudo journalctl -u iroh-relay -n 20 --no-pager
    ```
-   Check: `active (running)`, no config error (a complaint about `limits` means a field name is wrong: restore the backup and report the log). Do not continue if `grep` printed an `access` line.
+   Check: `active (running)`, no config error (a complaint about `limits` means a field name is wrong: restore the backup and report the log). Do not continue if the `grep -c` count is not 0, or if the files are missing. The files must come from the commit that has the commented-out `access` line (the first commit that had an active placeholder line is not safe to install).
 3. **nginx zones, as their own file.**
    ```
    sudo install -m 0644 ~/nginx-limits.conf /etc/nginx/conf.d/00-iroh-relay-limits.conf
