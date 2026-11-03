@@ -13,7 +13,8 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 | T3.1 plan and decisions | Drafted. Owner answers recorded (application id, test members, app lock, bottom bar). Still open: approval of the PIN design in T3.11, the defaults, and what the Settle tab shows. |
 | T3.2 Android build in the root project | Done (4 Nov 2026), see below. |
 | T3.3 money and text formatting | Done (4 Nov 2026), see below. |
-| T3.4 to T3.12 | Not started. |
+| T3.4 Keystore and secret storage | Done (4 Nov 2026), see below. |
+| T3.5 to T3.12 | Not started. |
 
 ## Decisions
 
@@ -31,7 +32,7 @@ Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Materi
 1. **Dependency wiring by hand**, no Hilt. The app is small; Hilt adds annotation processing and build time for little gain. (BUILD_PLAN allows either.)
 2. **Navigation:** Jetpack Navigation for Compose, one `ViewModel` per screen, state as plain Kotlin data classes so it can be unit tested on the JVM.
 3. **Where things live** (BUILD_PLAN layout, using the names already in the repo): `app/data` (Room, repositories, Keystore wrapping), `app/ui` (Compose screens and view models), `app/app` (the application, manifest, navigation). `core-model` and `crypto` stay pure JVM. The old `spike/` build stays separate and is not shipped.
-4. **What is stored.** One table of events per group: the **envelope bytes exactly as sent** (already encrypted and signed, docs/WIRE_FORMAT.md), plus author and counter for lookup. State is rebuilt by decrypting and replaying; it is never written to disk decrypted. Tables: `groups` (group id, key slot, creation time), `events`, `epoch_keys` (epoch to group key, each wrapped), `settings`.
+4. **What is stored.** One table of events per group: the **envelope bytes exactly as sent** (already encrypted and signed, docs/WIRE_FORMAT.md), plus author and counter for lookup. State is rebuilt by decrypting and replaying; it is never written to disk decrypted. Room tables: `groups` (group id, key slot, creation time), `events`, `settings`. **The master seed and the epoch keys are not in Room:** they are small sealed files in the app's `noBackupFilesDir` (changed in T3.4: the seed is written before any group or database exists, and a damaged database must not take the keys with it).
 5. **Keys.** A non-exportable AES key in the Android Keystore wraps everything secret that must survive a restart (the master seed and each epoch's group key), through Tink's Keystore support. The recovery phrase itself is never stored. Key slots: the next unused slot is recorded per group (this closes the open item from M2).
 6. **No cloud backup:** `allowBackup=false` and no data extraction, so keys and events are not copied off the phone.
 7. **Money display:** rupees from paise, Indian digit grouping (₹1,50,000), never floating point.
@@ -61,6 +62,14 @@ Done when: tests cover grouping, rounding to paise, bad input, and every amount 
 Do: `SecretStore` that wraps and unwraps bytes with a Keystore-backed Tink AEAD; store the master seed and epoch keys.
 
 Done when: the secret survives an app restart (emulator test); a wrong or deleted Keystore key fails safely; nothing secret appears in logs; `SecretStore` has a fake for JVM tests.
+
+**Result (4 Nov 2026):** in `app/data`, package `owntally.data.secrets`. `SecretBox` seals bytes for one named slot (the context is bound in as associated data, so a blob cannot be moved between the seed slot and a group's epoch slots); `AeadSecretBox` is it on a Tink AEAD; `KeystoreSecretBox.create()` is the phone version, an AES-256-GCM key in the Android Keystore made through Tink's Keystore support, created on first use and not exportable. `BlobStore` (`FileBlobStore`: one file per blob, written to a temporary file, synced, then moved into place; names limited to letters, digits, `-` and `_` so no name can escape the folder; `InMemoryBlobStore` for tests). `SecretStore` / `BoxedSecretStore`: save and load the master seed and each group's epoch keys; every blob is a version byte plus the sealed secret. Loading answers `Found`, `Missing` or `Unreadable` (something is stored but cannot be opened: key lost or changed, damaged, moved to another slot, wrong version); a keyring load also lists the unreadable epochs and still returns the readable ones. Any failure while sealing becomes a `SecretStoreException` that carries only a class name, never a message (a test found that a box throwing a plain exception could leak its message; fixed). The fake for JVM tests is `BoxedSecretStore` on `InMemoryBlobStore` with a Tink AES-GCM key held in memory. **In production** the folder is `noBackupFilesDir/secrets` (to be wired in T3.7).
+
+*On the emulator (Android 16, real Keystore, Tink's Android artifact):* 12 instrumented tests pass, covering: another instance opens what the first sealed; the key is not exportable (`encoded` is null), is AES-256 with GCM, and needs no unlock; a deleted Keystore key makes stored secrets `Unreadable` with no crash and a new seed can then be saved; another Keystore key cannot open them; and the crypto module's main operations run on Android and match the independent Python values (keys from the phrase, signing, sealing, HPKE, tickets). **Restart:** wrote the seed and two group keys in one process, stopped it, read them in a new process (OK), rebooted the emulator and read again (OK). To repeat: `./gradlew :app:data:installDebugAndroidTest`, then `adb shell am instrument -w -e restartPhase write -e class owntally.data.secrets.RestartInstrumentedTest#write owntally.data.test/androidx.test.runner.AndroidJUnitRunner`, then `adb shell am force-stop owntally.data.test`, then the same with `read` (and `cleanup` at the end). The normal full run, `./gradlew :app:data:connectedDebugAndroidTest`, skips those three.
+
+*JVM:* 27 tests in `app/data` (every protection was broken on purpose and a test caught it; one, the version byte, was first missed and got a better test). The Android modules have a new test that fails if they log or print anything. Lint: no errors.
+
+*Tink on Android:* `app/crypto` keeps Tink's JVM artifact for its own tests; the Android modules exclude it and use `tink-android` (same classes plus the Keystore support), so the APK has one copy (the build would fail on a duplicate class). Debug APK size: 15.24 MB at the end of T3.2, 15.61 MB now with the crypto, core and data modules included (unshrunk; the release size comes with R8 in M10).
 
 ## T3.5 Room database and repositories
 

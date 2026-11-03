@@ -9,6 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -33,4 +34,8 @@ dependencies {
     implementation("com.google.crypto.tink:tink-android:1.24.0")
 
     testImplementation(kotlin("test"))
+
+    androidTestImplementation(kotlin("test"))
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
