@@ -16,7 +16,8 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 | T3.4 Keystore and secret storage | Done (4 Nov 2026), see below. |
 | T3.5 Room database and repositories | Done (4 Nov 2026), see below. |
 | T3.6 App state from the log | Done (4 Nov 2026), see below. |
-| T3.7 to T3.12 | Not started. |
+| T3.7 First run: Welcome and recovery phrase | Done (4 Nov 2026), see below. |
+| T3.8 to T3.12 | Not started. |
 
 ## Decisions
 
@@ -100,6 +101,14 @@ Done when: tests show that adding and deleting expenses gives the balances of `c
 Do: Welcome (name and phone), phrase screen (12 numbered words, screenshots blocked), confirm screen (asks for 3 words, cannot be skipped), then the groups list. The seed is created, wrapped and stored; the phrase is dropped from memory.
 
 Done when: tests cover the confirm rules (wrong word, right words, cannot continue without confirming); the screens have the screenshot block set (checked on the emulator); the phrase is not in logs, saved state or the database.
+
+**Result (4 Nov 2026):** *Screens* (`app/ui`, theme colours read from the mockups: background #F3F5F1, green #0E6B5C, ink #10231F, amber #FFF1D0, mint #7FE0C4, red #B4412B): Welcome (design/07), the phrase (08) and "Check you wrote it down" (08b), then the Groups placeholder (T3.8 replaces it). Edge to edge with window insets handled, and the keyboard's Next key moves from the name to the phone field. *Flow* (`OnboardingViewModel`, a plain state machine on an androidx ViewModel, so it survives rotation and is tested on the JVM): details are checked with the same limits as the events they end up in; the phrase is made once (going back and forward shows the same one); the only way to finish is typing the three asked words correctly (case and spaces ignored), and only then are the profile and then the seed saved; a wrong word saves nothing; a save failure keeps the person on the confirm screen to retry; a double tap saves once; afterwards the phrase and answers are dropped. The phrase is held only as a `RecoveryPhrase` and the typed answers as a redacted wrapper, so even a printed state shows no word, and a source scan fails if the UI module uses saved state, preferences or logging. The confirm fields use a password-type keyboard (no suggestions, text stays visible). *Real stack:* `AppContainer` builds the Keystore, files and Room by hand; `MainActivity` shows a blank start, the first run, the placeholder, or a plain message if the saved seed cannot be opened or secure storage is unavailable.
+
+**What was found:** the first picture of the phrase screen showed words cut off ("aband" for "abandon"). A truncated recovery word would make someone write down the wrong word, so words now shrink to fit their chip and are never clipped; with large text sizes the screen uses two wider columns instead of three. A test renders the 12 longest words out of 4,000 phrases at text sizes 1.0, 1.3 and 2.0 and fails if any word is clipped or wrapped (it fails on the old code).
+
+*JVM:* 25 tests in `app/ui` (the rules, and the whole state machine including that the steps cannot be skipped). *Emulator:* 15 UI tests (each screen's text; the secure window flag is set on exactly the phrase and confirm screens and lifted when leaving them or finishing; wrong words refused; right words save; "Show the words again" shows the same phrase; back never skips ahead; long words fit) and **an end-to-end test of the real app** (real activity, Keystore, secret files and Room): the whole first run through the screens, the window really secure while the words are shown, nothing saved after wrong words, everything saved after the right ones, and then every file the app owns searched for the phrase in the ways it could be written (it finds none, and finds a planted one, so the scan works; with the phrase deliberately also saved in the database the test fails, and with the secure window removed it fails). Also by hand on the emulator: Android's own screen capture of the phrase screen comes back completely black (15 KB against about 150 KB), and after killing the app's process on the phrase screen it restarts at the welcome screen with empty fields and nothing of the phrase (so it is not in saved state). Lint: no errors.
+
+**Differences from the mockups** (for the owner): the font is the system font, not the mockups' typeface (bundling one is a later task); a disabled "Finish" is shown paler until all three words are typed; the confirm step can ask for any three of the 12 positions. Not done here: the optional app lock step (T3.11) and restoring from a phrase (M6). Note: the emulator is slow and sometimes shows Android system "isn't responding" dialogs (they were in Google's own processes, not the app); a cold boot clears them.
 
 ## T3.8 Groups and Group screens
 

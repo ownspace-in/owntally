@@ -4,6 +4,7 @@
     <!-- No permission is requested yet. Later milestones add what they need, each with a test. -->
 
     <application
+        android:name=".OwnTallyApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
