@@ -154,3 +154,23 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 3. The group limit of 20 members is accepted for v1. Yes.
 
 Also answered on 3 Nov 2026: payments count at once; exact splits are re-split on removal; one phone per member; a removed key never rejoins (changes 5, 11, 13 and 14).
+
+## Clarifications found while implementing M1 (3 Nov 2026, for the owner to confirm)
+
+None of these changes a decision the owner made. They fill gaps the approved text left open, and each has a test. If any is wrong, tell the builder and the code and tests change.
+
+1. **Ready means applied, not just present (section 3).** An event waits until every event it saw has itself been applied or ignored, which in turn needs what that event saw. For honest authors this is the same thing, because an event's `after` covers everything the events it saw covered. It only matters for hand-made input.
+2. **Events sharing an id wait for nothing.** Both are ignored (`DUPLICATE_ID`), so their `after` is not used. Events that depend on them still apply.
+3. **`GroupCreated` must have an empty `after`.** A creator who has already seen other events is `INVALID`, and so is any counter other than 1. A second creation by someone who has seen nothing is `ALREADY_DONE`. Until `ProfileUpdated`, the owner's name and phone are empty.
+4. **Reasons chosen where section 4 only said "ignored":**
+   - `MemberJoined` for a current member is `ALREADY_DONE`; for a removed key, a plain member author, or a full group it is `NOT_ALLOWED`.
+   - `ExpenseAdded` naming a non-member payer or participant is `INVALID`.
+   - `SettlementRecorded` by someone who is not `from` or `to` is `NOT_ALLOWED`; naming a non-member is `INVALID`.
+   - A confirmation or dispute on the wrong status is `ALREADY_DONE` (except a non-receiver author, which is `NOT_ALLOWED`).
+   - `AdminAdded` for a non-member is `UNKNOWN_TARGET`, and for someone already an admin `ALREADY_DONE`. `AdminRemoved` for a plain member is `ALREADY_DONE`, and for the owner `NOT_ALLOWED`.
+   - `OwnershipAccepted` without a matching pending offer is `NOT_ALLOWED`. Removing the member an offer was made to cancels the offer.
+5. **A removal cancels newer events even if they sort before it.** Events by the removed member with a counter above what the remover saw are `AFTER_REMOVAL`, including ones the deterministic order would have applied first. Replay does this by running again with those events left out until nothing new turns up. The removal event itself is exempt (a member leaving writes an event newer than their own `after`).
+6. **Dropped shares and rounding.** The removed members' exact shares, added up, are divided among the remaining participants of that expense by the same rule as an equal split (start position `counter mod n` of the expense's event). If no participant remains, the expense is excluded.
+7. **Payments with a removed member are excluded in both directions**, and a payment counts unless it is `DISPUTED`.
+8. **Invalid data throws.** The event constructors reject bad values (empty names, totals of 0 or less, exact splits that do not add up, a wrong `after`) with `IllegalArgumentException`. The decoder in M2 must catch that and treat the event as invalid. The log never holds an event that broke these checks.
+9. **Names may not be blank**; phone numbers may contain only ASCII digits, `+` and spaces.

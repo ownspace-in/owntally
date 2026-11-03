@@ -4,6 +4,16 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M1. Pure Kotlin on the JVM:
 
 Each task ends with "Done when", which must be checkable. Write the tests first.
 
+## Progress
+
+| Task | Status |
+|---|---|
+| T1.1 module and test tooling | Done: JUnit 5, kotest property tests, CI runs `:app:core-model:test`. |
+| T1.2 PROTOCOL.md | Approved by the owner on 3 Nov 2026. Clarifications found while implementing are listed at the end of the file, for the owner to confirm. |
+| T1.3 to T1.9 | Done, tests first. |
+| T1.10 fixtures | Done: `trip.json` (five members, hand-calculated) and `authorization.json`. |
+| T1.11 hand back | See the pull request. There is no `lint` task in the project yet (no ktlint or detekt configured). |
+
 ---
 
 ## T1.1 Module and test tooling
