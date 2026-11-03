@@ -147,8 +147,14 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 14. **One phone per member in v1.** The author key stands in for the device id used in DESIGN.md.
 15. **Added:** a `version` field on every event, `DUPLICATE_ID` and `UNKNOWN_TYPE` handling (section 3).
 
-## Open questions for the owner
+## Owner answers (3 Nov 2026)
 
-1. Is it right that admins cannot remove other admins (change 6)?
-2. Should a member who left, or was removed, be able to see the group's history afterwards? This draft says the removed phone keeps what it already had and gets nothing new (the key rotates in M2).
-3. Is the group limit of 20 acceptable for v1?
+1. Admins cannot remove other admins; only the owner can (change 6). Yes.
+2. A removed or departed member keeps a read-only copy of what they already had and gets nothing new (the key rotates in M2). Yes.
+3. The group limit of 20 members is accepted for v1. Yes.
+
+Also answered on 3 Nov 2026: payments count at once; exact splits are re-split on removal; one phone per member; a removed key never rejoins (changes 5, 11, 13 and 14).
+
+## Still needed
+
+The owner's explicit approval of the whole file ("approved"), which changes the status at the top from DRAFT to APPROVED. No code depends on this file until then.
