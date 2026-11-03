@@ -1,0 +1,435 @@
+{
+ "description": "Five friends on a trip: equal and exact splits, a deleted entry, a confirmed, a disputed and an unconfirmed payment, then Eve is removed. Amounts are paise. Balances are positive when the group owes the member. Hand calculation: Hotel 1,200,000 / 5 = 240,000 each; Taxi 250,000 / 3 = 83,333 with the odd paisa to Chitra (start position 1 mod 3 in ascending key order); Dinner exact 30,000 / 40,000 / 50,000 / 60,000; the disputed payment of 10,000 does not count; after removing Eve the hotel is 300,000 each, her payment is excluded.",
+ "keys": {
+  "asha": "0100000000000000000000000000000000000000000000000000000000000000",
+  "ben": "0200000000000000000000000000000000000000000000000000000000000000",
+  "chitra": "0300000000000000000000000000000000000000000000000000000000000000",
+  "dev": "0400000000000000000000000000000000000000000000000000000000000000",
+  "eve": "0500000000000000000000000000000000000000000000000000000000000000"
+ },
+ "events": [
+  {
+   "author": "asha",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {},
+   "body": {
+    "type": "GroupCreated",
+    "groupId": "09090909090909090909090909090909",
+    "name": "Goa Trip",
+    "currency": "INR"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 1
+   },
+   "body": {
+    "type": "ProfileUpdated",
+    "name": "Asha",
+    "phone": "98765 43210"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 3,
+   "version": 1,
+   "time": 3000,
+   "after": {
+    "asha": 2
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "ben",
+    "name": "Ben",
+    "phone": "98765 00002"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 4,
+   "version": 1,
+   "time": 4000,
+   "after": {
+    "asha": 3
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "chitra",
+    "name": "Chitra",
+    "phone": "98765 00003"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 5,
+   "version": 1,
+   "time": 5000,
+   "after": {
+    "asha": 4
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "dev",
+    "name": "Dev",
+    "phone": "98765 00004"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 6,
+   "version": 1,
+   "time": 6000,
+   "after": {
+    "asha": 5
+   },
+   "body": {
+    "type": "MemberJoined",
+    "member": "eve",
+    "name": "Eve",
+    "phone": "98765 00005"
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 7,
+   "version": 1,
+   "time": 7000,
+   "after": {
+    "asha": 6
+   },
+   "body": {
+    "type": "ExpenseAdded",
+    "description": "Hotel",
+    "total": 1200000,
+    "paidBy": "asha",
+    "day": 20000,
+    "split": {
+     "type": "Equal",
+     "participants": [
+      "asha",
+      "ben",
+      "chitra",
+      "dev",
+      "eve"
+     ]
+    }
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {
+    "asha": 7
+   },
+   "body": {
+    "type": "ExpenseAdded",
+    "description": "Taxi",
+    "total": 250000,
+    "paidBy": "ben",
+    "day": 20001,
+    "split": {
+     "type": "Equal",
+     "participants": [
+      "ben",
+      "chitra",
+      "dev"
+     ]
+    }
+   }
+  },
+  {
+   "author": "chitra",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {
+    "asha": 7,
+    "ben": 1
+   },
+   "body": {
+    "type": "ExpenseAdded",
+    "description": "Dinner",
+    "total": 180000,
+    "paidBy": "chitra",
+    "day": 20001,
+    "split": {
+     "type": "Exact",
+     "amounts": {
+      "asha": 30000,
+      "ben": 40000,
+      "chitra": 50000,
+      "dev": 60000
+     }
+    }
+   }
+  },
+  {
+   "author": "dev",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {
+    "asha": 7,
+    "ben": 1,
+    "chitra": 1
+   },
+   "body": {
+    "type": "ExpenseAdded",
+    "description": "Wrong entry",
+    "total": 99900,
+    "paidBy": "dev",
+    "day": 20002,
+    "split": {
+     "type": "Equal",
+     "participants": [
+      "asha",
+      "ben",
+      "chitra",
+      "dev",
+      "eve"
+     ]
+    }
+   }
+  },
+  {
+   "author": "dev",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 7,
+    "ben": 1,
+    "chitra": 1,
+    "dev": 1
+   },
+   "body": {
+    "type": "ExpenseDeleted",
+    "expense": [
+     "dev",
+     1
+    ]
+   }
+  },
+  {
+   "author": "eve",
+   "counter": 1,
+   "version": 1,
+   "time": 1000,
+   "after": {
+    "asha": 7,
+    "ben": 1,
+    "chitra": 1,
+    "dev": 2
+   },
+   "body": {
+    "type": "SettlementRecorded",
+    "from": "eve",
+    "to": "asha",
+    "amount": 200000
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 8,
+   "version": 1,
+   "time": 8000,
+   "after": {
+    "asha": 7,
+    "ben": 1,
+    "chitra": 1,
+    "dev": 2,
+    "eve": 1
+   },
+   "body": {
+    "type": "SettlementConfirmed",
+    "settlement": [
+     "eve",
+     1
+    ]
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 8,
+    "ben": 1,
+    "chitra": 1,
+    "dev": 2,
+    "eve": 1
+   },
+   "body": {
+    "type": "SettlementRecorded",
+    "from": "ben",
+    "to": "chitra",
+    "amount": 10000
+   }
+  },
+  {
+   "author": "chitra",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 8,
+    "ben": 2,
+    "chitra": 1,
+    "dev": 2,
+    "eve": 1
+   },
+   "body": {
+    "type": "PaymentDisputed",
+    "settlement": [
+     "ben",
+     2
+    ],
+    "reason": "NOTHING_RECEIVED"
+   }
+  },
+  {
+   "author": "dev",
+   "counter": 3,
+   "version": 1,
+   "time": 3000,
+   "after": {
+    "asha": 8,
+    "ben": 2,
+    "chitra": 2,
+    "dev": 2,
+    "eve": 1
+   },
+   "body": {
+    "type": "SettlementRecorded",
+    "from": "dev",
+    "to": "asha",
+    "amount": 50000
+   }
+  },
+  {
+   "author": "asha",
+   "counter": 9,
+   "version": 1,
+   "time": 9000,
+   "after": {
+    "asha": 8,
+    "ben": 2,
+    "chitra": 2,
+    "dev": 3,
+    "eve": 1
+   },
+   "body": {
+    "type": "MemberRemoved",
+    "member": "eve"
+   }
+  },
+  {
+   "author": "eve",
+   "counter": 2,
+   "version": 1,
+   "time": 2000,
+   "after": {
+    "asha": 8,
+    "ben": 2,
+    "chitra": 2,
+    "dev": 3,
+    "eve": 1
+   },
+   "body": {
+    "type": "ExpenseAdded",
+    "description": "Late",
+    "total": 10000,
+    "paidBy": "eve",
+    "day": 20003,
+    "split": {
+     "type": "Equal",
+     "participants": [
+      "eve",
+      "asha"
+     ]
+    }
+   }
+  },
+  {
+   "author": "ben",
+   "counter": 3,
+   "version": 1,
+   "time": 3000,
+   "after": {
+    "asha": 9,
+    "ben": 2,
+    "chitra": 2,
+    "dev": 3,
+    "eve": 2
+   },
+   "body": {
+    "type": "MemberRemoved",
+    "member": "chitra"
+   }
+  }
+ ],
+ "expect": {
+  "currentMembers": [
+   "asha",
+   "ben",
+   "chitra",
+   "dev"
+  ],
+  "removed": [
+   "eve"
+  ],
+  "owner": "asha",
+  "balances": {
+   "asha": 820000,
+   "ben": -173333,
+   "chitra": -253334,
+   "dev": -393333
+  },
+  "balancesBeforeRemoval": {
+   "asha": 680000,
+   "ben": -113333,
+   "chitra": -193334,
+   "dev": -333333,
+   "eve": -40000
+  },
+  "plan": [
+   [
+    "dev",
+    "asha",
+    393333
+   ],
+   [
+    "chitra",
+    "asha",
+    253334
+   ],
+   [
+    "ben",
+    "asha",
+    173333
+   ]
+  ],
+  "ignored": [
+   [
+    "eve",
+    2,
+    "AFTER_REMOVAL"
+   ],
+   [
+    "ben",
+    3,
+    "NOT_ALLOWED"
+   ]
+  ],
+  "eventsBeforeRemoval": 16
+ }
+}
