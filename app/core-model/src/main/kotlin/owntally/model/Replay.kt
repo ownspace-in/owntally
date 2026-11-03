@@ -28,6 +28,7 @@ private class Run(private val forced: Set<EventId>) {
     val members = LinkedHashMap<PublicKey, Member>()
     var owner: PublicKey? = null
     var pendingOffer: PublicKey? = null
+    var epoch = 0L
     val expenses = LinkedHashMap<EventId, Expense>()
     val settlements = LinkedHashMap<EventId, Settlement>()
     val removals = LinkedHashMap<PublicKey, Removal>()
@@ -35,7 +36,9 @@ private class Run(private val forced: Set<EventId>) {
     val applied = HashSet<EventId>()
 
     fun state(held: List<EventId>) =
-        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
+        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, epoch, expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
+
+    private fun currentKeys() = members.filterValues { !it.removed }.keys
 
     private fun current(key: PublicKey) = members[key]?.takeIf { !it.removed }
     private fun roleOf(key: PublicKey) = current(key)?.role
@@ -64,7 +67,7 @@ private class Run(private val forced: Set<EventId>) {
                 val existing = members[body.member]
                 if (existing != null) return if (existing.removed) IgnoreReason.NOT_ALLOWED else IgnoreReason.ALREADY_DONE
                 if (members.values.count { !it.removed } >= MAX_MEMBERS) return IgnoreReason.NOT_ALLOWED
-                members[body.member] = Member(body.member, body.name, body.phone, Role.MEMBER, removed = false)
+                members[body.member] = Member(body.member, body.name, body.phone, Role.MEMBER, removed = false, encryptionKey = body.encryptionKey)
                 null
             }
             is EventBody.ProfileUpdated -> {
@@ -142,6 +145,12 @@ private class Run(private val forced: Set<EventId>) {
                 pendingOffer = null
                 null
             }
+            is EventBody.KeyRotated -> {
+                if (!role.isAdmin) return IgnoreReason.NOT_ALLOWED
+                if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys()) return IgnoreReason.INVALID
+                epoch = body.newEpoch
+                null
+            }
             is EventBody.MemberRemoved -> {
                 val target = current(body.member) ?: return IgnoreReason.UNKNOWN_TARGET
                 if (target.role == Role.OWNER) return IgnoreReason.NOT_ALLOWED
@@ -152,6 +161,14 @@ private class Run(private val forced: Set<EventId>) {
                     else -> false
                 }
                 if (!allowed) return IgnoreReason.NOT_ALLOWED
+                // A leave keeps the epoch and carries no keys; a removal by someone else starts the next epoch and seals
+                // the new key to exactly the members who stay.
+                if (author == target.key) {
+                    if (body.newEpoch != epoch || body.sealedKeys.isNotEmpty()) return IgnoreReason.INVALID
+                } else {
+                    if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys() - target.key) return IgnoreReason.INVALID
+                    epoch = body.newEpoch
+                }
                 members[target.key] = target.copy(removed = true)
                 removals[target.key] = Removal(target.key, author, event.id, event.after[target.key] ?: 0L)
                 if (pendingOffer == target.key) pendingOffer = null
@@ -167,7 +184,8 @@ private class Run(private val forced: Set<EventId>) {
         name = body.name
         currency = body.currency
         owner = event.author
-        members[event.author] = Member(event.author, "", "", Role.OWNER, removed = false)
+        epoch = 1
+        members[event.author] = Member(event.author, "", "", Role.OWNER, removed = false, encryptionKey = body.encryptionKey)
         return null
     }
 }

@@ -36,11 +36,11 @@ class ReplayTest {
     @Test
     fun aSecondGroupCreatedIsIgnored() {
         val s = standardGroup()
-        val second = s.emit(b, EventBody.GroupCreated(GROUP, "Other", "INR"), seen = emptyMap())
+        val second = s.emit(b, EventBody.GroupCreated(GROUP, "Other", "INR", ENC), seen = emptyMap())
         assertEquals(IgnoreReason.ALREADY_DONE, s.reasonOf(second))
         assertEquals("Goa Trip", s.state().name)
         // One that has seen the group's events cannot be a creation at all.
-        val seenSome = s.emit(c, EventBody.GroupCreated(GROUP, "Third", "INR"))
+        val seenSome = s.emit(c, EventBody.GroupCreated(GROUP, "Third", "INR", ENC))
         assertEquals(IgnoreReason.INVALID, s.reasonOf(seenSome))
     }
 
@@ -48,7 +48,7 @@ class ReplayTest {
     fun groupCreatedMustBeTheFirstEventWithNothingSeen() {
         val s = Sim()
         s.emit(a, EventBody.ProfileUpdated("x", PHONE))
-        val late = s.emit(a, EventBody.GroupCreated(GROUP, "Late", "INR"))
+        val late = s.emit(a, EventBody.GroupCreated(GROUP, "Late", "INR", ENC))
         assertEquals(IgnoreReason.INVALID, s.reasonOf(late))
         assertNull(s.state().owner)
     }
@@ -70,7 +70,7 @@ class ReplayTest {
     fun admittingACurrentMemberOrAFormerMemberIsRejected() {
         val s = standardGroup()
         val again = s.join(a, b, "Ben again")
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val rejoin = s.join(a, c, "Chitra again")
         val state = s.state()
         assertEquals(IgnoreReason.ALREADY_DONE, again.reason(state))
@@ -81,7 +81,7 @@ class ReplayTest {
     @Test
     fun aGroupHasAtMostTwentyMembers() {
         val s = Sim()
-        s.emit(a, EventBody.GroupCreated(GROUP, "Big", "INR"))
+        s.emit(a, EventBody.GroupCreated(GROUP, "Big", "INR", ENC))
         val joins = (2..21).map { s.join(a, key(it), "M$it") }
         val state = s.state()
         assertEquals(20, state.currentMembers.size)
@@ -297,9 +297,9 @@ class ReplayTest {
     fun ownerCanRemoveAnyoneButThemselves() {
         val s = standardGroup()
         s.emit(a, EventBody.AdminAdded(b))
-        val removeAdmin = s.emit(a, EventBody.MemberRemoved(b))
-        val removeMember = s.emit(a, EventBody.MemberRemoved(c))
-        val removeSelf = s.emit(a, EventBody.MemberRemoved(a))
+        val removeAdmin = s.remove(a, b)
+        val removeMember = s.remove(a, c)
+        val removeSelf = s.remove(a, a)
         val state = s.state()
         assertNull(removeAdmin.reason(state))
         assertNull(removeMember.reason(state))
@@ -312,9 +312,9 @@ class ReplayTest {
         val s = standardGroup()
         s.emit(a, EventBody.AdminAdded(b))
         s.emit(a, EventBody.AdminAdded(c))
-        val removeMember = s.emit(b, EventBody.MemberRemoved(d))
-        val removeAdmin = s.emit(b, EventBody.MemberRemoved(c))
-        val removeOwner = s.emit(b, EventBody.MemberRemoved(a))
+        val removeMember = s.remove(b, d)
+        val removeAdmin = s.remove(b, c)
+        val removeOwner = s.remove(b, a)
         val state = s.state()
         assertNull(removeMember.reason(state))
         assertEquals(IgnoreReason.NOT_ALLOWED, removeAdmin.reason(state))
@@ -325,10 +325,10 @@ class ReplayTest {
     @Test
     fun membersCanLeaveButNotRemoveOthersAndTheOwnerCannotLeave() {
         val s = standardGroup()
-        val removeOther = s.emit(b, EventBody.MemberRemoved(c))
-        val leave = s.emit(b, EventBody.MemberRemoved(b))
-        val ownerLeaves = s.emit(a, EventBody.MemberRemoved(a))
-        val removeStranger = s.emit(a, EventBody.MemberRemoved(e))
+        val removeOther = s.remove(b, c)
+        val leave = s.remove(b, b)
+        val ownerLeaves = s.remove(a, a)
+        val removeStranger = s.remove(a, e)
         val state = s.state()
         assertEquals(IgnoreReason.NOT_ALLOWED, removeOther.reason(state))
         assertNull(leave.reason(state))
@@ -342,7 +342,7 @@ class ReplayTest {
     fun removalClearsAPendingOfferToThatMember() {
         val s = standardGroup()
         s.emit(a, EventBody.OwnershipOffered(b))
-        s.emit(a, EventBody.MemberRemoved(b))
+        s.remove(a, b)
         assertNull(s.state().pendingOffer)
     }
 
@@ -350,7 +350,7 @@ class ReplayTest {
     fun eventsWrittenAfterTheRemovalAreIgnored() {
         val s = standardGroup()
         s.expense(c, rupees(100), c, all)
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val later = s.expense(c, rupees(500), c, all)
         val state = s.state()
         assertEquals(IgnoreReason.AFTER_REMOVAL, later.reason(state))
@@ -365,7 +365,7 @@ class ReplayTest {
         val newer = s.expense(c, rupees(500), c, all)
         // d removes c having seen only c's first expense. d's key sorts after c's, so c's newer event is
         // applied first and must be cancelled afterwards.
-        val removal = s.emit(d, EventBody.MemberRemoved(c), seen = s.snapshot().toMutableMap().also { it[c] = kept.counter })
+        val removal = s.remove(d, c, seen = s.snapshot().toMutableMap().also { it[c] = kept.counter })
         val order = s.log().applicationOrder().map { it.id }
         assertTrue(order.indexOf(newer.id) < order.indexOf(removal.id), "scenario must put the newer event first")
         val state = s.state()
@@ -381,11 +381,123 @@ class ReplayTest {
     fun aRemovedMembersHistoryStaysInTheState() {
         val s = standardGroup()
         val x = s.expense(c, rupees(100), c, all)
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val state = s.state()
         assertTrue(x.id in state.expenses)
         assertEquals("Chitra", state.members.getValue(c).name)
         assertEquals(setOf(c), state.removals.keys)
+    }
+
+    // --- key epochs (docs/CRYPTO.md section 6) -------------------------------------------------
+
+    private fun keysFor(vararg members: PublicKey) = members.associateWith { sealed(it.bytes()[0].toInt()) }
+
+    @Test
+    fun theFirstEpochIsOneAndMembersKeepTheirEncryptionKeys() {
+        val state = standardGroup().state()
+        assertEquals(1L, state.epoch)
+        assertEquals(encKeyFor(a), state.members.getValue(a).encryptionKey)
+        assertEquals(encKeyFor(c), state.members.getValue(c).encryptionKey)
+    }
+
+    @Test
+    fun removingSomeoneStartsTheNextEpochWithAKeyForEachRemainingMember() {
+        val s = standardGroup()
+        val removal = s.emit(a, EventBody.MemberRemoved(c, 2, keysFor(a, b, d)))
+        val state = s.state()
+        assertNull(removal.reason(state))
+        assertEquals(2L, state.epoch)
+        assertTrue(state.members.getValue(c).removed)
+    }
+
+    @Test
+    fun aRemovalWithTheWrongEpochOrTheWrongKeysIsInvalidAndChangesNothing() {
+        val s = standardGroup()
+        val sameEpoch = s.emit(a, EventBody.MemberRemoved(c, 1, keysFor(a, b, d)))
+        val skipsAnEpoch = s.emit(a, EventBody.MemberRemoved(c, 3, keysFor(a, b, d)))
+        val missingMember = s.emit(a, EventBody.MemberRemoved(c, 2, keysFor(a, b)))
+        val includesRemoved = s.emit(a, EventBody.MemberRemoved(c, 2, keysFor(a, b, c, d)))
+        val includesStranger = s.emit(a, EventBody.MemberRemoved(c, 2, keysFor(a, b, d, e)))
+        val noKeys = s.emit(a, EventBody.MemberRemoved(c, 2, emptyMap()))
+        val state = s.state()
+        for (bad in listOf(sameEpoch, skipsAnEpoch, missingMember, includesRemoved, includesStranger, noKeys)) {
+            assertEquals(IgnoreReason.INVALID, bad.reason(state), bad.toString())
+        }
+        assertEquals(1L, state.epoch)
+        assertEquals(setOf(a, b, c, d), state.currentMembers.keys)
+    }
+
+    @Test
+    fun aLeaveKeepsTheEpochAndCarriesNoKeys() {
+        val s = standardGroup()
+        val leave = s.emit(c, EventBody.MemberRemoved(c, 1, emptyMap()))
+        val state = s.state()
+        assertNull(leave.reason(state))
+        assertEquals(1L, state.epoch)
+        assertTrue(state.members.getValue(c).removed)
+    }
+
+    @Test
+    fun aLeaveThatTriesToRotateOrCarriesKeysIsInvalid() {
+        val s = standardGroup()
+        val rotates = s.emit(c, EventBody.MemberRemoved(c, 2, keysFor(a, b, d)))
+        val keysOnly = s.emit(c, EventBody.MemberRemoved(c, 1, keysFor(a)))
+        val state = s.state()
+        assertEquals(IgnoreReason.INVALID, rotates.reason(state))
+        assertEquals(IgnoreReason.INVALID, keysOnly.reason(state))
+        assertTrue(c in state.currentMembers)
+    }
+
+    @Test
+    fun anAdminRotatesTheKeyAfterALeave() {
+        val s = standardGroup()
+        s.remove(c, c)
+        val rotate = s.rotate(a)
+        val state = s.state()
+        assertNull(rotate.reason(state))
+        assertEquals(2L, state.epoch)
+        assertEquals(setOf(a, b, d), state.currentMembers.keys)
+    }
+
+    @Test
+    fun onlyAnAdminCanRotateAndOnlyToTheNextEpochForExactlyTheCurrentMembers() {
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val byMember = s.emit(c, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
+        val byAdmin = s.emit(b, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
+        val repeated = s.emit(b, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
+        val missing = s.emit(a, EventBody.KeyRotated(3, keysFor(a, b, c)))
+        val stranger = s.emit(a, EventBody.KeyRotated(3, keysFor(a, b, c, d, e)))
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, byMember.reason(state))
+        assertNull(byAdmin.reason(state))
+        assertEquals(IgnoreReason.INVALID, repeated.reason(state))
+        assertEquals(IgnoreReason.INVALID, missing.reason(state))
+        assertEquals(IgnoreReason.INVALID, stranger.reason(state))
+        assertEquals(2L, state.epoch)
+    }
+
+    @Test
+    fun aRotationAfterARemovalMovesToEpochThree() {
+        val s = standardGroup()
+        s.remove(a, c)
+        s.rotate(a)
+        assertEquals(3L, s.state().epoch)
+    }
+
+    @Test
+    fun twoRemovalsWrittenAtTheSameTimeLeaveOnlyTheFirstInOrderAndTheOtherMustBeReissued() {
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val seen = s.snapshot()
+        // Both admins prepare their removal from the same state: epoch 2, keys for everyone left.
+        val first = s.emit(a, EventBody.MemberRemoved(c, 2, keysFor(a, b, d)), seen)
+        val second = s.emit(b, EventBody.MemberRemoved(d, 2, keysFor(a, b, c)), seen)
+        val state = s.state()
+        assertNull(first.reason(state))
+        assertEquals(IgnoreReason.INVALID, second.reason(state))
+        assertEquals(setOf(a, b, d), state.currentMembers.keys)
+        assertEquals(2L, state.epoch)
     }
 
     // --- odd input ---------------------------------------------------------------------------
@@ -393,7 +505,7 @@ class ReplayTest {
     @Test
     fun unknownTypesAndNewerVersionsAreKeptWithNoEffect() {
         val s = standardGroup()
-        val unknown = s.emit(a, EventBody.Unknown("FutureThing"))
+        val unknown = s.emit(a, EventBody.Unknown(200, ByteArray(0)))
         val newer = s.emit(a, EventBody.ProfileUpdated("Changed", PHONE), version = 2)
         val after = s.emit(a, EventBody.ProfileUpdated("Final", PHONE))
         val state = s.state()

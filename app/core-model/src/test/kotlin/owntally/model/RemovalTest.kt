@@ -56,7 +56,7 @@ class RemovalTest {
         // among the others on those expenses; E's payments are excluded.
         //  A +1000 -250 -150 = +600   B -250 +600 -200 -150 = 0   C -250 -200 +300 -300 = -450   D -250 -200 +500 -200 = -150
         val s = trip()
-        s.emit(a, EventBody.MemberRemoved(e))
+        s.remove(a, e)
         val after = balances(s.state())
         assertEquals(mapOf(a to rupees(600), b to Money.ZERO, c to -rupees(450), d to -rupees(150)), after)
         assertEquals(Money.ZERO, after.values.fold(Money.ZERO) { x, y -> x + y })
@@ -94,7 +94,7 @@ class RemovalTest {
     fun theActualRemovalGivesTheBalancesThePreviewPromised() {
         val s = trip()
         val promised = previewRemoval(s.state(), c).changes.associate { it.member to it.after }
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         assertEquals(promised, balances(s.state()))
     }
 
@@ -105,7 +105,7 @@ class RemovalTest {
         val s = standardGroup()
         s.expense(c, rupees(300), c, Split.Equal(setOf(a, b, c)))
         assertEquals(-rupees(100), balances(s.state()).getValue(a))
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val after = balances(s.state())
         assertEquals(Money.ZERO, after.getValue(a))
         assertEquals(Money.ZERO, after.getValue(b))
@@ -122,7 +122,7 @@ class RemovalTest {
     fun anEqualSplitIsRedividedAmongTheRemainingParticipants() {
         val s = standardGroup()
         s.expense(a, rupees(900), a, Split.Equal(setOf(a, b, c)))
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val after = balances(s.state())
         assertEquals(rupees(450), after.getValue(a))
         assertEquals(-rupees(450), after.getValue(b))
@@ -133,7 +133,7 @@ class RemovalTest {
         val s = standardGroup()
         s.expense(a, rupees(600), a, Split.Exact(mapOf(a to rupees(100), b to rupees(200), c to rupees(300))))
         // C leaves: their 300 is shared equally by A and B (150 each), so A owes 250 and B owes 350.
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val after = balances(s.state())
         assertEquals(rupees(350), after.getValue(a)) // paid 600, own share 250
         assertEquals(-rupees(350), after.getValue(b))
@@ -144,7 +144,7 @@ class RemovalTest {
         val s = standardGroup()
         // C's share of 501 paise goes to A and B: 250 each, the odd paisa to the member the rule picks.
         val x = s.expense(a, Money(1001), a, Split.Exact(mapOf(a to Money(100), b to Money(400), c to Money(501))))
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val extra = equalShares(Money(501), listOf(a, b), x.counter)
         val after = balances(s.state())
         assertEquals(Money(1001) - Money(100) - extra.getValue(a), after.getValue(a))
@@ -158,7 +158,7 @@ class RemovalTest {
         s.expense(a, rupees(300), a, Split.Equal(setOf(a, b, c)))
         s.emit(c, EventBody.SettlementRecorded(c, a, rupees(100)))
         s.emit(b, EventBody.SettlementRecorded(b, c, rupees(40)))
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val after = balances(s.state())
         // Only A and B remain: A paid 300 for two, so B owes 150. The payments with C do not count.
         assertEquals(rupees(150), after.getValue(a))
@@ -175,7 +175,7 @@ class RemovalTest {
         val before = balances(s.state())
         assertEquals(Money.ZERO, before.getValue(b))
         assertEquals(Money.ZERO, before.getValue(c))
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, c)
         val after = balances(s.state())
         // C's taxi and B's payment to C both drop out, so B owes the 150 for lunch again.
         assertEquals(-rupees(150), after.getValue(b))
@@ -187,23 +187,23 @@ class RemovalTest {
     fun anExpenseWithNoRemainingParticipantsIsExcluded() {
         val s = standardGroup()
         s.expense(a, rupees(300), a, Split.Exact(mapOf(b to rupees(100), c to rupees(200))))
-        s.emit(a, EventBody.MemberRemoved(b))
-        s.emit(a, EventBody.MemberRemoved(c))
+        s.remove(a, b)
+        s.remove(a, c)
         val after = balances(s.state())
         assertEquals(Money.ZERO, after.getValue(a)) // paid 300 for B and C, who are gone: nobody owes A
     }
 
     @Test
     fun removalsInSequenceGiveTheSameResultAsTheOrderOfRemovalsDoesNotMatter() {
-        val first = trip().also { it.emit(a, EventBody.MemberRemoved(e)); it.emit(a, EventBody.MemberRemoved(d)) }
-        val second = trip().also { it.emit(a, EventBody.MemberRemoved(d)); it.emit(a, EventBody.MemberRemoved(e)) }
+        val first = trip().also { it.remove(a, e); it.remove(a, d) }
+        val second = trip().also { it.remove(a, d); it.remove(a, e) }
         assertEquals(balances(first.state()), balances(second.state()))
     }
 
     @Test
     fun removedMembersKeepTheirEntriesInHistory() {
         val s = trip()
-        s.emit(a, EventBody.MemberRemoved(e))
+        s.remove(a, e)
         val state = s.state()
         assertEquals(4, state.expenses.size)
         assertEquals(4, state.settlements.size)

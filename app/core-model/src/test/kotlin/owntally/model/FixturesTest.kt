@@ -5,7 +5,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -16,60 +15,14 @@ import kotlinx.serialization.json.long
 /** Loads the JSON fixtures in src/test/resources/fixtures, replays them and checks the numbers worked out by hand. */
 class FixturesTest {
     private class Fixture(val json: JsonObject) {
-        val keys: Map<String, PublicKey> = json.getValue("keys").jsonObject.mapValues { PublicKey.fromHex(it.value.jsonPrimitive.content) }
-        val names: Map<PublicKey, String> = keys.entries.associate { it.value to it.key }
+        val reader = JsonEvents(json.getValue("keys").jsonObject.mapValues { PublicKey.fromHex(it.value.jsonPrimitive.content) })
+        val keys get() = reader.keys
         val expect: JsonObject = json.getValue("expect").jsonObject
-
-        private fun key(name: String) = keys.getValue(name)
-        private fun id(e: JsonElement) = e.jsonArray.let { EventId(key(it[0].jsonPrimitive.content), it[1].jsonPrimitive.long) }
-        private fun money(e: JsonElement) = Money(e.jsonPrimitive.long)
-
-        private fun split(o: JsonObject): Split = when (val type = o.getValue("type").jsonPrimitive.content) {
-            "Equal" -> Split.Equal(o.getValue("participants").jsonArray.map { key(it.jsonPrimitive.content) }.toSet())
-            "Exact" -> Split.Exact(o.getValue("amounts").jsonObject.entries.associate { key(it.key) to money(it.value) })
-            else -> error("unknown split $type")
-        }
-
-        private fun body(o: JsonObject): EventBody {
-            fun s(f: String) = o.getValue(f).jsonPrimitive.content
-            fun k(f: String) = key(s(f))
-            return when (val type = s("type")) {
-                "GroupCreated" -> EventBody.GroupCreated(GroupId(hex(s("groupId"))), s("name"), s("currency"))
-                "ProfileUpdated" -> EventBody.ProfileUpdated(s("name"), s("phone"))
-                "MemberJoined" -> EventBody.MemberJoined(k("member"), s("name"), s("phone"))
-                "ExpenseAdded" -> EventBody.ExpenseAdded(s("description"), money(o.getValue("total")), k("paidBy"), o.getValue("day").jsonPrimitive.long, split(o.getValue("split").jsonObject))
-                "ExpenseDeleted" -> EventBody.ExpenseDeleted(id(o.getValue("expense")))
-                "SettlementRecorded" -> EventBody.SettlementRecorded(k("from"), k("to"), money(o.getValue("amount")))
-                "SettlementConfirmed" -> EventBody.SettlementConfirmed(id(o.getValue("settlement")))
-                "PaymentDisputed" -> EventBody.PaymentDisputed(id(o.getValue("settlement")), DisputeReason.valueOf(s("reason")))
-                "AdminAdded" -> EventBody.AdminAdded(k("member"))
-                "AdminRemoved" -> EventBody.AdminRemoved(k("member"))
-                "OwnershipOffered" -> EventBody.OwnershipOffered(k("to"))
-                "OwnershipOfferCancelled" -> EventBody.OwnershipOfferCancelled
-                "OwnershipAccepted" -> EventBody.OwnershipAccepted
-                "MemberRemoved" -> EventBody.MemberRemoved(k("member"))
-                "Unknown" -> EventBody.Unknown(s("name"))
-                else -> error("unknown body $type")
-            }
-        }
-
-        private fun hex(h: String) = ByteArray(h.length / 2) { h.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
-
-        val events: List<Event> = json.getValue("events").jsonArray.map { e ->
-            val o = e.jsonObject
-            Event(
-                o.getValue("version").jsonPrimitive.int,
-                key(o.getValue("author").jsonPrimitive.content),
-                o.getValue("counter").jsonPrimitive.long,
-                o.getValue("after").jsonObject.entries.associate { key(it.key) to it.value.jsonPrimitive.long },
-                o.getValue("time").jsonPrimitive.long,
-                body(o.getValue("body").jsonObject),
-            )
-        }
+        val events: List<Event> = json.getValue("events").jsonArray.map { reader.event(it.jsonObject) }
 
         fun balances(name: String): Map<String, Long> = expect.getValue(name).jsonObject.mapValues { it.value.jsonPrimitive.long }
         fun strings(name: String): List<String> = expect.getValue(name).jsonArray.map { it.jsonPrimitive.content }
-        fun name(k: PublicKey) = names.getValue(k)
+        fun name(k: PublicKey) = reader.names.getValue(k)
     }
 
     private fun load(name: String): Fixture {
@@ -84,6 +37,7 @@ class FixturesTest {
         assertEquals(f.strings("currentMembers").toSet(), state.currentMembers.keys.map { f.name(it) }.toSet())
         assertEquals(f.strings("removed").toSet(), state.members.filterValues { it.removed }.keys.map { f.name(it) }.toSet())
         assertEquals(f.expect.getValue("owner").jsonPrimitive.content, f.name(state.owner!!))
+        assertEquals(f.expect.getValue("epoch").jsonPrimitive.long, state.epoch)
         assertEquals(f.balances("balances"), state.namedBalances(f))
         val plan = settlementPlan(balances(state)).map { Triple(f.name(it.from), f.name(it.to), it.amount.paise) }
         val expectedPlan = f.expect.getValue("plan").jsonArray.map { p -> p.jsonArray.let { Triple(it[0].jsonPrimitive.content, it[1].jsonPrimitive.content, it[2].jsonPrimitive.long) } }

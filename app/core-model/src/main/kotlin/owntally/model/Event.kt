@@ -29,6 +29,10 @@ sealed class Split {
         }
 }
 
+private fun checkEpoch(epoch: Long) = require(epoch in 1..0xFFFF_FFFFL) { "an epoch starts at 1 and fits 32 bits" }
+
+private fun checkSealedKeys(keys: Map<PublicKey, SealedKey>) = require(keys.size <= 65_535) { "too many sealed keys" }
+
 private fun checkName(name: String) =
     require(name.isNotBlank() && name.length in 1..40) { "name must be 1 to 40 characters" }
 
@@ -38,14 +42,14 @@ private fun checkPhone(phone: String) =
     }
 
 sealed class EventBody {
-    data class GroupCreated(val groupId: GroupId, val name: String, val currency: String) : EventBody() {
+    data class GroupCreated(val groupId: GroupId, val name: String, val currency: String, val encryptionKey: EncryptionKey) : EventBody() {
         init {
             checkName(name)
             require(Regex("[A-Z]{3}").matches(currency)) { "currency must be a 3 letter upper case code" }
         }
     }
 
-    data class MemberJoined(val member: PublicKey, val name: String, val phone: String) : EventBody() {
+    data class MemberJoined(val member: PublicKey, val encryptionKey: EncryptionKey, val name: String, val phone: String) : EventBody() {
         init {
             checkName(name)
             checkPhone(phone)
@@ -90,10 +94,39 @@ sealed class EventBody {
     data class OwnershipOffered(val to: PublicKey) : EventBody()
     data object OwnershipOfferCancelled : EventBody()
     data object OwnershipAccepted : EventBody()
-    data class MemberRemoved(val member: PublicKey) : EventBody()
+    /**
+     * Removes a member, or lets a member leave (when [member] is the author). Removal by someone else starts a new key
+     * epoch and carries the new group key sealed to each remaining member; a leave carries the current epoch and no keys
+     * (docs/CRYPTO.md section 6).
+     */
+    data class MemberRemoved(val member: PublicKey, val newEpoch: Long, val sealedKeys: Map<PublicKey, SealedKey>) : EventBody() {
+        init {
+            checkEpoch(newEpoch)
+            checkSealedKeys(sealedKeys)
+        }
+    }
 
-    /** A type this version does not know. Kept in the log, no effect (PROTOCOL.md section 3). */
-    data class Unknown(val type: String) : EventBody()
+    /** A new group key epoch without removing anyone, written by an admin (docs/CRYPTO.md section 6). */
+    data class KeyRotated(val newEpoch: Long, val sealedKeys: Map<PublicKey, SealedKey>) : EventBody() {
+        init {
+            checkEpoch(newEpoch)
+            checkSealedKeys(sealedKeys)
+        }
+    }
+
+    /** A type this version does not know. Its tag and content are kept so it can be passed on byte for byte. */
+    class Unknown(val tag: Int, content: ByteArray) : EventBody() {
+        private val data = content.copyOf()
+
+        init {
+            require(tag in 0..255) { "a tag is one byte" }
+        }
+
+        fun content(): ByteArray = data.copyOf()
+        override fun equals(other: Any?) = other is Unknown && tag == other.tag && data.contentEquals(other.data)
+        override fun hashCode() = 31 * tag + data.contentHashCode()
+        override fun toString() = "Unknown(tag=$tag, ${data.size} bytes)"
+    }
 }
 
 /**

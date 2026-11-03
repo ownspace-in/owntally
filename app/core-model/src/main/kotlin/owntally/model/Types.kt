@@ -57,6 +57,28 @@ class PublicKey(bytes: ByteArray) : ByteId(bytes, 32), Comparable<PublicKey> {
     }
 }
 
+/** A member's 32-byte X25519 public key, used to seal the group key to them (docs/CRYPTO.md section 2). */
+class EncryptionKey(bytes: ByteArray) : ByteId(bytes, 32) {
+    companion object {
+        fun fromHex(hex: String) = EncryptionKey(hexToBytes(hex))
+    }
+}
+
+/** A group key sealed to one member (an HPKE output). Opaque to the core: only the crypto module opens it. */
+class SealedKey(bytes: ByteArray) {
+    private val data: ByteArray
+
+    init {
+        require(bytes.size in 1..65_535) { "a sealed key is 1 to 65535 bytes" }
+        data = bytes.copyOf()
+    }
+
+    fun bytes(): ByteArray = data.copyOf()
+    override fun equals(other: Any?) = other is SealedKey && data.contentEquals(other.data)
+    override fun hashCode() = data.contentHashCode()
+    override fun toString() = "SealedKey(${data.size} bytes)"
+}
+
 /** A group's random 16-byte id. */
 class GroupId(bytes: ByteArray) : ByteId(bytes, 16)
 
