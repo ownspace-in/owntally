@@ -1,6 +1,6 @@
 # OwnTally wire format: events as bytes
 
-Status: **DRAFT, waiting for owner approval** (task T2.1 in [tasks/M2-identity-crypto.md](tasks/M2-identity-crypto.md)). No code may depend on anything here until it is approved. Decision of 3 Nov 2026: the format is written by the project, not a standard such as CBOR. Because nobody else documents it, this file is the only specification.
+Status: **APPROVED by the owner on 3 Nov 2026** (task T2.1 in [tasks/M2-identity-crypto.md](tasks/M2-identity-crypto.md)). Any change from here needs the owner's approval. Decision of 3 Nov 2026: the format is written by the project, not a standard such as CBOR. Because nobody else documents it, this file is the only specification.
 
 Why it exists: a signature is made over bytes, so the same event must give exactly the same bytes on every phone and every app version. The rules below leave no choices. See [CRYPTO.md](CRYPTO.md) for what is signed and encrypted.
 

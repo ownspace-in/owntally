@@ -12,8 +12,9 @@ Each task ends with "Done when", which must be checkable.
 
 | Task | Status |
 |---|---|
-| T2.1 specs | Drafted, waiting for the owner's approval of `WIRE_FORMAT.md` and `CRYPTO.md`. |
-| T2.2 to T2.12 | Not started: nothing may be coded until T2.1 is approved. |
+| T2.1 specs | Approved by the owner on 3 Nov 2026. |
+| T2.2 library check | Done, see below. |
+| T2.3 to T2.12 | Not started. |
 
 ---
 
@@ -28,6 +29,8 @@ Done when: the owner has approved both files.
 Do: create `app/crypto` with the pinned Tink Java release. In a test, confirm each call CRYPTO.md names exists and works: HKDF-SHA256, Ed25519 key pair from a 32-byte seed, XChaCha20-Poly1305 with a caller-supplied nonce and associated data, X25519 key pair from 32 bytes, HPKE (X25519, HKDF-SHA256, ChaCha20-Poly1305) seal and open, CRC-32 and PBKDF2-HMAC-SHA512 from the JDK. Check against published test vectors where they exist (RFC 8032, RFC 7748, RFC 9180).
 
 Done when: each call is shown working, or the builder has stopped and told the owner which one is missing. Record the Tink version and the app size added.
+
+**Result (3 Nov 2026):** Tink 1.24.0 (released 16 Oct 2026), module `app/crypto`, test `TinkCapabilitiesTest` (9 tests, all pass). Every expected value comes from an independent implementation (Python `cryptography` 49.0.0 and `hashlib`, plus hand-written RFC 9180 HPKE and XChaCha20-Poly1305 sealing), not from Tink: HKDF-SHA256 key derivation, Ed25519 key pair and signature from a seed, X25519 public key from 32 bytes, opening an XChaCha20-Poly1305 message, opening an HPKE (X25519, HKDF-SHA256, ChaCha20-Poly1305) message, plus JDK PBKDF2-HMAC-SHA512 and CRC-32. Differences from the spec text: (1) Tink's public `XChaCha20Poly1305` cannot take a caller-supplied nonce; it makes a random one and puts it in front of the ciphertext, so the envelope's `nonce` is those 24 bytes split out (no change to the format, and the nonce is random as required); (2) HPKE sealing with a fixed ephemeral key is not possible through the public API, so sealing is checked by round trip and opening is checked against the independent RFC 9180 value. For the JVM modules and tests we use `tink` (2.9 MB jar, plus protobuf-java and gson); the Android app should use `tink-android` (checked: version 1.24.0 exists, jar). The size added to the APK is measured in M3, when it is first included.
 
 ## T2.3 Event model changes
 

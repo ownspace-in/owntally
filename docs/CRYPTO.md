@@ -1,8 +1,8 @@
 # OwnTally cryptography: keys, signatures, encryption, tickets
 
-Status: **DRAFT, waiting for owner approval** (task T2.1 in [tasks/M2-identity-crypto.md](tasks/M2-identity-crypto.md)). No code may depend on anything here until it is approved. Behaviour comes from [DESIGN.md](DESIGN.md) ("Encryption", "Recovery", "Pairing"); bytes come from [WIRE_FORMAT.md](WIRE_FORMAT.md).
+Status: **APPROVED by the owner on 3 Nov 2026** (task T2.1 in [tasks/M2-identity-crypto.md](tasks/M2-identity-crypto.md)). Any change from here needs the owner's approval. Behaviour comes from [DESIGN.md](DESIGN.md) ("Encryption", "Recovery", "Pairing"); bytes come from [WIRE_FORMAT.md](WIRE_FORMAT.md).
 
-Rules: no cryptography is written by the project. Every primitive below comes from Google Tink (decided 3 Nov 2026) or from the JDK. The project only chooses which primitive is used where, and in what order. **Not yet verified:** that the Tink Java release we pin exposes each call named below. Task T2.2 checks this with a throwaway test before anything depends on it. If a call is missing, the builder stops and asks the owner.
+Rules: no cryptography is written by the project. Every primitive below comes from Google Tink (decided 3 Nov 2026) or from the JDK. The project only chooses which primitive is used where, and in what order. **Verified (T2.2, 3 Nov 2026):** the pinned Tink 1.24.0 exposes every call named below, and reproduces or opens values made by an independent implementation (details in the task list). If a later Tink release drops one, the builder stops and asks the owner.
 
 ## 1. Recovery phrase and master seed
 
@@ -42,7 +42,7 @@ The fixed prefix stops a signature made for one purpose being replayed as anothe
 
 ## 5. Encrypting an event
 
-XChaCha20-Poly1305 (Tink) with the epoch's group key, a fresh random 24-byte nonce for every event, plaintext = the payload (WIRE_FORMAT.md section 2), associated data =
+XChaCha20-Poly1305 (Tink) with the epoch's group key, a fresh random 24-byte nonce for every event (Tink's `XChaCha20Poly1305` makes the nonce itself and returns it in front of the ciphertext; the envelope's `nonce` field is those first 24 bytes, split out), plaintext = the payload (WIRE_FORMAT.md section 2), associated data =
 
 ```
 "owntally/v1/payload" | groupId | epoch | author | counter
