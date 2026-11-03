@@ -1,6 +1,12 @@
 package owntally.model
 
-enum class DisputeReason { NOTHING_RECEIVED, DIFFERENT_AMOUNT, NOT_CHECKED }
+enum class DisputeReason(val code: Int) {
+    NOTHING_RECEIVED(0), DIFFERENT_AMOUNT(1), NOT_CHECKED(2);
+
+    companion object {
+        fun fromCode(code: Int) = values().firstOrNull { it.code == code }
+    }
+}
 
 /** How an expense is shared. */
 sealed class Split {

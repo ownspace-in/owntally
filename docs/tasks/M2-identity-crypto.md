@@ -15,7 +15,8 @@ Each task ends with "Done when", which must be checkable.
 | T2.1 specs | Approved by the owner on 3 Nov 2026. |
 | T2.2 library check | Done, see below. |
 | T2.3 event model changes | Done: encryption keys, `MemberRemoved` with epoch and sealed keys, `KeyRotated`, numeric `Unknown` (tag and content kept), `epoch` in the state. 127 `core-model` tests. |
-| T2.4 to T2.12 | Not started. |
+| T2.4 wire codec | Done: `EventCodec` and `Envelope` in `core-model`, 21 valid, 17 invalid payload and 11 envelope vectors from an independent encoder, strictness and "changed bytes are rejected or rewrite identically" property tests. 143 `core-model` tests. |
+| T2.5 to T2.12 | Not started. |
 
 ---
 

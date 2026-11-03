@@ -28,7 +28,7 @@ time    = i64                  wall clock milliseconds
 body    = tag u8 | length u32 | content
 ```
 
-`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3), so old apps keep newer events in their log without understanding them.
+`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 15 are always known events; a body can only be unknown when its tag is 0 or 16 and above.
 
 ### Example
 
@@ -91,4 +91,4 @@ Consequence: `decode(bytes)` succeeds only if `encode(decode(bytes)) == bytes`. 
 
 ## 5. Test vectors
 
-`app/core-model/src/test/resources/fixtures/wire-vectors.json` holds a few events with their exact hex, written by hand from this file before any code. They are the contract for other languages.
+`app/core-model/src/test/resources/fixtures/wire-vectors.json` holds 21 valid events, 17 bytes sequences that must be rejected (with the reason), 2 envelopes and 9 invalid envelopes, all with their exact hex. They were made before the Kotlin codec by a separate encoder written from this file (`app/core-model/src/test/tools/wire_vectors.py`), and they are the contract for other languages. The example in section 2 is vector `profile-updated`.

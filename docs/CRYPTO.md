@@ -90,7 +90,7 @@ For the owner to approve together with this file. Nothing in `docs/PROTOCOL.md` 
 1. `GroupCreated` and `MemberJoined` gain `encryptionKey`.
 2. `MemberRemoved` gains `newEpoch` and the sealed keys (and gets a rule: `newEpoch` is the current epoch plus 1).
 3. `Event.version` becomes the envelope version.
-4. `EventBody.Unknown` carries the numeric tag instead of a name.
+4. `EventBody.Unknown` carries the numeric tag and the raw content instead of a name.
 5. A new event `KeyRotated(newEpoch, sealed keys)`, and the leave rule for `MemberRemoved` (section 6).
 6. DESIGN.md says "Noise or TLS 1.3 / QUIC" for transport. M2 does not touch transport security.
 
