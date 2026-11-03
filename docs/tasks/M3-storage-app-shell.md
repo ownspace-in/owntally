@@ -10,7 +10,7 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 
 | Task | Status |
 |---|---|
-| T3.1 plan and decisions | Drafted. Owner answers recorded (application id, test members, app lock). Still open: the bottom bar, and approval of the PIN design in T3.11. |
+| T3.1 plan and decisions | Drafted. Owner answers recorded (application id, test members, app lock, bottom bar). Still open: approval of the PIN design in T3.11, the defaults, and what the Settle tab shows. |
 | T3.2 to T3.12 | Not started. |
 
 ## Decisions
@@ -21,8 +21,9 @@ Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Materi
 1. **Application id: `in.ownspace.owntally`.** Permanent once published; the invite site's `assetlinks.json` is tied to it.
 2. **Test members: debug builds only, groups limited to three members until M4.** A debug-only menu item adds pretend members (real keys, real `MemberJoined` events written by the owner), at most two, so a group has at most three members. Release builds contain no such code and no way to add members until M4 and M6.
 3. **App lock: support all three:** off, the phone's own biometric or screen lock, or our own PIN (details in T3.11).
+4. **Bottom bar: all four tabs as in the mockup** (Groups, Settle, Sync, About). The Sync tab is shown but disabled: tapping it opens a short placeholder ("Syncing with friends arrives in a later update. For now your data is stored only on this phone.") and nothing else. It becomes the real sync status screen (mockup 05) in M5 to M7.
 
-**Still open:** which tabs the bottom bar shows (only the working ones, or all four with Sync disabled). Until answered, the builder assumes only the working tabs (Groups, Settle, About), which is easy to change.
+**Still open:** approval of the PIN design in T3.11, the defaults above, and what the Settle tab shows. The builder proposes: the Settle tab lists the groups that have payments to make (group name and what you owe or are owed), and tapping one opens that group's Settle up screen (mockup 04); with no payments it says everyone is settled up.
 
 **Defaults the builder proposes (change any of them):**
 1. **Dependency wiring by hand**, no Hilt. The app is small; Hilt adds annotation processing and build time for little gain. (BUILD_PLAN allows either.)
@@ -75,7 +76,9 @@ Done when: tests cover the confirm rules (wrong word, right words, cannot contin
 
 Do: Groups (totals card, group cards, empty state), Group (balance card, expense list with deleted entries struck through, total spent), create group (name, colour), as in the mockups.
 
-Done when: view model tests for the numbers; emulator screenshots compared with the mockups.
+The bottom bar has all four tabs (Groups, Settle, Sync, About). Sync opens the placeholder from the decisions above; Settle lists groups with payments to make.
+
+Done when: view model tests for the numbers and for the bottom bar (four tabs, Sync shows the placeholder and does nothing else); emulator screenshots compared with the mockups.
 
 ## T3.9 Add expense and delete
 
