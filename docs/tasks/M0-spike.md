@@ -10,14 +10,22 @@ Each task below ends with "Done when", which must be checkable.
 
 | Task | Status |
 |---|---|
-| T0.1 spike project | Built (debug APK, 9 MB). Not yet installed on two phones. |
+| T0.1 spike project | Done. Installed on real phones. Debug APK 24.6 MB (arm64 only, with Iroh); minified release APK 15.7 MB. Shows its build stamp under the title. |
 | T0.2 `Transport` interface | Done, in `app/sync` with an in-memory fake and 4 passing tests. |
 | T0.3 WebSocket relay in Go | Done, in `relay/ws-relay` with 14 passing tests (race detector on). 100 idle connections used about 11 MB. |
 | T0.4 deploy the relay | Done on 20 Oct 2026. `wss://relay.ownspace.in/ws` passes the smoke test from a laptop (3 of 3). The invite site is deployed at `https://joinowntally.ownspace.in/j` (checked: 200, CSS type, http redirects to https; port 80 config plus `certbot --nginx`, without the stricter CSP headers). |
 | T0.5 WebSocket transport on Android | Done on real phones: Redmi 23053RN02I (Android 15) and Galaxy S24 SM-S928B (Android 16 and 17) on mobile data, 30 of 30 messages, 0 corrupt. Ten runs in a row reported by the owner; per-run numbers still to paste into `docs/SPIKE_RESULTS.md`. |
-| T0.6 Iroh attempt | Step 1 (official package) in progress. Works on emulators only intermittently; see `docs/SPIKE_RESULTS.md`. Not yet tried on phones. |
+| T0.6 Iroh attempt | Step 1 (official package `computer.iroh:iroh-android:1.1.0`) works on real phones (Redmi Android 15, Galaxy S24 Android 16/17, Realme Android 16). Needed a threading fix (calls finish on a Rust thread; reads and writes moved to `Dispatchers.IO`). Through Iroh's public relay: 3 logged runs plus 7 owner-reported, starts RELAYED, ends DIRECT. Through our own relay (`relay.ownspace.in`, `iroh-relay` v1.4.1, deployed 29 Oct): 1 logged run, 30 of 30, 0 corrupt, ended DIRECT; other rooms and swapped roles reported fine. Added size about 6 MB compressed (14 MB unpacked, arm64). Not yet proven: that direct links came from our relay's address discovery, and behaviour on Wi-Fi or across carriers. See `docs/SPIKE_RESULTS.md`. |
 | T0.7 Nearby Connections | Works on the same two phones. Needs the Location switch on for discovery (see `docs/SPIKE_RESULTS.md`). Ten runs reported by the owner (setup not recorded); Wi-Fi off and airplane mode setups not yet confirmed. |
-| T0.8 results and decision | Template in `docs/SPIKE_RESULTS.md`, with a preliminary emulator row. Waiting on phone results. |
+| T0.8 results and decision | Done. Owner decision recorded at the top of `docs/SPIKE_RESULTS.md` (28 Oct 2026: support all three transports) and `docs/DESIGN.md` (2 Nov 2026: order Nearby, WebSocket relay, Iroh). M0 is closed; the follow-ups below do not block M1. |
+
+**Follow-ups (need phones, not blocking):**
+- Iroh on Wi-Fi, and across different carriers, through our relay; record DIRECT or RELAYED for each.
+- The nginx per-IP limits and the relay's per-client cap against real phones (`sudo grep -c limiting /var/log/nginx/error.log` before and after).
+- Nearby with Wi-Fi off and in airplane mode (Bluetooth and Wi-Fi on); record which radio was used.
+- Per-run numbers for the owner-reported runs (T0.5, T0.7), and the carriers used.
+- Optional relay token (`relay/iroh-relay/RUNBOOK.md` step 10): off by default, untested on phones.
+- Invite site: add back the stricter CSP and `X-Frame-Options` headers before announcing it.
 
 ---
 

@@ -146,7 +146,9 @@ echo | openssl s_client -connect relay.ownspace.in:443 -servername relay.ownspac
 sudo openssl x509 -in /etc/iroh-relay/certs/default.crt -noout -dates
 ```
 
-## 9b. Production update: per-IP limits and rate cap, no token (3 Nov 2026, not yet run)
+## 9b. Production update: per-IP limits and rate cap, no token (3 Nov 2026)
+
+**Run on the VM on 3 Nov 2026, steps 1 to 5 (step 6, the phone test, is still to do).** The relay stayed running for more than 2 minutes on the new config (same process, listeners TCP 3340 and 8443 and UDP 7842, `/generate_204` 204, `/ping` 200), which shows it accepts the `limits` section; it does not show the per-client byte cap is enforced. nginx `-t` passed and nginx was reloaded with the limit lines on `/relay`, `/ping` and `/generate_204`. From a laptop, 80 parallel requests to `/generate_204` gave 29 times `204` and 51 times `429`, a single request after a 5 second pause gave `204`, `/healthz` gave `ok`, and the WebSocket smoke test passed (connect 280 ms, round trip 16 ms).
 
 Decision: ship with limits only (open access, the relay's own per-client cap, and nginx per-IP limits). The token in step 10 stays optional and off. Run this on the VM after steps 1 to 9 are done. Copy the files first, from the development machine:
 
