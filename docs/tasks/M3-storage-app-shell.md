@@ -120,7 +120,7 @@ Done when: view model tests for the numbers and for the bottom bar (four tabs, S
 
 ### T3.8 result
 
-Done on the emulator (Android 16). Tests: core-model 181, data 99, ui 20 on the JVM; instrumented tests for the screens and the real-app first run, which now also makes a group, opens it and checks the four tabs.
+Done on the emulator (Android 16). Tests: core-model 181 on the JVM, plus new data and ui JVM tests (all pass); instrumented tests for the screens and the real-app first run, which now also makes a group, opens it and checks the four tabs.
 
 - Core: `sharesOf` and `totalSpent` (deleted expenses are not counted), `GroupId.fromHexOrNull`.
 - Data: `Sessions` (one `GroupSession` per group, a summaries flow, create and delete group, the group colour kept as a local setting). Its constructor does no I/O; `refresh()` reads the database and must be called off the main thread. The end-to-end test found this: the first version read the database in the constructor and crashed on the main thread.
