@@ -30,6 +30,21 @@ body    = tag u8 | length u32 | content
 
 `length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3), so old apps keep newer events in their log without understanding them.
 
+### Example
+
+A `ProfileUpdated` event with nothing seen yet (`after` empty), `time` 1000, name "Asha", phone "98765 43210":
+
+```
+00 00                                     after: count 0
+00 00 00 00 00 00 03 E8                   time: 1000
+03                                        tag 3 (ProfileUpdated)
+00 00 00 13                               content length: 19
+00 04 41 73 68 61                         name: length 4, "Asha"
+00 0B 39 38 37 36 35 20 34 33 32 31 30    phone: length 11, "98765 43210"
+```
+
+That is 34 bytes. The same event always gives these 34 bytes.
+
 ### Body tags
 
 | Tag | Body | Content |
@@ -69,6 +84,7 @@ A decoder rejects (treats the event as invalid) anything that is not exactly wha
 - wrong magic, unknown envelope `version`, or fewer or more bytes than the lengths say (trailing bytes are an error);
 - a `set` or `map` that is unsorted or has a duplicate;
 - a `str` that is not valid UTF-8;
+- a known body whose `content` is longer or shorter than its fields need, an unknown `split` kind, or a dispute reason other than 0, 1 or 2 (an unknown `tag` is the only thing that is skipped by length);
 - a counter of 0, an `after` entry of 0, or a split that breaks the rules in PROTOCOL.md section 2 (the event constructors in `core-model` already check these).
 
 Consequence: `decode(bytes)` succeeds only if `encode(decode(bytes)) == bytes`. Tests check this in both directions with random events and with fixed byte vectors.
