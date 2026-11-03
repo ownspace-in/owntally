@@ -16,3 +16,9 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+// Tests run in a fixed locale (English, India) so that an amount does not change with the machine's settings. Tests of other locales say which they use.
+tasks.withType<Test>().configureEach {
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "IN")
+}

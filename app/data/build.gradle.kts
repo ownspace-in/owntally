@@ -19,6 +19,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    testOptions {
+        // A fixed locale (English, India) so an amount in a test does not change with the machine. Tests of other locales say which they use.
+        unitTests.all { test ->
+            test.systemProperty("user.language", "en")
+            test.systemProperty("user.country", "IN")
+        }
+    }
 }
 
 kotlin {

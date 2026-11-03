@@ -32,6 +32,8 @@ android {
     testOptions {
         // The rule tests read these files directly. Declaring them makes Gradle re-run the tests when one changes.
         unitTests.all { test ->
+            test.systemProperty("user.language", "en")
+            test.systemProperty("user.country", "IN")
             test.inputs.dir("src/main")
             test.inputs.dir("../ui/src/main")
             test.inputs.dir("../data/src/main")
