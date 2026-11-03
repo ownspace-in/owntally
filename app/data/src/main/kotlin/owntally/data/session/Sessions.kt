@@ -47,11 +47,8 @@ class Sessions(
     private val mutableSummaries = MutableStateFlow<List<GroupSummary>>(emptyList())
     private var batching = false
 
+    /** Empty until [refresh] is called, which reads the database: call it off the main thread (the constructor does no I/O). */
     val summaries: StateFlow<List<GroupSummary>> get() = mutableSummaries
-
-    init {
-        refresh()
-    }
 
     private fun colourKey(id: GroupId) = "group_colour_${id.toHex()}"
 

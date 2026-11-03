@@ -49,6 +49,7 @@ configurations.configureEach {
 }
 
 dependencies {
+    implementation(project(":app:core-model"))
     implementation(project(":app:ui"))
     implementation(project(":app:data"))
     implementation(project(":app:crypto"))

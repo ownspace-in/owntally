@@ -19,7 +19,21 @@ import org.junit.Rule
 import org.junit.runner.RunWith
 import owntally.crypto.Bip39
 import owntally.crypto.RecoveryPhrase
-import owntally.ui.GroupsPlaceholder
+import owntally.model.EventId
+import owntally.model.GroupId
+import owntally.model.PublicKey
+import owntally.model.format.BalanceKind
+import owntally.model.format.MoneyFormat
+import owntally.model.Money
+import owntally.ui.groups.CreateGroupModel
+import owntally.ui.groups.CreateGroupScreen
+import owntally.ui.groups.ExpenseRow
+import owntally.ui.groups.GroupCardModel
+import owntally.ui.groups.GroupScreen
+import owntally.ui.groups.GroupScreenModel
+import owntally.ui.groups.GroupsListModel
+import owntally.ui.groups.GroupsScreen
+import owntally.ui.groups.MemberLine
 import owntally.ui.theme.OwnTallyTheme
 
 /**
@@ -78,10 +92,65 @@ class ScreenImagesInstrumentedTest {
         save("08-phrase-large-text")
     }
 
+    private fun card(name: String, initials: String, colour: Int, sub: String, paise: Long) =
+        GroupCardModel(GroupId(ByteArray(16) { (name.length + it).toByte() }), name, initials, colour, sub, MoneyFormat.describe(Money(paise)), true)
+
     @Test
-    fun saveThePlaceholder() {
+    fun saveTheGroupsScreens() {
         rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        rule.setContent { OwnTallyTheme { GroupsPlaceholder() } }
-        save("07-groups-placeholder")
+        rule.setContent {
+            OwnTallyTheme {
+                GroupsScreen(
+                    GroupsListModel(
+                        MoneyFormat.describe(Money(4_820_00)), MoneyFormat.describe(Money(-1_150_00)),
+                        listOf(
+                            card("Goa Trip", "GT", 0, "5 members · 23 expenses", 3_200_00),
+                            card("Flat 4B", "F4", 1, "3 members · 41 expenses", -1_150_00),
+                            card("Office Lunches", "OL", 2, "6 members · 12 expenses", 1_620_00),
+                            card("Sunday Football", "SF", 3, "8 members · 9 expenses", 0),
+                        ),
+                    ),
+                    onOpen = { }, onCreate = { },
+                )
+            }
+        }
+        save("10-groups")
+    }
+
+    @Test
+    fun saveTheGroupScreen() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        val key = PublicKey(ByteArray(32))
+        fun row(n: Long, d: String, sub: String, cap: String?, amount: String, kind: BalanceKind, deleted: Boolean = false) =
+            ExpenseRow(EventId(key, n), d, sub, cap, amount, kind, deleted)
+        rule.setContent {
+            OwnTallyTheme {
+                GroupScreen(
+                    GroupScreenModel(
+                        "Goa Trip", "You are the owner", MoneyFormat.describe(Money(3_200_00)), "₹38,460",
+                        listOf(
+                            MemberLine("Rohan owes", "₹1,850", BalanceKind.OWED), MemberLine("Meera owes", "₹1,350", BalanceKind.OWED),
+                            MemberLine("Isha & Kabir", "settled", BalanceKind.SETTLED),
+                        ),
+                        listOf(
+                            row(4, "Beach shack dinner", "You paid ₹4,800 · split 5 ways", "you lent", "₹3,840", BalanceKind.OWED),
+                            row(3, "Scooter rental", "Deleted by Rohan · not counted", null, "₹2,500", BalanceKind.SETTLED, deleted = true),
+                            row(2, "Villa, 3 nights", "Meera paid ₹21,000 · split 5 ways", "you owe", "₹4,200", BalanceKind.OWES),
+                            row(1, "Cab from airport", "You paid ₹1,900 · split 5 ways", "you lent", "₹1,520", BalanceKind.OWED),
+                        ),
+                        allSettled = false,
+                    ),
+                    onBack = { },
+                )
+            }
+        }
+        save("11-group")
+    }
+
+    @Test
+    fun saveTheCreateGroupScreen() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        rule.setContent { OwnTallyTheme { CreateGroupScreen(CreateGroupModel("Goa Trip", 1), { }, { }, { }, null) } }
+        save("12-create-group")
     }
 }

@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val start by produceState<AppStart>(AppStart.Loading) { value = withContext(Dispatchers.IO) { container.start() } }
-            OwnTallyApp(start, onboarding = { onboarding })
+            OwnTallyApp(start, onboarding = { onboarding }, sessions = { container.sessions }, debugTools = container.debugTools)
         }
     }
 }

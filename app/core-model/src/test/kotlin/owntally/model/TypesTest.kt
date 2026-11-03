@@ -8,6 +8,17 @@ import kotlin.test.assertTrue
 
 class TypesTest {
     @Test
+    fun groupIdReadsBackFromHexAndRefusesBadText() {
+        val id = GroupId(ByteArray(16) { (it * 17).toByte() })
+        assertEquals(id, GroupId.fromHexOrNull(id.toHex()))
+        assertEquals(id, GroupId.fromHexOrNull(id.toHex().uppercase()))
+        assertEquals(null, GroupId.fromHexOrNull(""))
+        assertEquals(null, GroupId.fromHexOrNull(id.toHex().dropLast(2)))
+        assertEquals(null, GroupId.fromHexOrNull(id.toHex() + "00"))
+        assertEquals(null, GroupId.fromHexOrNull("zz" + id.toHex().drop(2)))
+    }
+
+    @Test
     fun moneyAddsAndSubtractsInPaise() {
         assertEquals(Money(350), Money(100) + Money(250))
         assertEquals(Money(-150), Money(100) - Money(250))

@@ -171,3 +171,20 @@ enum class Tab(val label: String, val enabled: Boolean) {
 object SyncPlaceholder {
     const val TEXT = "Syncing with friends arrives in a later update. For now your data is stored only on this phone."
 }
+
+/** The Create group form: a name, a colour for the icon (kept only on this phone), and rupees as the only currency for now. */
+data class CreateGroupModel(val name: String = "", val colourIndex: Int = 0) {
+    val trimmedName: String get() = name.trim()
+    val canCreate: Boolean get() = trimmedName.isNotEmpty() && trimmedName.length <= MAX_NAME
+    val problem: String? get() = if (trimmedName.length > MAX_NAME) "Use at most $MAX_NAME letters" else null
+
+    fun withName(text: String) = copy(name = text.take(INPUT_LIMIT))
+    fun withColour(index: Int) = if (index in 0 until COLOURS) copy(colourIndex = index) else this
+
+    companion object {
+        const val MAX_NAME = 40
+        const val INPUT_LIMIT = 60
+        const val COLOURS = owntally.data.session.GroupLooks.PALETTE_SIZE
+        const val CURRENCY = "INR"
+    }
+}

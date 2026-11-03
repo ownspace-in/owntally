@@ -118,6 +118,24 @@ The bottom bar has all four tabs (Groups, Settle, Sync, About). Sync opens the p
 
 Done when: view model tests for the numbers and for the bottom bar (four tabs, Sync shows the placeholder and does nothing else); emulator screenshots compared with the mockups.
 
+### T3.8 result
+
+Done on the emulator (Android 16). Tests: core-model 181, data 99, ui 20 on the JVM; instrumented tests for the screens and the real-app first run, which now also makes a group, opens it and checks the four tabs.
+
+- Core: `sharesOf` and `totalSpent` (deleted expenses are not counted), `GroupId.fromHexOrNull`.
+- Data: `Sessions` (one `GroupSession` per group, a summaries flow, create and delete group, the group colour kept as a local setting). Its constructor does no I/O; `refresh()` reads the database and must be called off the main thread. The end-to-end test found this: the first version read the database in the constructor and crashed on the main thread.
+- UI: models in plain Kotlin (`GroupsModels.kt`) with the texts under test: totals, "N members · M expenses", role text, "X owes", "X is owed", settled names joined, "you lent / you owe", deleted rows. Compose screens, four-tab bottom bar, Jetpack Navigation, icons drawn in code (no icon library).
+- Debug builds only: "Add test friends and expenses" on the Group screen (two "(test)" friends, three expenses, slots from 2,000,000 up, so at most 3 members). The release build has a stub that returns null, so the control and code are absent.
+- Screens were compared with design/01 and 02 (`10-groups`, `11-group`, `12-create-group` from `ScreenImagesInstrumentedTest`).
+
+Deviations from the mockups, each because a control would do nothing yet (no dead controls):
+- No "Join with link or code", sync button, "not yet shared" notice, members/invite icons or "Settle up the group" button: they arrive with M4 and T3.10. The Groups screen has a "New group" button where the mockup has "Add expense" (that button arrives in T3.9).
+- Cards say "members", not "friends/flatmates/players", because the app does not know what a group is.
+- Expense icons show the first letter, not a picture per category.
+- The Settle tab is my proposal, **awaiting the owner**: groups where you owe or are owed, each opening the group. Sync shows only the placeholder text. About is a short text until T3.10.
+- Tab and form state is kept in a ViewModel, never in saved state (a test forbids `rememberSaveable`).
+- Group name is limited to 40 characters (the core's rule); the icon colour is local to this phone.
+
 ## T3.9 Add expense and delete
 
 Do: Add expense (amount, description, paid by, date, equal or exact split with live shares), delete (creator or admin, with the "this changes balances" warning from DESIGN.md).

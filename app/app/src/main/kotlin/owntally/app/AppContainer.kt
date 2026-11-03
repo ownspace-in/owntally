@@ -14,9 +14,11 @@ import owntally.data.secrets.FileBlobStore
 import owntally.data.secrets.KeystoreSecretBox
 import owntally.data.secrets.SecretStore
 import owntally.data.secrets.SecretStoreException
+import owntally.data.session.Sessions
 import owntally.data.store.RoomEventStore
 import owntally.data.store.RoomSettingsStore
 import owntally.ui.AppStart
+import owntally.ui.groups.DebugTools
 import owntally.ui.onboarding.FirstRun
 
 /**
@@ -26,8 +28,12 @@ import owntally.ui.onboarding.FirstRun
 class AppContainer(private val context: Context) {
     val secrets: SecretStore by lazy { BoxedSecretStore(KeystoreSecretBox.create(), FileBlobStore(File(context.noBackupFilesDir, "secrets"))) }
     private val database: OwnTallyDatabase by lazy { OwnTallyDatabase.open(context) }
-    val identity: IdentityRepository by lazy { IdentityRepository(secrets, RoomSettingsStore(database)) }
+    val identity: IdentityRepository by lazy { IdentityRepository(secrets, settings) }
     val groups: GroupRepository by lazy { GroupRepository(secrets, RoomEventStore(database), identity, Clock.SYSTEM, SecureRandom()) }
+
+    private val settings: RoomSettingsStore by lazy { RoomSettingsStore(database) }
+    val sessions: Sessions by lazy { Sessions(groups, secrets, identity, Clock.SYSTEM, settings) }
+    val debugTools: DebugTools? by lazy { DebugToolsFactory.create(this) }
 
     val firstRun: FirstRun = object : FirstRun {
         override fun newPhrase(): RecoveryPhrase = identity.newPhrase()

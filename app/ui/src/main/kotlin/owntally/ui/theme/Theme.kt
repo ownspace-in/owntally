@@ -24,6 +24,13 @@ object OwnTallyColors {
     val TextHint = Color(0xFF7B867F)
     val Card = Color.White
     val Chip = Color(0xFFF3F5F1)
+    val CardBorder = Color(0xFFE1E7E2)
+    val OnDark = Color.White
+    val OnDarkMuted = Color(0xFFB9C7C1)
+    val PeachOnDark = Color(0xFFFFB4A0)
+
+    /** The icon colours a group can have, in the order of the colour index kept for each group. */
+    val GroupPastels = listOf(Color(0xFFBFE8DA), Color(0xFFFFD9CC), Color(0xFFF6E3A6), Color(0xFFD6DDF5), Color(0xFFE7ECE7))
 }
 
 private val OwnTallyTypography = Typography(

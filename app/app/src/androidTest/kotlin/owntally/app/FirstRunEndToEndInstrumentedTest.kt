@@ -3,7 +3,10 @@ package owntally.app
 import android.content.Context
 import android.view.WindowManager
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -92,12 +95,31 @@ class FirstRunEndToEndInstrumentedTest {
             positions.forEach { pos -> rule.onAllNodesWithText("qqqq")[0].performTextReplacement(words[pos - 1]) }
             rule.onNodeWithText("Finish").performClick()
 
-            // Done: on the Groups placeholder, no longer secure, everything saved.
-            rule.waitUntil(15_000) { rule.onAllNodesWithTextCount("No groups yet") == 1 }
+            // Done: on the Groups screen, no longer secure, everything saved.
+            rule.waitUntil(15_000) { rule.onAllNodesWithTextCount("New group") == 1 }
             rule.waitUntil(3_000) { !secure() }
             assertEquals(IdentityState.READY, container().identity.state())
             assertEquals("Asha", container().identity.defaultProfile()?.name)
             assertEquals("98765 43210", container().identity.defaultProfile()?.phone)
+
+            // The four tabs are there; Sync says it is not built yet and has nothing to press.
+            for (label in listOf("Groups", "Settle", "Sync", "About")) rule.onNode(hasContentDescription(label)).assertExists()
+            rule.onNode(hasContentDescription("Sync")).performClick()
+            rule.onNodeWithText("Syncing with friends arrives in a later update. For now your data is stored only on this phone.").assertExists()
+            rule.onNode(hasContentDescription("Groups")).performClick()
+
+            // Make a group, see it listed, open it.
+            rule.onNodeWithText("New group").performClick()
+            rule.onNodeWithText("Create group").assertIsNotEnabled()
+            rule.onNodeWithText("Group name").assertExists()
+            rule.onNode(hasSetTextAction()).performTextInput("Goa Trip")
+            rule.onNodeWithText("Create group").assertIsEnabled().performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
+            rule.onNodeWithText("Goa Trip").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithTextCount("You are the owner") == 1 }
+            rule.onNodeWithText("No expenses yet.").assertExists()
+            rule.onNode(hasContentDescription("Back")).performClick()
+            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
 
             // The phrase is in no file: not the secret files, the database, caches or preferences.
             val files = appFiles()

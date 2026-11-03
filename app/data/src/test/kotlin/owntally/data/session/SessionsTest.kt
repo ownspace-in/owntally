@@ -129,7 +129,7 @@ class SessionsTest {
     fun aGroupWhoseKeyIsMissingIsStillListedButMarkedUnreadable() {
         val id = sessions.createGroup("Goa Trip", "INR", 1)
         env.secrets.deleteGroup(id)
-        val fresh = sessions()
+        val fresh = sessions().also { it.refresh() }
         val s = fresh.summaries.value.single()
         assertEquals(id, s.groupId)
         assertEquals(false, s.readable)
@@ -142,7 +142,16 @@ class SessionsTest {
         val id = sessions.createGroup("Goa Trip", "INR", 4)
         val s = sessions.session(id)
         s.addExpense("Dinner", rupees(10), s.view.value.me, 1, Split.Equal(setOf(s.view.value.me)))
-        assertEquals(sessions.summaries.value, sessions().summaries.value)
+        assertEquals(sessions.summaries.value, sessions().also { it.refresh() }.summaries.value)
+    }
+
+    @Test
+    fun constructionReadsNothingSoItIsSafeOnTheMainThread() {
+        sessions.createGroup("Goa Trip", "INR", 4)
+        val fresh = sessions()
+        assertEquals(emptyList(), fresh.summaries.value, "empty until refresh() is called, which is where the database is read")
+        fresh.refresh()
+        assertEquals(1, fresh.summaries.value.size)
     }
 
     @Test
