@@ -93,7 +93,7 @@ class EventLogTest {
     }
 
     @Test
-    fun mergingInEitherOrderGivesEqualLogs() = runBlocking {
+    fun mergingInEitherOrderGivesEqualLogs() = runBlocking<Unit> {
         checkAll(300, Arb.long()) { seed ->
             val rnd = Random(seed)
             val left = randomEvents(rnd).filter { rnd.nextBoolean() }
@@ -107,7 +107,7 @@ class EventLogTest {
     }
 
     @Test
-    fun missingForThenMergeMakesTwoLogsEqual() = runBlocking {
+    fun missingForThenMergeMakesTwoLogsEqual() = runBlocking<Unit> {
         checkAll(300, Arb.long()) { seed ->
             val rnd = Random(seed)
             val all = randomEvents(rnd)
@@ -125,7 +125,7 @@ class EventLogTest {
     }
 
     @Test
-    fun arrivalOrderDoesNotChangeTheApplicationOrder() = runBlocking {
+    fun arrivalOrderDoesNotChangeTheApplicationOrder() = runBlocking<Unit> {
         checkAll(300, Arb.long()) { seed ->
             val events = randomEvents(Random(seed))
             val reference = logOf(events).applicationOrder()
@@ -134,7 +134,7 @@ class EventLogTest {
     }
 
     @Test
-    fun everyAppliedEventComesAfterItsDependencies() = runBlocking {
+    fun everyAppliedEventComesAfterItsDependencies() = runBlocking<Unit> {
         checkAll(300, Arb.long()) { seed ->
             val order = logOf(randomEvents(Random(seed))).applicationOrder()
             val position = order.withIndex().associate { (i, o) -> o.id to i }
