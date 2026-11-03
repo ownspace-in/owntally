@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     kotlin("android")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -12,6 +13,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -20,6 +23,11 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+ksp {
+    // The database schema is exported so a test can check that the code and the schema agree, and migrations can be tested.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 // Android needs Tink's Android artifact (it has the Keystore integration). The JVM artifact that app/crypto uses for its own
@@ -32,10 +40,13 @@ dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
     implementation("com.google.crypto.tink:tink-android:1.24.0")
+    implementation("androidx.room:room-runtime:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation(kotlin("test"))
 
     androidTestImplementation(kotlin("test"))
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
 }
