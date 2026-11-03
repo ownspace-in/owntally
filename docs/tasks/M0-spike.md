@@ -25,7 +25,7 @@ Each task below ends with "Done when", which must be checkable.
 - Nearby with Wi-Fi off and in airplane mode (Bluetooth and Wi-Fi on); record which radio was used.
 - Per-run numbers for the owner-reported runs (T0.5, T0.7), and the carriers used.
 - Optional relay token (`relay/iroh-relay/RUNBOOK.md` step 10): off by default, untested on phones.
-- Invite site: add back the stricter CSP and `X-Frame-Options` headers before announcing it.
+- ~~Invite site: add back the stricter CSP and `X-Frame-Options` headers.~~ Done on the live site on 3 Nov 2026 (see `relay/ws-relay/RUNBOOK.md`).
 
 ---
 
