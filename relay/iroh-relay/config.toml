@@ -1,0 +1,38 @@
+# Iroh relay for relay.ownspace.in. TEMPLATE: install at /etc/iroh-relay/config.template.toml, then run render-config.sh.
+# nginx owns public TCP 80 and 443 and forwards the relay's web paths to the HTTPS listener below.
+# The relay itself listens on UDP for QUIC address discovery, which nginx cannot proxy.
+# Field names are from iroh-relay v1.4.1 (src/main.rs). See RUNBOOK.md for what is not yet verified.
+
+# Plain HTTP listener, loopback only. Not used by nginx.
+http_bind_addr = "127.0.0.1:3340"
+
+enable_relay = true
+enable_quic_addr_discovery = true
+
+# No metrics server for now.
+enable_metrics = false
+
+# Who may connect: only clients that send one of these bearer tokens. The relay allows ONE access mode
+# at a time, so a denylist cannot be combined with this. This file is a TEMPLATE: the value below is a
+# placeholder, not a secret. On the VM, render-config.sh replaces this line with the tokens from
+# /etc/iroh-relay/tokens and writes /etc/iroh-relay/config.toml. Never put a real token in git.
+access.shared_token = ["placeholder-replaced-by-render-config"]
+
+# Per-client cap on what the relay reads from one connection. Sync traffic is small (a 30-message test
+# with ten 50 KB messages was about 0.5 MB); this stops one client using the relay as a free tunnel.
+# accept_conn_limit / accept_conn_burst exist in the config but v1.4.1 does not implement them, so they are not set.
+[limits.client.rx]
+bytes_per_second = 262144
+max_burst_bytes = 1048576
+
+[tls]
+# Loopback only: nginx proxies to this. Public TCP 443 stays with nginx.
+https_bind_addr = "127.0.0.1:8443"
+# Public UDP port for QUIC address discovery. Open it in the cloud firewall and on the VM.
+quic_bind_addr = "0.0.0.0:7842"
+hostname = "relay.ownspace.in"
+# Copied from certbot's files by the renewal hook; restart the service after a renewal.
+cert_mode = "Manual"
+cert_dir = "/etc/iroh-relay/certs"
+manual_cert_path = "/etc/iroh-relay/certs/default.crt"
+manual_key_path = "/etc/iroh-relay/certs/default.key"

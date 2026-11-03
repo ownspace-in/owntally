@@ -1,0 +1,25 @@
+[Unit]
+Description=OwnTally Iroh relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=iroh-relay
+Group=iroh-relay
+ExecStart=/usr/local/bin/iroh-relay -c /etc/iroh-relay/config.toml
+Restart=on-failure
+RestartSec=2
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+LimitNOFILE=65536
+MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target

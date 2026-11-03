@@ -22,3 +22,6 @@ keystore.properties
 
 # Spike keeps its own local.properties
 spike/local.properties
+
+# Relay token for the spike build (see spike/local-secrets.properties.example)
+local-secrets.properties
