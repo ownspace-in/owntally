@@ -31,7 +31,7 @@ class AppContainer(private val context: Context) {
     val identity: IdentityRepository by lazy { IdentityRepository(secrets, settings) }
     val groups: GroupRepository by lazy { GroupRepository(secrets, RoomEventStore(database), identity, Clock.SYSTEM, SecureRandom()) }
 
-    private val settings: RoomSettingsStore by lazy { RoomSettingsStore(database) }
+    val settings: RoomSettingsStore by lazy { RoomSettingsStore(database) }
     val sessions: Sessions by lazy { Sessions(groups, secrets, identity, Clock.SYSTEM, settings) }
     val debugTools: DebugTools? by lazy { DebugToolsFactory.create(this) }
 

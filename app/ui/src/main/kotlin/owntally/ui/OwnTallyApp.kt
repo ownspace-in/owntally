@@ -15,6 +15,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import owntally.ui.lock.LockController
+import owntally.ui.lock.LockHost
+import owntally.ui.lock.LockSettingStore
+import owntally.ui.lock.PhoneAuthenticator
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,17 +50,37 @@ sealed class AppStart {
     data object StorageUnavailable : AppStart()
 }
 
+/** What the lock needs from the app: where its one setting is kept, and the phone's own lock screen. */
+class LockDeps(val settings: owntally.data.store.SettingsStore, val authenticator: PhoneAuthenticator)
+
+/** Loads the lock mode (off the main thread), then shows [content] behind the lock. With no [lock] there is none. */
+@Composable
+private fun WithLock(lock: LockDeps?, content: @Composable (LockController?) -> Unit) {
+    if (lock == null) {
+        content(null)
+        return
+    }
+    val controller by produceState<LockController?>(null) {
+        value = withContext(Dispatchers.IO) {
+            val store = LockSettingStore(lock.settings)
+            LockController(store.load(), store, lock.authenticator) { android.os.SystemClock.elapsedRealtime() }
+        }
+    }
+    val c = controller
+    if (c == null) Box(Modifier.fillMaxSize().background(OwnTallyColors.Background)) else LockHost(c) { content(c) }
+}
+
 /** The root of the app's screens. */
 @Composable
-fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions: () -> Sessions, debugTools: DebugTools? = null) {
+fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions: () -> Sessions, debugTools: DebugTools? = null, lock: LockDeps? = null) {
     OwnTallyTheme {
         when (start) {
             AppStart.Loading -> Box(Modifier.fillMaxSize().background(OwnTallyColors.Background))
             AppStart.NeedsFirstRun -> {
                 var finished by remember { mutableStateOf(false) }
-                if (finished) HomeFlow(sessions(), debugTools) else OnboardingFlow(onboarding(), onFinished = { finished = true })
+                if (finished) WithLock(lock) { HomeFlow(sessions(), debugTools, it) } else OnboardingFlow(onboarding(), onFinished = { finished = true })
             }
-            AppStart.Ready -> HomeFlow(sessions(), debugTools)
+            AppStart.Ready -> WithLock(lock) { HomeFlow(sessions(), debugTools, it) }
             AppStart.SeedUnreadable -> MessageScreen(
                 "Your saved identity can't be opened on this phone",
                 "This can happen when the app is restored from a backup or moved to another phone. Restoring from your recovery phrase arrives in a later update.",

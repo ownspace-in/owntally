@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
@@ -121,11 +123,16 @@ class FirstRunEndToEndInstrumentedTest {
 
             // Add an expense: blocked until valid, then saved and listed, then deleted with a confirmation.
             rule.onNode(hasContentDescription("Add expense")).performClick()
+            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("Save expense") == 1 }
             rule.onNodeWithText("Save expense").assertIsNotEnabled()
             rule.onNode(hasContentDescription("Amount") and hasSetTextAction()).performTextInput("2400")
             rule.onNode(hasContentDescription("What was it for?") and hasSetTextAction()).performTextInput("Seafood lunch")
             rule.onNodeWithText("Save expense").assertIsEnabled().performClick()
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You paid ₹2,400 · split 1 way") == 1 }
+            try {
+                rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You paid ₹2,400 · split 1 way") == 1 }
+            } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+                throw AssertionError("screen at the timeout: " + rule.onRoot().printToString(10000), e)
+            }
             rule.onNodeWithText("Seafood lunch").performClick()
             rule.onNodeWithText("Delete").performClick()
             rule.onNodeWithText("It stays in the list, struck through, and is no longer counted in the balances.").assertExists()

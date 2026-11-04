@@ -53,6 +53,7 @@ configurations.configureEach {
 dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:ui"))
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation(project(":app:data"))
     implementation(project(":app:crypto"))
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")

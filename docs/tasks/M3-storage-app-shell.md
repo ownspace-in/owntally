@@ -26,19 +26,27 @@ Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Materi
 **Answered by the owner on 3 Nov 2026:**
 1. **Application id: `in.ownspace.owntally`.** Permanent once published; the invite site's `assetlinks.json` is tied to it.
 2. **Test members: debug builds only, groups limited to three members until M4.** A debug-only menu item adds pretend members (real keys, real `MemberJoined` events written by the owner), at most two, so a group has at most three members. Release builds contain no such code and no way to add members until M4 and M6.
-3. **App lock: support all three:** off, the phone's own biometric or screen lock, or our own PIN (details in T3.11).
+3. **App lock: off or the phone's own fingerprint or screen lock.** The own PIN was dropped on 4 Nov 2026 (see below).
 4. **Bottom bar: all four tabs as in the mockup** (Groups, Settle, Sync, About). The Sync tab is shown but disabled: tapping it opens a short placeholder ("Syncing with friends arrives in a later update. For now your data is stored only on this phone.") and nothing else. It becomes the real sync status screen (mockup 05) in M5 to M7.
 
-**Still open:** approval of the PIN design in T3.11, the defaults above, and what the Settle tab shows. The builder proposes: the Settle tab lists the groups that have payments to make (group name and what you owe or are owed), and tapping one opens that group's Settle up screen (mockup 04); with no payments it says everyone is settled up.
+**Answered by the owner on 4 Nov 2026** (each question asked with no recommended option):
+5. **App lock:** only Off and the phone lock (no own PIN). Locks 30 seconds after the app leaves the screen; always asks on a fresh start; screenshots and the recent-apps preview are blocked on every screen while the lock is on. Turning it on or off asks for the phone lock first.
+6. **Settings:** a separate Settings screen opened from the About tab.
+7. **Settle tab:** lists every group that can be opened, settled or not; each opens that group's Settle up.
+8. **Settle up buttons:** Pay opens the share sheet with who, how much and the number. I paid, Send reminder and Mark received stay switched off until payments can be recorded.
+9. **Dependency wiring:** by hand in one file (as built).
+10. **Navigation:** our own small screen stack, not Jetpack Navigation (changed from the default).
+11. **Android backup:** on for the database only (changed from the default). Keys are not in it, so a restored database shows its groups as "waiting for the group key".
+12. **Number style:** follows the phone's language and region (changed from the default).
 
 **Defaults the builder proposes (change any of them):**
 1. **Dependency wiring by hand**, no Hilt. The app is small; Hilt adds annotation processing and build time for little gain. (BUILD_PLAN allows either.)
-2. **Navigation:** Jetpack Navigation for Compose, one `ViewModel` per screen, state as plain Kotlin data classes so it can be unit tested on the JVM.
+2. **Navigation:** ~~Jetpack Navigation~~ (replaced by the owner's choice, item 10: `NavStack`, a list of plain `Screen` values), state as plain Kotlin data classes so it can be unit tested on the JVM.
 3. **Where things live** (BUILD_PLAN layout, using the names already in the repo): `app/data` (Room, repositories, Keystore wrapping), `app/ui` (Compose screens and view models), `app/app` (the application, manifest, navigation). `core-model` and `crypto` stay pure JVM. The old `spike/` build stays separate and is not shipped.
 4. **What is stored.** One table of events per group: the **envelope bytes exactly as sent** (already encrypted and signed, docs/WIRE_FORMAT.md), plus author and counter for lookup. State is rebuilt by decrypting and replaying; it is never written to disk decrypted. Room tables: `groups` (group id, key slot, creation time), `events`, `settings`. **The master seed and the epoch keys are not in Room:** they are small sealed files in the app's `noBackupFilesDir` (changed in T3.4: the seed is written before any group or database exists, and a damaged database must not take the keys with it).
 5. **Keys.** A non-exportable AES key in the Android Keystore wraps everything secret that must survive a restart (the master seed and each epoch's group key), through Tink's Keystore support. The recovery phrase itself is never stored. Key slots: each group records its slot (this closes the open item from M2), and slots come from a counter in the settings that only goes up, so a slot is never handed out twice, even after its group is deleted (a reused slot would give a new group the same member key as the old one, and anyone who was in both could link them).
-6. **No cloud backup:** `allowBackup=false` and no data extraction, so keys and events are not copied off the phone.
-7. **Money display:** rupees from paise, Indian digit grouping (₹1,50,000), never floating point.
+6. ~~No cloud backup~~ (changed by the owner, item 11): the database only is backed up; the keys never are.
+7. **Money display:** rupees from paise, never floating point. ~~Indian digit grouping~~ now follows the phone (owner, item 12): lakh grouping (₹1,50,000) in India and Hindi, thousands elsewhere, the phone's decimal sign, always digits 0 to 9.
 8. **Mockups are the contract** for layout, wording and colours; differences are listed in the pull request.
 9. **Tests without a phone:** unit tests on the JVM for view models, repositories (with an in-memory fake) and formatting; Room, Keystore wrapping and Compose screens are checked on the emulator (Android 36 image is installed). Screens are compared with the mockup images.
 
@@ -175,17 +183,25 @@ Settle up and How it works are done and checked on the emulator. JVM tests, the 
 
 ## T3.11 App lock (optional)
 
-Off by default. A setting chooses one of three modes; the app locks when it goes to the background (after a short grace period, default 30 seconds, so switching to a UPI app and back is not annoying).
+Off by default. Two modes, set in Settings (opened from About): Off, or **Phone lock** (owner decision, 4 Nov 2026; the own-PIN mode was dropped, so no PIN, salt, hash or try counter exists in the code).
 
-1. **Phone lock:** Android's own prompt (`BiometricPrompt`) accepting a strong biometric or the phone's PIN, pattern or password. We store nothing and write no lockout rules.
-2. **Our own PIN, 4 to 6 digits.** This is security-sensitive code of our own, so its design needs the owner's approval before it is built:
-   - The PIN is never stored. We store a salted hash made with PBKDF2-HMAC-SHA256 from the JDK (210,000 rounds, random 16-byte salt), then wrapped with the Keystore AEAD like the other secrets. No custom hashing.
-   - Wrong tries are counted and stored: after 5 in a row the lock waits 30 seconds, doubling each further failure (up to 1 hour). The data is never wiped by wrong PINs.
-   - Changing or turning off the PIN needs the current PIN. Forgotten PIN: no reset by us; the person can reinstall and restore from the recovery phrase (the data is re-synced from friends).
-   - Comparison in constant time. No PIN in logs, saved state or screenshots; the PIN screen blocks screenshots like the phrase screen.
-3. **Off.**
+- Locks 30 seconds after the app leaves the screen (so a trip to a UPI app and back does not ask); always asks on a fresh start. While the lock is on, every screen blocks screenshots and the recent-apps preview.
+- Turning the lock on or off shows the phone's lock first (so it is proven to work before it is relied on).
+- The phone's lock is Android's `BiometricPrompt`: a strong fingerprint or face, or the screen lock PIN, pattern or password on Android 11 and newer; the screen lock on Android 10; a fingerprint on Android 9 and older (Android cannot combine the two there). We store only the chosen mode; Android applies its own wrong-try limits.
+- If the phone no longer has any lock (the person removed their screen lock), the app lock cannot protect anything, so it stops asking instead of trapping the person out of their own data; Settings says so.
+- Adds the normal `USE_BIOMETRIC` permission through the biometric library.
 
-Done when: tests on the JVM for the lock state machine (locked, unlocked, grace period, background), for the PIN rules (hash and compare, wrong-try counting, waiting times, persisted counter, constant-time compare) with a fake clock; the real prompt and Keystore are checked on the emulator.
+Done when: JVM tests for the state machine, the Settings choices, the stored mode and the shared screenshot flag; the real prompt checked on the emulator.
+
+### T3.11 result
+
+JVM tests (state machine 15, Settings model and gate, stored mode, shared secure flag) pass, with every rule checked by breaking the code on purpose. **Checked by hand on the emulator with a real device PIN** (set with `adb shell locksettings set-pin`; setup test `LockSetupInstrumentedTest`, run only with `-e lockSetup yes`):
+- the lock screen and the system prompt show on a fresh start; a screen capture of it is black (secure window);
+- the right PIN opens the app; Android rejects a wrong PIN itself; cancelling shows "OwnTally is locked" with "That did not unlock it. Try again." and an Unlock button;
+- leaving for 10 seconds and coming back stays open; leaving for 35 seconds asks again;
+- turning the lock off asks for the PIN, then screenshots work and a restart opens straight in; turning it on again asks for the PIN and survives a restart;
+- after removing the device PIN while the lock was on, the app opens without asking and Settings explains why.
+Not checked: a real fingerprint (the emulator was used with a PIN only), and Android 9 or 10 behaviour.
 
 ## T3.12 Hand back
 

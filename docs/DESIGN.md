@@ -94,7 +94,7 @@ Consequences and rules:
 - The ticket contains the group key: short expiry, single use, host approval.
 - No forward secrecy for stored events in v1 (MLS or a ratchet considered too heavy).
 - Metadata is visible to a relay or network observers.
-- Optional app lock (fingerprint or PIN).
+- Optional app lock: the phone's own fingerprint or screen lock (no PIN of our own; owner decision, 4 Nov 2026).
 
 ## Resources (estimates)
 
@@ -177,7 +177,7 @@ Public relay caveat: the n0 public relays are free but rate-limited and document
 1. Welcome: one line saying data stays on this phone, no account.
 2. Enter a name and phone number (these are only defaults; each group asks again).
 3. Recovery phrase: show 12 words, then confirm 3 of them (see Recovery). Cannot be skipped.
-4. Optional app lock (fingerprint or PIN).
+4. Optional app lock (the phone's fingerprint or screen lock), turned on later in Settings.
 5. Empty home screen with two actions: "Create group" and "Join with link or code".
 Permissions are asked only when first needed: camera for scanning, Bluetooth/Nearby for same-room sync.
 

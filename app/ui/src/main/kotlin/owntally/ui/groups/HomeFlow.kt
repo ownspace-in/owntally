@@ -52,7 +52,7 @@ interface DebugTools {
 
 /** The screens after first run: the four tabs, and the Group and New group screens above them. */
 @Composable
-fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null) {
+fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.ui.lock.LockController? = null) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { sessions.refresh() } }
@@ -65,11 +65,12 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null) {
                 onOpen = { ui.nav = ui.nav.push(Screen.Group(it)) },
                 onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(it)) },
                 onHow = { ui.nav = ui.nav.push(Screen.HowItWorks) },
+                onSettings = if (lock != null) ({ ui.nav = ui.nav.push(Screen.Settings) }) else null,
                 onCreate = { ui.nav = ui.nav.push(Screen.CreateGroup) },
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
-            Screen.Settings -> MessageTab("Settings", "Settings arrive in the next step.")
+            Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
             is Screen.AddExpense -> AddExpenseRoute(sessions, screen.id, onDone = back)
             is Screen.Group -> GroupRoute(
@@ -82,7 +83,7 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null) {
 }
 
 @Composable
-private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onCreate: () -> Unit) {
+private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onSettings: (() -> Unit)?, onCreate: () -> Unit) {
     val ui: HomeViewModel = viewModel()
     val tab = ui.tab
     val summaries by sessions.summaries.collectAsStateWithLifecycle()
@@ -100,7 +101,10 @@ private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (G
                             "OwnTally splits expenses with friends. There is no account and no server of ours: your groups are stored on this phone, and each group's data is encrypted with its own key.",
                         )
                     }
-                    Box(Modifier.padding(20.dp)) { owntally.ui.components.PrimaryButton("How OwnTally works", onHow, Modifier.fillMaxWidth()) }
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        owntally.ui.components.PrimaryButton("How OwnTally works", onHow, Modifier.fillMaxWidth())
+                        if (onSettings != null) owntally.ui.components.PrimaryButton("Settings", onSettings, Modifier.fillMaxWidth())
+                    }
                 }
             }
         }
