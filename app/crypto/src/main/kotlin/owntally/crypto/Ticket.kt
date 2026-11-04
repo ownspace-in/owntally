@@ -106,7 +106,13 @@ class Ticket(
         }
 
         /** A ticket from shared text: the bare ticket, or a link whose part after `#` is the ticket. Spaces around it are ignored. */
-        fun fromShared(text: String): Ticket? = decode(text.trim().substringAfterLast('#'))
+        /**
+         * A ticket from what a person pasted: a link or the bare text. Spaces, line breaks and invisible characters anywhere are ignored
+         * first (a chat app may wrap or space a long text; owner decision, 4 Nov 2026), then the part after the last "#" is decoded by
+         * [decode], which still accepts exactly one text per ticket.
+         */
+        fun fromShared(text: String): Ticket? =
+            decode(text.filterNot { it.isWhitespace() || Character.isSpaceChar(it) || Character.getType(it) == Character.FORMAT.toInt() }.substringAfterLast('#'))
     }
 }
 

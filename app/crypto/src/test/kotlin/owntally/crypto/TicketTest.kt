@@ -87,6 +87,42 @@ class TicketTest {
     }
 
     @Test
+    fun aSharedTextThatAChatAppWrappedOrSpacedStillGivesTheSameTicket() {
+        // Owner decision, 4 Nov 2026 (clarification C5, option B): spaces and line breaks inside a shared text are ignored before decoding.
+        val ticket = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "relay")
+        val text = ticket.encode()
+        val wrapped = text.chunked(40).joinToString("\n")
+        val spaced = text.chunked(8).joinToString(" ")
+        val link = "https://joinowntally.ownspace.in/j#"
+        assertEquals(ticket, Ticket.fromShared(wrapped))
+        assertEquals(ticket, Ticket.fromShared(spaced))
+        assertEquals(ticket, Ticket.fromShared(link + wrapped))
+        assertEquals(ticket, Ticket.fromShared(link.chunked(10).joinToString("\r\n") + text.chunked(30).joinToString("\r\n")))
+        assertEquals(ticket, Ticket.fromShared("\t$text\u00A0")) // tab, non-breaking space
+        assertEquals(ticket, Ticket.fromShared(text.take(60) + "\u200B" + text.drop(60))) // an invisible zero-width space
+    }
+
+    @Test
+    fun theStrictDecoderStillRefusesAnythingButTheOneExactText() {
+        val ticket = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "")
+        val text = ticket.encode()
+        assertNull(Ticket.decode(text.chunked(40).joinToString("\n")), "decode itself is not forgiving")
+        assertNull(Ticket.decode(" $text"))
+        assertNull(Ticket.decode(text + "="))
+    }
+
+    @Test
+    fun forgivingAboutSpacesIsNotForgivingAboutAnythingElse() {
+        val text = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "").encode()
+        assertNull(Ticket.fromShared(text + "="), "padding")
+        assertNull(Ticket.fromShared(text.replaceRange(10, 11, "+")), "a character outside the alphabet")
+        assertNull(Ticket.fromShared(text.replaceRange(10, 11, " ")), "a missing character")
+        assertNull(Ticket.fromShared(text.dropLast(1)), "cut short")
+        assertNull(Ticket.fromShared(text + "AA"), "extra characters")
+        assertNull(Ticket.fromShared("   \n  "))
+    }
+
+    @Test
     fun aLinkOrPastedTextWithSpacesGivesTheSameTicket() {
         val ticket = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "")
         val text = ticket.encode()
