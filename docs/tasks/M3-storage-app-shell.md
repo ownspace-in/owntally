@@ -270,3 +270,5 @@ Checked by hand on the emulator (second review round): lock on and no phone lock
 
 **A bug found by the flaky end-to-end test (fixed):** after Save, the Add expense screen cleared the form before closing; clearing it made the screen return early, which dropped its coroutine scope, which cancelled the save before it could close the screen, leaving a blank screen. Fixed by declaring the state and scope before any early return and closing the screen before clearing the form.
 
+**Clarification P9 decided (owner, 4 Nov 2026):** names are unique in a group, ignoring capitals and extra spaces; a removed member's name stays reserved; the admin sets the name when approving; phone numbers also allow `-` `(` `)` `.` (at least 5 digits). Core: `NameKey`, the replay rule (`INVALID` for a taken name, on join and on rename), `checkPhone`. Found while testing: a non-breaking space or an invisible character would have let someone copy a name, so both are ignored in the comparison; a phone made only of spaces used to be accepted and is now refused. Not in the app yet (M4/M6): the join screen where the admin types the name, and the message to a person whose name was taken.
+

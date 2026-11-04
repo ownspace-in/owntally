@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.waitUntilExactlyOneExists
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -34,6 +37,7 @@ import owntally.data.secrets.KeystoreSecretBox
  * The real app on a real (emulated) phone: the real activity, the Keystore, the secret files and the database. Runs the whole
  * first run through the screens, then looks in every file the app owns for the recovery phrase.
  */
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 class FirstRunEndToEndInstrumentedTest {
     @get:Rule
@@ -68,14 +72,14 @@ class FirstRunEndToEndInstrumentedTest {
             }
 
             // Welcome: not secure.
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("Split expenses.\nKeep your data.") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Split expenses.\nKeep your data."), 25_000)
             assertTrue(!secure(), "the welcome screen may be captured")
             rule.onNodeWithText("For example, Asha").performTextInput("Asha")
             rule.onNodeWithText("+91 98765 43210").performTextInput("98765 43210")
             rule.onNodeWithText("Continue").performClick()
 
             // Phrase: not secure either. Read the twelve words from the screen like a person would.
-            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Save your recovery phrase") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Save your recovery phrase"), 5_000)
             val words = (1..12).map { n ->
                 val d = rule.onNode(hasContentDescription("Word $n: ", substring = true)).fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single()
                 d.removePrefix("Word $n: ")
@@ -86,7 +90,7 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("I've written it down").performClick()
 
             // Confirm: wrong first, then right.
-            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Check you wrote it down") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Check you wrote it down"), 5_000)
             assertTrue(!secure())
             val positions = (1..12).filter { rule.onAllNodesWithTextCount("Word $it") == 1 }
             assertEquals(3, positions.size)
@@ -98,7 +102,7 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("Finish").performClick()
 
             // Done: on the Groups screen, everything saved.
-            rule.waitUntil(15_000) { rule.onAllNodesWithTextCount("New group") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("New group"), 15_000)
             assertEquals(IdentityState.READY, container().identity.state())
             assertEquals("Asha", container().identity.defaultProfile()?.name)
             assertEquals("98765 43210", container().identity.defaultProfile()?.phone)
@@ -115,20 +119,23 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("Group name").assertExists()
             rule.onNode(hasSetTextAction()).performTextInput("Goa Trip")
             rule.onNodeWithText("Create group").assertIsEnabled().performClick()
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("1 member · 0 expenses") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("1 member · 0 expenses"), 25_000)
             rule.onNodeWithText("Goa Trip").performClick()
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You are the owner") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("You are the owner"), 25_000)
             rule.onNodeWithText("No expenses yet.").assertExists()
 
             // Add an expense: blocked until valid, then saved and listed, then deleted with a confirmation.
             rule.onNode(hasContentDescription("Add expense")).performClick()
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("Save expense") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Save expense"), 25_000)
             rule.onNodeWithText("Save expense").assertIsNotEnabled()
             rule.onNode(hasContentDescription("Amount") and hasSetTextAction()).performTextInput("2400")
             rule.onNode(hasContentDescription("What was it for?") and hasSetTextAction()).performTextInput("Seafood lunch")
-            rule.onNodeWithText("Save expense").assertIsEnabled().performClick()
+            rule.waitForIdle()
+            // Pressed through its accessibility action, not by screen coordinates: the bottom bar moves while the keyboard area settles, and a
+            // coordinate tap that lands during that move can miss the button (seen once in about ten runs).
+            rule.onNodeWithText("Save expense").assertIsEnabled().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
             try {
-                rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You paid ₹2,400 · split 1 way") == 1 }
+                rule.waitUntilExactlyOneExists(hasText("You paid ₹2,400 · split 1 way"), 25_000)
             } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
                 throw AssertionError("screen at the timeout: " + rule.onRoot().printToString(10000), e)
             }
@@ -136,13 +143,13 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("Delete").performClick()
             rule.onNodeWithText("It stays in the list, struck through, and is no longer counted in the balances.").assertExists()
             rule.onNodeWithText("Delete expense").performClick()
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("Deleted by Asha · not counted") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Deleted by Asha · not counted"), 25_000)
 
             // Test friends (debug build only), then Settle up shows the plan, with its buttons switched off.
             rule.onNodeWithText("Add test friends and expenses (debug build)").performClick()
-            rule.waitUntil(15_000) { rule.onAllNodesWithTextCount("Meera (test) is owed") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Meera (test) is owed"), 15_000)
             rule.onNodeWithText("Settle up the group").performClick()
-            rule.waitUntil(25_000) { rule.onAllNodesWithTextCount("You → Meera (test)") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("You → Meera (test)"), 25_000)
             rule.onNodeWithText("₹2,850").assertExists()
             rule.onNodeWithText("Ben (test) → Meera (test)").assertExists()
             rule.onNodeWithText("₹9,550").assertExists()
@@ -150,9 +157,9 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("I paid").assertIsNotEnabled()
             rule.onNodeWithText(SETTLE_NOTE).assertExists()
             rule.onNode(hasContentDescription("Back")).performClick()
-            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Settle up the group") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("Settle up the group"), 5_000)
             rule.onNode(hasContentDescription("Back")).performClick()
-            rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("3 members · 3 expenses") == 1 }
+            rule.waitUntilExactlyOneExists(hasText("3 members · 3 expenses"), 5_000)
             rule.onNode(hasContentDescription("About")).performClick()
             rule.onNodeWithText("How OwnTally works").performClick()
             rule.onNodeWithText("Everything lives on your phone").assertExists()

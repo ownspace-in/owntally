@@ -160,4 +160,21 @@ class EventTest {
         assertEquals(ok, EventCodec.decodePayload(1, a, 1, bytes))
         assertFailsWith<DecodeException> { EventCodec.decodePayload(1, a, 1, patched) }
     }
+
+    @Test
+    fun phoneNumbersAllowTheUsualWaysOfWritingThem() {
+        // Owner decision, 4 Nov 2026: digits, +, spaces, and also - ( ) and . ; 5 to 20 characters in all.
+        for (phone in listOf("+91 98765 43210", "98765-43210", "(022) 2345 6789", "98765.43210", "+1 (415) 555-0132", "12345", "1".repeat(20))) {
+            EventBody.MemberJoined(a, ENC, "Asha", phone)
+            EventBody.ProfileUpdated("Asha", phone)
+        }
+    }
+
+    @Test
+    fun phoneNumbersStillRefuseLettersOtherDigitsAndBadLengths() {
+        for (phone in listOf("98765 abc", "९८७६५ ४३२१०", "98765/43210", "98765_43210", "12 3", "1".repeat(21), "", "     ", "98765\n43210", "+91 98765 4321O")) {
+            assertFailsWith<IllegalArgumentException>("\"$phone\"") { EventBody.MemberJoined(a, ENC, "Asha", phone) }
+            assertFailsWith<IllegalArgumentException>("\"$phone\"") { EventBody.ProfileUpdated("Asha", phone) }
+        }
+    }
 }

@@ -43,8 +43,11 @@ private fun checkName(name: String) =
     require(name.isNotBlank() && name.length in 1..40) { "name must be 1 to 40 characters" }
 
 private fun checkPhone(phone: String) =
-    require(phone.length in 5..20 && phone.all { it.isDigit() && it.code < 128 || it == '+' || it == ' ' }) {
-        "phone must be 5 to 20 characters from digits, + and spaces"
+    require(
+        phone.length in 5..20 && phone.count { it in '0'..'9' } >= 5 &&
+            phone.all { it in '0'..'9' || it == '+' || it == ' ' || it == '-' || it == '(' || it == ')' || it == '.' },
+    ) {
+        "phone must be 5 to 20 characters with at least 5 digits, from the digits 0 to 9, + space - ( ) and ."
     }
 
 sealed class EventBody {

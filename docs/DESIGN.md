@@ -130,6 +130,7 @@ Limits:
 - The plan updates when an expense is added or deleted. Payments already marked stay in the log and are counted.
 
 - A member's profile is a name and a phone number. `MemberJoined` carries them, and `ProfileUpdated` lets the member change either later. No payment id, email or other data is stored.
+- **Names are unique inside a group** (owner decision, 4 Nov 2026): "Rohan" and "rohan" cannot both be members, "Rohan V" can; a removed member's name stays taken. The admin who approves a join sets the name (for example "Rohan V") and the joiner is told which name they were given. The same person can use different names in different groups. Phone numbers may be typed with `-`, `(`, `)` and `.` as well as digits, `+` and spaces.
 - The phone number is shown to group members, so the join screen says so. Using a different number or name per group is allowed.
 - The phone number is unverified. It identifies nobody on its own: identity is the key.
 - Settle up shows who pays whom and how much. OwnTally opens no other app and refers to no payment service (owner decision, 4 Nov 2026): the person pays outside the app, however they like, and marks it there.

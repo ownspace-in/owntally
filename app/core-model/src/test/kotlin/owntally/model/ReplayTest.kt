@@ -682,4 +682,86 @@ class ReplayTest {
         s.emit(rival, EventBody.GroupCreated(GroupIds.create(rival, ByteArray(8) { 1 }), "Rival's", "INR", encKeyFor(rival)))
         assertEquals(rival, s.state().owner)
     }
+
+    // ---- member names are unique within a group (owner decision, 4 Nov 2026) ----
+
+    @Test
+    fun aNameAlreadyInTheGroupIsRefusedWhateverTheCapitalsAndSpaces() {
+        val s = standardGroup() // Asha (owner, but her name is set by ProfileUpdated), Ben, Chitra, Dev
+        for ((n, name) in listOf("Ben", "ben", "BEN", " Ben ", "bEn  ").withIndex()) {
+            val join = s.join(a, key(20 + n), name)
+            assertEquals(IgnoreReason.INVALID, join.reason(s.state()), "\"$name\"")
+        }
+        assertEquals(4, s.state().currentMembers.size)
+    }
+
+    @Test
+    fun spacesInsideAreIgnoredToo() {
+        val s = standardGroup()
+        s.join(a, key(10), "Ben Kumar")
+        val clash = s.join(a, key(11), "  ben    KUMAR ")
+        assertEquals(IgnoreReason.INVALID, clash.reason(s.state()))
+        val different = s.join(a, key(12), "Ben Kumar V")
+        assertNull(different.reason(s.state()))
+    }
+
+    @Test
+    fun aSecondRohanMustBecomeRohanV() {
+        val s = standardGroup()
+        s.join(a, key(10), "Rohan")
+        assertEquals(IgnoreReason.INVALID, s.join(a, key(11), "Rohan").reason(s.state()))
+        assertNull(s.join(a, key(12), "Rohan V").reason(s.state()))
+    }
+
+    @Test
+    fun theOwnersNameIsTakenToo() {
+        val s = standardGroup() // owner's profile name is "Asha"
+        assertEquals(IgnoreReason.INVALID, s.join(a, key(10), "asha").reason(s.state()))
+    }
+
+    @Test
+    fun aRemovedMembersNameStaysReserved() {
+        val s = standardGroup()
+        s.remove(a, b) // Ben is removed
+        val reuse = s.join(a, key(10), "Ben")
+        assertEquals(IgnoreReason.INVALID, reuse.reason(s.state()))
+        assertNull(s.join(a, key(11), "Ben 2").reason(s.state()))
+    }
+
+    @Test
+    fun renamingToATakenNameIsRefusedButChangingTheCapitalsOfYourOwnIsFine() {
+        val s = standardGroup()
+        val toTaken = s.emit(b, EventBody.ProfileUpdated("chitra", PHONE))
+        val ownCaps = s.emit(b, EventBody.ProfileUpdated("BEN", PHONE))
+        val fresh = s.emit(c, EventBody.ProfileUpdated("Chitra S", PHONE))
+        val state = s.state()
+        assertEquals(IgnoreReason.INVALID, toTaken.reason(state))
+        assertNull(ownCaps.reason(state))
+        assertNull(fresh.reason(state))
+        assertEquals("BEN", state.members.getValue(b).name)
+        assertEquals("Chitra S", state.members.getValue(c).name)
+    }
+
+    @Test
+    fun theSameNameInADifferentGroupIsFine() {
+        val s1 = standardGroup()
+        val s2 = standardGroup()
+        assertNull(s1.join(a, key(10), "Rohan").reason(s1.state()))
+        assertNull(s2.join(a, key(10), "Rohan").reason(s2.state()))
+    }
+
+    @Test
+    fun twoAdminsAdmittingTheSameNameAtOnceGiveTheSameResultOnEveryPhone() {
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val seen = s.snapshot()
+        s.join(a, key(10), "Rohan") // the owner admits one Rohan ...
+        val byAdmin = s.emit(b, EventBody.MemberJoined(key(11), encKeyFor(key(11)), "rohan", PHONE), seen = seen) // ... while the admin, who has not seen that, admits another
+        val log1 = logOf(s.events + byAdmin)
+        val log2 = logOf((s.events + byAdmin).reversed())
+        val st1 = replay(log1)
+        val st2 = replay(log2)
+        assertEquals(st1.members.keys, st2.members.keys)
+        assertEquals(1, st1.members.values.count { it.name.equals("rohan", ignoreCase = true) })
+    }
 }
