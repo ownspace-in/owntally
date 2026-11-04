@@ -132,7 +132,7 @@ Acceptance: simulated devices always converge to identical logs and balances. In
 
 Nearby transport with fallback to same Wi-Fi, invite screen (QR, share link, copy code, expiry, revoke), QR scan, Join flow, host approval, join requests screen, sync status screen.
 
-Acceptance (two real phones): invite by QR, scan, approve, history arrives, add an expense on each side and both converge, airplane mode with Wi-Fi only still works if fallback is in.
+Acceptance (two real phones, and a test): issued invite tickets survive an app restart on the host and are still single use (CRYPTO.md clarification C4). Two real phones: invite by QR, scan, approve, history arrives, add an expense on each side and both converge, airplane mode with Wi-Fi only still works if fallback is in.
 
 ### M7. Internet sync and relay setting
 
