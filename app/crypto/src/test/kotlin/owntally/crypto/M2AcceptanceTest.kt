@@ -93,7 +93,7 @@ class M2AcceptanceTest {
         log.append(Event(1, owner.publicKey, 1, emptyMap(), 1, EventBody.GroupCreated(group, "Trip", "INR", owner.encryptionKey)))
         log.append(Event(1, owner.publicKey, 2, mapOf(owner.publicKey to 1), 2, EventBody.MemberJoined(stays.publicKey, stays.encryptionKey, "Ben", "98765 00002")))
         log.append(Event(1, owner.publicKey, 3, mapOf(owner.publicKey to 2), 3, EventBody.MemberJoined(leaves.publicKey, leaves.encryptionKey, "Eve", "98765 00005")))
-        val sealed = KeyRotation.seal(group, 2, k2, KeyRotation.recipients(replay(log), excluding = setOf(leaves.publicKey)))
+        val sealed = KeyRotation.seal(owner.publicKey, group, 2, k2, KeyRotation.recipients(replay(log), excluding = setOf(leaves.publicKey)))
         val removal = Event(1, owner.publicKey, 4, mapOf(owner.publicKey to 3), 4, EventBody.MemberRemoved(leaves.publicKey, 2, sealed))
         log.append(removal)
         val state = replay(log)

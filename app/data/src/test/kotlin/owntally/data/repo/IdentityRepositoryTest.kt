@@ -38,7 +38,8 @@ class IdentityRepositoryTest {
         val phrase = env.firstRun()
         val everythingStored = env.blobs.all().values.joinToString(" ") { String(it, Charsets.ISO_8859_1) } + env.settings.all().toString()
         for (word in phrase.words().toSet()) {
-            if (word.length >= 5) assertFalse(word in everythingStored, "the word \"$word\" was stored")
+            // Whole words only: a phrase word such as "fault" must not fail the test because a stored setting is called "default_...".
+            if (word.length >= 5) assertFalse(Regex("(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])").containsMatchIn(everythingStored), "the word \"$word\" was stored")
         }
     }
 

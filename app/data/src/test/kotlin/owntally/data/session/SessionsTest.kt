@@ -77,7 +77,7 @@ class SessionsTest {
         assertEquals(2, sessions.summaries.value.single().memberCount)
         val next = owntally.crypto.GroupKey.generate()
         env.secrets.saveGroupKey(id, 2, next)
-        val sealed = owntally.crypto.KeyRotation.seal(id, 2, next, owntally.crypto.KeyRotation.recipients(session.view.value.state, excluding = setOf(ben.publicKey)))
+        val sealed = owntally.crypto.KeyRotation.seal(session.view.value.me, id, 2, next, owntally.crypto.KeyRotation.recipients(session.view.value.state, excluding = setOf(ben.publicKey)))
         session.append(EventBody.MemberRemoved(ben.publicKey, 2, sealed))
         assertEquals(1, sessions.summaries.value.single().memberCount)
     }

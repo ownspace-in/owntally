@@ -63,7 +63,7 @@ class KeyRotationTest {
 
     private fun removeMember(chain: Chain, by: GroupIdentity, member: GroupIdentity, newKey: GroupKey): Event {
         val state = chain.state()
-        val sealed = KeyRotation.seal(group, state.epoch + 1, newKey, KeyRotation.recipients(state, excluding = setOf(member.publicKey)))
+        val sealed = KeyRotation.seal(by.publicKey, group, state.epoch + 1, newKey, KeyRotation.recipients(state, excluding = setOf(member.publicKey)))
         return chain.emit(by, EventBody.MemberRemoved(member.publicKey, state.epoch + 1, sealed))
     }
 
@@ -98,7 +98,7 @@ class KeyRotationTest {
         assertFalse(KeyRotation.receive(state, removal, d, keyring))
         assertNull(keyring[2L])
         // Even with someone else's sealed key in hand, only its owner's private key opens it.
-        assertNull(KeyRotation.open(body.sealedKeys.getValue(b.publicKey), d, group, 2))
+        assertNull(KeyRotation.open(body.sealedKeys.getValue(b.publicKey), d, a.publicKey, group, 2))
     }
 
     @Test
@@ -123,21 +123,22 @@ class KeyRotationTest {
     @Test
     fun aSealedKeyOpensOnlyWithTheRightPrivateKeyGroupAndEpoch() {
         val k = GroupKey.generate()
-        val sealed = KeyRotation.seal(group, 2, k, mapOf(b.publicKey to b.encryptionKey, c.publicKey to c.encryptionKey))
+        val sealed = KeyRotation.seal(a.publicKey, group, 2, k, mapOf(b.publicKey to b.encryptionKey, c.publicKey to c.encryptionKey))
         val forB = sealed.getValue(b.publicKey)
-        assertEquals(k, KeyRotation.open(forB, b, group, 2))
-        assertNull(KeyRotation.open(forB, c, group, 2), "another member's private key")
-        assertNull(KeyRotation.open(forB, b, GroupId(ByteArray(16) { 1 }), 2), "another group")
-        assertNull(KeyRotation.open(forB, b, group, 3), "another epoch")
-        assertNull(KeyRotation.open(SealedKey(forB.bytes().also { it[40] = (it[40].toInt() xor 1).toByte() }), b, group, 2), "a changed byte")
-        assertNull(KeyRotation.open(SealedKey(forB.bytes().copyOf(30)), b, group, 2), "cut short")
+        assertEquals(k, KeyRotation.open(forB, b, a.publicKey, group, 2))
+        assertNull(KeyRotation.open(forB, c, a.publicKey, group, 2), "another member's private key")
+        assertNull(KeyRotation.open(forB, b, c.publicKey, group, 2), "another sender")
+        assertNull(KeyRotation.open(forB, b, a.publicKey, GroupId(ByteArray(16) { 1 }), 2), "another group")
+        assertNull(KeyRotation.open(forB, b, a.publicKey, group, 3), "another epoch")
+        assertNull(KeyRotation.open(SealedKey(forB.bytes().also { it[40] = (it[40].toInt() xor 1).toByte() }), b, a.publicKey, group, 2), "a changed byte")
+        assertNull(KeyRotation.open(SealedKey(forB.bytes().copyOf(30)), b, a.publicKey, group, 2), "cut short")
     }
 
     @Test
     fun eachSealingIsDifferentAndTheSizeIsFixed() {
         val k = GroupKey.generate()
-        val one = KeyRotation.seal(group, 2, k, mapOf(b.publicKey to b.encryptionKey)).getValue(b.publicKey)
-        val two = KeyRotation.seal(group, 2, k, mapOf(b.publicKey to b.encryptionKey)).getValue(b.publicKey)
+        val one = KeyRotation.seal(a.publicKey, group, 2, k, mapOf(b.publicKey to b.encryptionKey)).getValue(b.publicKey)
+        val two = KeyRotation.seal(a.publicKey, group, 2, k, mapOf(b.publicKey to b.encryptionKey)).getValue(b.publicKey)
         assertNotEquals(one, two)
         assertEquals(32 + 32 + 16, one.bytes().size) // encapsulated key, the group key, tag
     }
@@ -148,7 +149,7 @@ class KeyRotationTest {
         assertTrue(list.size >= 2)
         for (v in list) {
             val who = KeyDerivation.groupIdentity(seed, v.getValue("recipientSlot").jsonPrimitive.long)
-            val opened = KeyRotation.open(SealedKey(v.getValue("sealed").jsonPrimitive.content.hex()), who, GroupId(v.getValue("groupId").jsonPrimitive.content.hex()), v.getValue("epoch").jsonPrimitive.long)
+            val opened = KeyRotation.open(SealedKey(v.getValue("sealed").jsonPrimitive.content.hex()), who, PublicKey.fromHex(v.getValue("sender").jsonPrimitive.content), GroupId(v.getValue("groupId").jsonPrimitive.content.hex()), v.getValue("epoch").jsonPrimitive.long)
             assertEquals(GroupKey(v.getValue("groupKey").jsonPrimitive.content.hex()), opened)
         }
     }
@@ -160,7 +161,7 @@ class KeyRotationTest {
         val chain = newGroup()
         val attackerKey = GroupKey.generate()
         // c is a plain member: replay ignores this rotation, so nobody must take the key from it.
-        val sealed = KeyRotation.seal(group, 2, attackerKey, KeyRotation.recipients(chain.state()))
+        val sealed = KeyRotation.seal(c.publicKey, group, 2, attackerKey, KeyRotation.recipients(chain.state()))
         val forged = chain.emit(c, EventBody.KeyRotated(2, sealed))
         val state = chain.state()
         assertEquals(IgnoreReason.NOT_ALLOWED, state.ignored.single { it.id == forged.id }.reason)
@@ -175,7 +176,7 @@ class KeyRotationTest {
         val chain = newGroup()
         val k2 = GroupKey.generate()
         val state = chain.state()
-        val sealed = KeyRotation.seal(group, 2, k2, KeyRotation.recipients(state))
+        val sealed = KeyRotation.seal(a.publicKey, group, 2, k2, KeyRotation.recipients(state))
         val notRecorded = Event(1, a.publicKey, 6, mapOf(a.publicKey to 5), 6, EventBody.KeyRotated(2, sealed))
         val keyring = ring()
         assertFalse(KeyRotation.receive(state, notRecorded, b, keyring))
@@ -189,7 +190,7 @@ class KeyRotationTest {
         val afterLeave = chain.state()
         assertEquals(1L, afterLeave.epoch)
         val k2 = GroupKey.generate()
-        val sealed = KeyRotation.seal(group, 2, k2, KeyRotation.recipients(afterLeave))
+        val sealed = KeyRotation.seal(a.publicKey, group, 2, k2, KeyRotation.recipients(afterLeave))
         val rotation = chain.emit(a, EventBody.KeyRotated(2, sealed))
         val state = chain.state()
         assertEquals(rotation.id, state.epochStarts.getValue(2))
@@ -200,9 +201,25 @@ class KeyRotationTest {
     }
 
     @Test
+    fun sealedKeysCopiedIntoAnotherAdminsEventDoNotOpen() {
+        // Owner decision, 4 Nov 2026 (clarification C1): the sender's key is part of the HPKE context. Admin b copies the sealed keys
+        // that owner a made into b's own rotation event: replay accepts the event (b is an admin) but nobody can open the keys from it.
+        val chain = newGroup()
+        chain.emit(a, EventBody.AdminAdded(b.publicKey))
+        val k2 = GroupKey.generate()
+        val byA = KeyRotation.seal(a.publicKey, group, 2, k2, KeyRotation.recipients(chain.state()))
+        val copiedByB = chain.emit(b, EventBody.KeyRotated(2, byA))
+        val state = chain.state()
+        assertEquals(copiedByB.id, state.epochStarts.getValue(2), "replay accepts it: b is an admin")
+        val keyring = ring(1L to GroupKey.generate())
+        assertFalse(KeyRotation.receive(state, copiedByB, c, keyring))
+        assertNull(keyring[2L])
+    }
+
+    @Test
     fun theRecipientsAreExactlyTheCurrentMembersWithTheirEncryptionKeys() {
         val chain = newGroup()
-        chain.emit(a, EventBody.MemberRemoved(d.publicKey, 2, KeyRotation.seal(group, 2, GroupKey.generate(), KeyRotation.recipients(chain.state(), setOf(d.publicKey)))))
+        chain.emit(a, EventBody.MemberRemoved(d.publicKey, 2, KeyRotation.seal(a.publicKey, group, 2, GroupKey.generate(), KeyRotation.recipients(chain.state(), setOf(d.publicKey)))))
         val state = chain.state()
         val recipients = KeyRotation.recipients(state)
         assertEquals(mapOf<PublicKey, EncryptionKey>(a.publicKey to a.encryptionKey, b.publicKey to b.encryptionKey, c.publicKey to c.encryptionKey), recipients)

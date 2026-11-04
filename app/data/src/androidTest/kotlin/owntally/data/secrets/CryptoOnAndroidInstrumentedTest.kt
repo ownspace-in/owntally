@@ -52,9 +52,9 @@ class CryptoOnAndroidInstrumentedTest {
 
         // HPKE: seal a new epoch's key to b and open it.
         val next = GroupKey.generate()
-        val sealed = KeyRotation.seal(group, 2, next, mapOf(b.publicKey to b.encryptionKey))
-        assertEquals(next, KeyRotation.open(sealed.getValue(b.publicKey), b, group, 2))
-        assertNull(KeyRotation.open(sealed.getValue(b.publicKey), a, group, 2))
+        val sealed = KeyRotation.seal(a.publicKey, group, 2, next, mapOf(b.publicKey to b.encryptionKey))
+        assertEquals(next, KeyRotation.open(sealed.getValue(b.publicKey), b, a.publicKey, group, 2))
+        assertNull(KeyRotation.open(sealed.getValue(b.publicKey), a, a.publicKey, group, 2))
     }
 
     @Test

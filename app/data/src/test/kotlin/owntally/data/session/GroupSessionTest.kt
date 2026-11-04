@@ -257,7 +257,7 @@ class GroupSessionTest {
     private fun rotate(): GroupKey {
         val next = GroupKey.generate()
         env.secrets.saveGroupKey(group, 2, next) // the person who rotates already holds the new key
-        val sealed = owntally.crypto.KeyRotation.seal(group, 2, next, owntally.crypto.KeyRotation.recipients(session.view.value.state))
+        val sealed = owntally.crypto.KeyRotation.seal(session.view.value.me, group, 2, next, owntally.crypto.KeyRotation.recipients(session.view.value.state))
         assertAdded(session.append(EventBody.KeyRotated(2, sealed)))
         return next
     }
