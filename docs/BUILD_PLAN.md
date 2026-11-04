@@ -118,7 +118,7 @@ Acceptance: a user can create a group, add and delete expenses, and see correct 
 
 ### M4. Membership, roles and ownership (still local)
 
-Members, owner, admins, join requests, approve or decline, remove with the before and after screen, ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
+Members, owner, admins, join requests, approve or decline, remove with the before and after screen (and a list, for the remover and the owner, of the removed member's late entries that were cancelled so they can be re-entered), ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
 
 Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
 
