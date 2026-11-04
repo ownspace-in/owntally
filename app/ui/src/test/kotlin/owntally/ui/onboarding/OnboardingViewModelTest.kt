@@ -276,7 +276,11 @@ class OnboardingViewModelTest {
         v.toConfirm()
         v.answerRight()
         val text = v.s.toString()
-        // Whole words only: a phrase word such as "match" must not fail the test because the state has a field called "mismatch".
-        for (w in firstRun.last.words().filter { it.length >= 4 }) assertFalse(Regex("(?<![A-Za-z])${Regex.escape(w)}(?![A-Za-z])").containsMatchIn(text), "the state printed \"$w\"")
+        // A leak of the phrase is words side by side, written the ways a phrase could be printed. One word alone proves nothing: the
+        // word list has ordinary words (such as "phone" or "match") that are also names of fields in the state.
+        val words = firstRun.last.words()
+        fun leaks(t: String) = words.zipWithNext().flatMap { (x, y) -> listOf("$x $y", "$x,$y", "$x, $y", "\"$x\",\"$y\"", "$x\n$y", "$x$y") }.filter { it in t }
+        assertEquals(emptyList(), leaks(text), "two phrase words side by side were printed")
+        assertTrue(leaks("State(words=" + words.joinToString(", ") + ")").isNotEmpty(), "the check must find a planted phrase")
     }
 }

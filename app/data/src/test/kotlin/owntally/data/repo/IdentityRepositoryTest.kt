@@ -37,10 +37,13 @@ class IdentityRepositoryTest {
     fun thePhraseIsNeverStored() {
         val phrase = env.firstRun()
         val everythingStored = env.blobs.all().values.joinToString(" ") { String(it, Charsets.ISO_8859_1) } + env.settings.all().toString()
-        for (word in phrase.words().toSet()) {
-            // Whole words only: a phrase word such as "fault" must not fail the test because a stored setting is called "default_...".
-            if (word.length >= 5) assertFalse(Regex("(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])").containsMatchIn(everythingStored), "the word \"$word\" was stored")
-        }
+        // A leak of the phrase is words side by side, written the ways a phrase could be saved. One word alone proves nothing: the
+        // word list has ordinary words such as "phone" and "group" that are also the names of stored settings.
+        val words = phrase.words()
+        fun leaks(text: String) = words.zipWithNext().flatMap { (x, y) -> listOf("$x $y", "$x,$y", "$x, $y", "\"$x\",\"$y\"", "$x\n$y", "$x$y") }.filter { it in text }
+        assertEquals(emptyList(), leaks(everythingStored), "two phrase words side by side were stored")
+        assertTrue(leaks("saved: " + words.joinToString(" ")).isNotEmpty(), "the check must find a planted phrase")
+        assertTrue(leaks(words.joinToString(",")).isNotEmpty())
     }
 
     @Test
