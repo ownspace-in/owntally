@@ -206,3 +206,14 @@ Not checked: a real fingerprint (the emulator was used with a PIN only), and And
 ## T3.12 Hand back
 
 Checklist: `./gradlew test` and the debug build pass locally and in CI; the data survives an app restart on the emulator (create a group, add and delete expenses, kill and reopen the app); balances are correct offline; no network permission in the manifest except what later milestones add (none now); no secret in logs; docs match; interpretations listed in the pull request.
+
+### T3.12 result (hand back)
+
+- `./gradlew` tests for every module, the debug and release builds and `lintDebug` pass locally; CI passed on every earlier push of this branch (the last run is linked in the pull request).
+- **Restart check on the emulator (by hand):** with the debug test friends, three expenses were added, one deleted, the app killed and reopened: the Group screen was identical (balances me −₹3,800, Ben ₹8,600, Meera ₹12,400, total spent ₹25,800, the deleted entry struck through). The same persistence is also covered by the instrumented restart tests from T3.5.
+- **Balances are correct offline:** there is no network code (a test scans for it); the figures above match the core's balances worked out by hand.
+- **Permissions:** none requested by us. The merged manifest has only `USE_BIOMETRIC` and `USE_FINGERPRINT` from the biometric library, no `INTERNET`.
+- **No secret in logs:** `NoLoggingTest` and `NoPhraseLeaksTest` pass (no log calls, no saved state in the UI module); the lock stores only its mode.
+- **Interpretations for the owner to confirm:** (1) the "This changes balances" delete warning shows when a payment in the group involves someone on the expense; (2) How it works wording changed in two places (short list instead of "fewest", UPI wording); (3) the debug build's test-data button; (4) a phone without a screen lock makes the app lock stop asking instead of trapping the person; (5) amounts follow the phone's region, so two friends can see different grouping; (6) backup of the database includes this person's name and phone (settings table) and group ids in plain form, with the events encrypted: say if the settings should be excluded or kept out of the database.
+- **Known gaps:** one end-to-end test timeout was seen about once in five runs while the build host was busy and did not reproduce in six later runs (the test now prints the screen when it times out); a real fingerprint and Android 9 and 10 were not tried.
+
