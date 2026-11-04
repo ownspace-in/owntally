@@ -2,6 +2,7 @@ package owntally.ui.groups
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import owntally.model.Money
 import owntally.model.settlementPlan
@@ -102,12 +103,12 @@ class SettleUpModelTest {
     }
 
     @Test fun actionsAreOffUntilPaymentsCanBeRecorded() {
-        assertTrue(!SettleUpModel.ACTIONS_ENABLED, "I paid, Send reminder and Mark received stay off")
-        assertEquals("Recording payments arrives in a later update. Pay opens your share sheet with the amount and number; the other buttons wait for that update.", SettleUpModel.ACTIONS_NOTE)
+        assertTrue(!SettleUpModel.ACTIONS_ENABLED, "all four buttons stay off")
+        assertEquals("Recording payments arrives in a later update. Until then this is the list of who should pay whom.", SettleUpModel.ACTIONS_NOTE)
     }
 }
 
-class SettleTabAndPayTest {
+class SettleTabTest {
     @Test fun settleTabListsEveryReadableGroupSettledOrNot() {
         val w = TestWorld("Asha")
         val owed = w.sessions.session(w.newGroup("Owed"))
@@ -124,31 +125,6 @@ class SettleTabAndPayTest {
         assertEquals(listOf("A"), GroupsModels.settleTabCards(listOf(ok, lost)).map { it.name })
         assertEquals(emptyList(), GroupsModels.settleTabCards(emptyList()))
     }
-
-    @Test fun payTextNamesWhoHowMuchWhereAndTheNumber() {
-        val w = TestWorld("Asha")
-        val s = w.sessions.session(w.newGroup("Goa Trip"))
-        val me = s.view.value.me
-        val rohan = w.addFriend(s, "Rohan", 2_000_001)
-        w.expense(s, "Villa", w.rupees(900), rohan, me, rohan)
-        val row = SettleUpModel.build(s.view.value).payments.single()
-        assertEquals(PaymentRole.FROM_ME, row.role)
-        assertEquals("Pay Rohan ₹450 for Goa Trip. Phone: 98765 00001. Sent from OwnTally.", row.payText("Goa Trip"))
-    }
-
-    @Test fun payTextWithoutANumberLeavesItOut() {
-        val k = owntally.model.PublicKey(ByteArray(32))
-        val row = PaymentRow(k, k, Money(100_00), "₹100", "You → Sam", null, PaymentRole.FROM_ME, "You", "Sam")
-        assertEquals("Pay Sam ₹100 for G. Sent from OwnTally.", row.payText("G"))
-    }
-
-    @Test fun onlyMyOwnPaymentsCanBePaid() {
-        val k = owntally.model.PublicKey(ByteArray(32))
-        fun row(role: PaymentRole) = PaymentRow(k, k, Money(1), "₹0.01", "x", null, role, "A", "B")
-        assertTrue(row(PaymentRole.FROM_ME).canPay)
-        assertTrue(!row(PaymentRole.TO_ME).canPay)
-        assertTrue(!row(PaymentRole.BETWEEN_OTHERS).canPay)
-    }
 }
 
 class HowItWorksTest {
@@ -159,10 +135,16 @@ class HowItWorksTest {
         assertTrue(HowItWorks.note.body.contains("12-word recovery phrase"))
     }
 
+    @Test fun noUpiAnywhereAndNoOtherAppIsOpened() {
+        val all = (HowItWorks.cards.flatMap { listOf(it.title, it.body) } + HowItWorks.note.body + SettleUpModel.INTRO + SettleUpModel.ACTIONS_NOTE)
+            .joinToString(" ").lowercase()
+        assertFalse("upi" in all, "owner decision, 4 Nov 2026: no reference to UPI")
+        assertFalse("share sheet" in all, "the app opens no other app")
+    }
+
     @Test fun neverClaimsMoneyIsMovedOrCheckedByTheApp() {
         val text = (HowItWorks.cards.map { it.body } + HowItWorks.note.body).joinToString(" ").lowercase()
         assertTrue("never holds or moves money" in text)
-        assertTrue("opens your upi app" !in text, "the app does not open UPI apps yet")
         assertTrue("fewest" !in text, "the plan is a short list, not always the fewest (DESIGN.md)")
     }
 }

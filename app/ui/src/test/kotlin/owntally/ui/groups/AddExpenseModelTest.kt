@@ -198,6 +198,24 @@ class DeletePermissionTest {
         assertTrue(DeleteRules.changesSettledAmounts(s.view.value, s.view.value.state.expenses.getValue(e.id)))
     }
 
+    private fun withStatus(e: Expense, from: owntally.model.PublicKey, to: owntally.model.PublicKey, status: owntally.model.SettlementStatus): owntally.data.session.GroupView {
+        val id = owntally.model.EventId(me, 99)
+        val settlement = owntally.model.Settlement(id, from, to, Money(1_00), status, if (status == owntally.model.SettlementStatus.DISPUTED) owntally.model.DisputeReason.NOTHING_RECEIVED else null)
+        return s.view.value.let { it.copy(state = it.state.copy(settlements = mapOf(id to settlement))) }
+    }
+
+    @Test fun onlyAPaymentMarkedPaidOrReceivedWarns() {
+        val e = expense()
+        for (status in listOf(owntally.model.SettlementStatus.PAID_MARKED, owntally.model.SettlementStatus.CONFIRMED)) {
+            assertTrue(DeleteRules.changesSettledAmounts(withStatus(e, rohan, me, status), e), "$status warns")
+        }
+    }
+
+    @Test fun aDisputedPaymentDoesNotCountSoItDoesNotWarn() {
+        val e = expense()
+        assertFalse(DeleteRules.changesSettledAmounts(withStatus(e, rohan, me, owntally.model.SettlementStatus.DISPUTED), e))
+    }
+
     @Test fun aPaymentBetweenOtherPeopleDoesNotWarn() {
         val carol = w.addFriend(s, "Carol", 2_000_002)
         val r = w.expense(s, "Biscuits", w.rupees(10), rohan, rohan) as AddResult.Added

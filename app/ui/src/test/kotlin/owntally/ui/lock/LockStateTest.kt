@@ -74,6 +74,23 @@ class LockStateTest {
         assertFalse(s.backgrounded(t0).foregrounded(t0 + 100_000).locked)
     }
 
+    @Test fun whenThePhoneLocksTheAppLocksAtOnceWhateverTheGracePeriod() {
+        val open = LockState.start(LockMode.PHONE).unlocked()
+        assertTrue(open.phoneLocked().locked)
+        // even if the app was in front the whole time, with no "left the screen" signal first
+        assertTrue(open.backgrounded(t0).phoneLocked().foregrounded(t0 + 1).locked)
+    }
+
+    @Test fun thePhoneLockingDoesNothingWhenTheAppLockIsOff() {
+        assertFalse(LockState.start(LockMode.OFF).phoneLocked().locked)
+    }
+
+    @Test fun aLockedByThePhoneAppStaysLockedUntilUnlocked() {
+        val s = LockState.start(LockMode.PHONE).unlocked().phoneLocked().backgrounded(t0).foregrounded(t0 + 1)
+        assertTrue(s.locked)
+        assertFalse(s.unlocked().locked)
+    }
+
     @Test fun theGracePeriodIsThirtySeconds() {
         assertEquals(30_000L, LockState.GRACE_MILLIS)
     }

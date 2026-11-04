@@ -41,7 +41,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import owntally.ui.SecureWindow
 import owntally.ui.components.Glyph
 import owntally.ui.components.GlyphIcon
 import owntally.ui.components.Notice
@@ -65,6 +64,7 @@ class LockController(
     fun backgrounded() { state = state.backgrounded(nowMillis()) }
     fun foregrounded() { state = state.foregrounded(nowMillis()) }
     fun unlocked() { state = state.unlocked() }
+    fun phoneLocked() { state = state.phoneLocked() }
 
     /** Sets and stores the mode. */
     suspend fun setMode(mode: LockMode) {
@@ -88,7 +88,17 @@ fun LockHost(controller: LockController, content: @Composable () -> Unit) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    SecureWindow(LockGate.blockScreenshots(controller.state.mode))
+    // The phone locking (its screen going off) locks the app at once.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    DisposableEffect(context, controller) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, intent: android.content.Intent) = controller.phoneLocked()
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            context, receiver, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        onDispose { context.unregisterReceiver(receiver) }
+    }
     val availability = controller.authenticator.availability()
     if (LockGate.mustAsk(controller.state, availability)) LockScreen(controller) else content()
 }
@@ -154,7 +164,7 @@ fun SettingsScreen(controller: LockController, onBack: () -> Unit) {
         ModeRow("Off", "Anyone who opens your phone can open OwnTally.", model.mode == LockMode.OFF, true) { choose(LockMode.OFF) }
         Spacer(Modifier.height(10.dp))
         ModeRow(
-            "Phone lock", "Ask for your fingerprint or screen lock when OwnTally opens, and after 30 seconds away. Screenshots are blocked while it is on.",
+            "Phone lock", "Ask for your fingerprint or screen lock when OwnTally opens, when your phone locks, and after 30 seconds away.",
             model.mode == LockMode.PHONE, model.canChoosePhoneLock || model.mode == LockMode.PHONE,
         ) { choose(LockMode.PHONE) }
         val note = message ?: model.phoneNote

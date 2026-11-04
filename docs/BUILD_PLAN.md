@@ -21,7 +21,7 @@ Names marked "candidate" must be confirmed in M0 before depending on them.
 |---|---|
 | Language | Kotlin |
 | UI | Jetpack Compose, Material 3, light theme first, then dark |
-| Android | minSdk 26, targetSdk latest stable |
+| Android | minSdk 30 (Android 11; owner decision 4 Nov 2026), targetSdk latest stable |
 | Local storage | SQLite through Room (event log is one table, append only) |
 | Crypto | Google Tink or libsodium bindings (candidate): Ed25519 signatures, XChaCha20-Poly1305 or AES-256-GCM, X25519 key exchange, HKDF |
 | Recovery phrase | BIP39 word list, 12 words (candidate: a small Kotlin BIP39 library) |

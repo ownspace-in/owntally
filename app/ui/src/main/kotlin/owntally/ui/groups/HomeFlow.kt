@@ -304,9 +304,5 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
     }
     val s = session ?: return Box(Modifier.fillMaxSize())
     val view by s.view.collectAsStateWithLifecycle()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack, onShare = { text ->
-        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
-        try { context.startActivity(android.content.Intent.createChooser(send, null)) } catch (e: android.content.ActivityNotFoundException) { }
-    })
+    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack)
 }

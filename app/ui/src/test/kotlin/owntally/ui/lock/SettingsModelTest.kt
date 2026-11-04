@@ -51,26 +51,4 @@ class SettingsModelTest {
         assertFalse(LockGate.mustAsk(locked, PhoneLockAvailability.UNSUPPORTED))
         assertFalse(LockGate.mustAsk(LockState.start(LockMode.OFF), PhoneLockAvailability.AVAILABLE))
     }
-
-    @Test fun screenshotsAreBlockedWhileTheLockIsOnAndOnlyThen() {
-        assertTrue(LockGate.blockScreenshots(LockMode.PHONE))
-        assertFalse(LockGate.blockScreenshots(LockMode.OFF))
-    }
-}
-
-class FlagHoldsTest {
-    @Test fun theFlagStaysOnUntilEveryoneWhoAskedHasLetGo() {
-        val h = FlagHolds()
-        assertTrue(h.acquire(), "the first one turns it on")
-        assertFalse(h.acquire(), "already on")
-        assertFalse(h.release(), "one holder is left")
-        assertTrue(h.release(), "the last one turns it off")
-    }
-
-    @Test fun releasingMoreThanAcquiredDoesNotGoNegative() {
-        val h = FlagHolds()
-        assertFalse(h.release())
-        assertTrue(h.acquire())
-        assertTrue(h.release())
-    }
 }

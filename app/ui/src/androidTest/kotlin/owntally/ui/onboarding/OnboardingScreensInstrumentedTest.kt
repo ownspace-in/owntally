@@ -97,7 +97,7 @@ class OnboardingScreensInstrumentedTest {
         phrase.words().forEachIndexed { i, w -> rule.onNode(hasContentDescription("Word ${i + 1}: $w")).assertExists() }
         rule.onNodeWithText("I've written it down").assertIsEnabled()
         rule.waitForIdle()
-        assertTrue(secure(), "screenshots must be blocked while the words are shown")
+        assertFalse(secure(), "screenshots are allowed on every screen (owner decision, 4 Nov 2026)")
     }
 
     @Test
@@ -108,7 +108,7 @@ class OnboardingScreensInstrumentedTest {
         vm.state.value.positions.forEach { rule.onNodeWithText("Word $it").assertExists() }
         rule.onNodeWithText("Finish").assertIsNotEnabled()
         rule.waitForIdle()
-        assertTrue(secure())
+        assertFalse(secure())
         assertEquals(emptyList(), completed)
     }
 
@@ -132,7 +132,6 @@ class OnboardingScreensInstrumentedTest {
         rule.waitUntil(5000) { finished == 1 }
         assertEquals(1, completed.size)
         assertEquals(Triple(phrase, "Asha", "98765 43210"), completed.single())
-        rule.waitUntil(3000) { !secure() }
     }
 
     @Test
@@ -161,9 +160,8 @@ class OnboardingScreensInstrumentedTest {
         start()
         toPhrase()
         rule.waitForIdle()
-        assertTrue(secure())
+        assertFalse(secure())
         rule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-        rule.waitUntil(3000) { !secure() }
     }
 }
 

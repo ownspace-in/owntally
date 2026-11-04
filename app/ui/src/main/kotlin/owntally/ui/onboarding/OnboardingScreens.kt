@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import owntally.crypto.RecoveryPhrase
-import owntally.ui.SecureWindow
 import owntally.ui.components.CenteredNote
 import owntally.ui.components.Notice
 import owntally.ui.components.OwnTallyField
@@ -247,7 +246,6 @@ fun ConfirmScreen(state: OnboardingState, onAnswer: (Int, String) -> Unit, onFin
 @Composable
 fun OnboardingFlow(viewModel: OnboardingViewModel, onFinished: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    SecureWindow(enabled = state.step == Step.PHRASE || state.step == Step.CONFIRM)
     BackHandler(enabled = state.step == Step.PHRASE || state.step == Step.CONFIRM) { viewModel.back() }
     LaunchedEffect(state.step) { if (state.step == Step.DONE) onFinished() }
     when (state.step) {

@@ -12,7 +12,7 @@ UI mockups: see the design/ folder (screens to be exported there).
 | Third party (relay) allowed? | Off by default. Admin can enable a relay per group (see Relay). |
 | Google Play Services? | Optional. Use Nearby Connections when available, fall back to same-Wi-Fi discovery. |
 | Encryption | Signed events, group-key encryption, encrypted transport (see Encryption). |
-| Minimum Android | 8 (API 26). |
+| Minimum Android | 11 (API 30). Owner decision, 4 Nov 2026: Android 10 and older are not supported. |
 | Backup / recovery | One-time recovery phrase at first run (see Recovery). No backup files. |
 | Who can add expenses? | Anyone in the group. |
 | Edit expenses? | Not allowed. To fix a mistake, delete and re-add. |
@@ -94,7 +94,8 @@ Consequences and rules:
 - The ticket contains the group key: short expiry, single use, host approval.
 - No forward secrecy for stored events in v1 (MLS or a ratchet considered too heavy).
 - Metadata is visible to a relay or network observers.
-- Optional app lock: the phone's own fingerprint or screen lock (no PIN of our own; owner decision, 4 Nov 2026).
+- Optional app lock: the phone's own fingerprint or screen lock (no PIN of our own; owner decision, 4 Nov 2026). It locks when the phone locks and after 30 seconds away.
+- Screenshots are allowed on every screen, the recovery phrase included (owner decision, 4 Nov 2026). A screenshot of the phrase can be copied by photo backups and other apps.
 
 ## Resources (estimates)
 
@@ -109,7 +110,7 @@ The recovery phrase restores your identity, not your data. Expense data is re-sy
 First run:
 1. The app creates the master seed and shows a 12-word recovery phrase (BIP39-style word list), derived from it.
 2. The user must write it down. The app then asks for 3 of the words to confirm before continuing.
-3. The phrase is never stored by the app after this screen, never sent anywhere, and screenshots are blocked on that screen.
+3. The phrase is never stored by the app after this screen, never sent anywhere. Screenshots are not blocked on that screen (owner decision, 4 Nov 2026).
 
 Restoring on a new phone:
 1. Enter the 12 words. The master seed and all per-group keypairs are re-derived (group keys come from numbered slots of the seed; `MemberJoined` records which slot a group used).
@@ -127,10 +128,10 @@ Limits:
 - Payments are recorded one by one (no frozen "settlement round"). Each suggested payment is marked "I paid" and "Received" separately. The group is settled when all balances reach zero.
 - The plan updates when an expense is added or deleted. Payments already marked stay in the log and are counted.
 
-- A member's profile is a name and a phone number. `MemberJoined` carries them, and `ProfileUpdated` lets the member change either later. No UPI id, email or other data is stored.
+- A member's profile is a name and a phone number. `MemberJoined` carries them, and `ProfileUpdated` lets the member change either later. No payment id, email or other data is stored.
 - The phone number is shown to group members, so the join screen says so. Using a different number or name per group is allowed.
 - The phone number is unverified. It identifies nobody on its own: identity is the key.
-- Settle up shows who pays whom and how much. A UPI payment link needs a UPI id, which we do not store, so the app cannot pre-fill a payment. Instead the debtor taps "Pay Rohan ₹1,850", which shows the phone number with copy and call buttons and opens their UPI app chooser, and pays to that number in their own UPI app.
+- Settle up shows who pays whom and how much. OwnTally opens no other app and refers to no payment service (owner decision, 4 Nov 2026): the person pays outside the app, however they like, and marks it there.
 - The debtor taps "I paid" and the creditor taps "Received". Until then the settlement is shown as unconfirmed, but it counts toward the balances from the moment it is recorded (owner decision, 3 Nov 2026); a dispute stops it counting. `SettlementRecorded` stores the amount, from, to, and the confirmation state.
 - Cash is always an option.
 - Reminders: the creditor can send a message through the share sheet.

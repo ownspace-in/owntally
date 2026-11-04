@@ -74,7 +74,7 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("+91 98765 43210").performTextInput("98765 43210")
             rule.onNodeWithText("Continue").performClick()
 
-            // Phrase: secure. Read the twelve words from the screen like a person would.
+            // Phrase: not secure either. Read the twelve words from the screen like a person would.
             rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Save your recovery phrase") == 1 }
             val words = (1..12).map { n ->
                 val d = rule.onNode(hasContentDescription("Word $n: ", substring = true)).fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single()
@@ -82,12 +82,12 @@ class FirstRunEndToEndInstrumentedTest {
             }
             assertEquals(12, words.size)
             rule.waitForIdle()
-            assertTrue(secure(), "the real window is secure while the words are shown")
+            assertTrue(!secure(), "screenshots are allowed on every screen (owner decision, 4 Nov 2026)")
             rule.onNodeWithText("I've written it down").performClick()
 
-            // Confirm: secure; wrong first, then right.
+            // Confirm: wrong first, then right.
             rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Check you wrote it down") == 1 }
-            assertTrue(secure())
+            assertTrue(!secure())
             val positions = (1..12).filter { rule.onAllNodesWithTextCount("Word $it") == 1 }
             assertEquals(3, positions.size)
             positions.forEach { rule.onNodeWithText("Type word $it").performTextInput("qqqq") }
@@ -97,9 +97,8 @@ class FirstRunEndToEndInstrumentedTest {
             positions.forEach { pos -> rule.onAllNodesWithText("qqqq")[0].performTextReplacement(words[pos - 1]) }
             rule.onNodeWithText("Finish").performClick()
 
-            // Done: on the Groups screen, no longer secure, everything saved.
+            // Done: on the Groups screen, everything saved.
             rule.waitUntil(15_000) { rule.onAllNodesWithTextCount("New group") == 1 }
-            rule.waitUntil(3_000) { !secure() }
             assertEquals(IdentityState.READY, container().identity.state())
             assertEquals("Asha", container().identity.defaultProfile()?.name)
             assertEquals("98765 43210", container().identity.defaultProfile()?.phone)
@@ -147,7 +146,7 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("₹2,850").assertExists()
             rule.onNodeWithText("Ben (test) → Meera (test)").assertExists()
             rule.onNodeWithText("₹9,550").assertExists()
-            rule.onNodeWithText("Pay").assertIsEnabled()
+            rule.onNodeWithText("Pay").assertIsNotEnabled()
             rule.onNodeWithText("I paid").assertIsNotEnabled()
             rule.onNodeWithText(SETTLE_NOTE).assertExists()
             rule.onNode(hasContentDescription("Back")).performClick()
@@ -177,7 +176,7 @@ class FirstRunEndToEndInstrumentedTest {
     }
 
     private companion object {
-        const val SETTLE_NOTE = "Recording payments arrives in a later update. Pay opens your share sheet with the amount and number; the other buttons wait for that update."
+        const val SETTLE_NOTE = "Recording payments arrives in a later update. Until then this is the list of who should pay whom."
     }
 
     private fun container() = (context as OwnTallyApplication).container

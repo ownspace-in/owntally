@@ -64,18 +64,8 @@ private fun OffButton(text: String, modifier: Modifier, filled: Boolean) {
     ) { Text(text, style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextHint) }
 }
 
-/** Pay: opens the share sheet with the payment text. It moves no money; the person pays in their own UPI app or with cash. */
 @Composable
-private fun PayButton(text: String, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier.height(48.dp).border(BorderStroke(1.dp, OwnTallyColors.Green), RoundedCornerShape(24.dp)).clickable(onClick = onClick)
-            .semantics(mergeDescendants = true) { role = Role.Button },
-        contentAlignment = Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.Green) }
-}
-
-@Composable
-fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onShare: (String) -> Unit = {}) {
+fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp, 8.dp, 20.dp, 24.dp)) {
         item {
             BackHeader("Settle up", model.subtitle, onBack)
@@ -106,8 +96,7 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onShare: (String) -
                 if (labels != null) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (p.canPay) PayButton(labels.first, Modifier.weight(1f)) { onShare(p.payText(model.groupName)) }
-                        else OffButton(labels.first, Modifier.weight(1f), filled = false)
+                        OffButton(labels.first, Modifier.weight(1f), filled = false)
                         OffButton(labels.second, Modifier.weight(1f), filled = true)
                     }
                 }

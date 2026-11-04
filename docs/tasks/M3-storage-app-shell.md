@@ -21,7 +21,7 @@ This file is a draft: **nothing below is built until the owner approves it** (se
 
 ## Decisions
 
-Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Material 3, minSdk 26, Room, the Android Keystore for keys, optional app lock, screenshots blocked on the phrase screen, no network code in M3.
+Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Material 3, minSdk 30 (changed 4 Nov 2026, see decision 17), Room, the Android Keystore for keys, optional app lock, screenshots blocked on the phrase screen, no network code in M3.
 
 **Answered by the owner on 3 Nov 2026:**
 1. **Application id: `in.ownspace.owntally`.** Permanent once published; the invite site's `assetlinks.json` is tied to it.
@@ -30,14 +30,23 @@ Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Materi
 4. **Bottom bar: all four tabs as in the mockup** (Groups, Settle, Sync, About). The Sync tab is shown but disabled: tapping it opens a short placeholder ("Syncing with friends arrives in a later update. For now your data is stored only on this phone.") and nothing else. It becomes the real sync status screen (mockup 05) in M5 to M7.
 
 **Answered by the owner on 4 Nov 2026** (each question asked with no recommended option):
-5. **App lock:** only Off and the phone lock (no own PIN). Locks 30 seconds after the app leaves the screen; always asks on a fresh start; screenshots and the recent-apps preview are blocked on every screen while the lock is on. Turning it on or off asks for the phone lock first.
+5. **App lock:** only Off and the phone lock (no own PIN). Locks 30 seconds after the app leaves the screen, and at once when the phone locks (item 16); always asks on a fresh start. (Screenshots blocked while on: dropped, item 13.) Turning it on or off asks for the phone lock first.
 6. **Settings:** a separate Settings screen opened from the About tab.
 7. **Settle tab:** lists every group that can be opened, settled or not; each opens that group's Settle up.
 8. **Settle up buttons:** Pay opens the share sheet with who, how much and the number. I paid, Send reminder and Mark received stay switched off until payments can be recorded.
 9. **Dependency wiring:** by hand in one file (as built).
 10. **Navigation:** our own small screen stack, not Jetpack Navigation (changed from the default).
 11. **Android backup:** on for the database only (changed from the default). Keys are not in it, so a restored database shows its groups as "waiting for the group key".
-12. **Number style:** follows the phone's language and region (changed from the default).
+12. **Number style:** follows the phone's language and region (changed from the default). Confirmed again on 4 Nov 2026.
+
+**Second round, 4 Nov 2026** (the owner changed or confirmed these while reviewing the finished milestone):
+13. **Screenshots are allowed on every screen, the recovery phrase included.** The secure-window code was removed. DESIGN.md is changed.
+14. **Delete warning "This changes balances"** shows only when a payment marked paid or received involves someone on that expense (a disputed payment does not count).
+15. **Backup contents:** kept as is (database including the settings table).
+16. **App lock:** locks at once when the phone locks (its screen goes off), and opens again with the phone's fingerprint or screen lock. If the phone has no screen lock any more the app cannot ask and does not (as built; the owner's answer did not cover this case, so it is still as built).
+17. **Minimum Android is 11 (API 30).** Android 10 and older are not supported; the biometric code no longer has older-version branches.
+18. **No reference to UPI anywhere, and the app opens no other app.** So the Pay share sheet was removed: all four Settle up buttons are switched off. How it works card 4 and the Settle up intro say "pay however you like, outside the app". Card 3 (joining and syncing) is kept as is.
+19. **Debug test-data button:** stays in debug builds only; both debug and release builds must build (they do).
 
 **Defaults the builder proposes (change any of them):**
 1. **Dependency wiring by hand**, no Hilt. The app is small; Hilt adds annotation processing and build time for little gain. (BUILD_PLAN allows either.)
@@ -106,7 +115,7 @@ Done when: tests show that adding and deleting expenses gives the balances of `c
 
 ## T3.7 First run: Welcome and recovery phrase
 
-Do: Welcome (name and phone), phrase screen (12 numbered words, screenshots blocked), confirm screen (asks for 3 words, cannot be skipped), then the groups list. The seed is created, wrapped and stored; the phrase is dropped from memory.
+Do: Welcome (name and phone), phrase screen (12 numbered words; screenshots were blocked here at first, allowed since 4 Nov 2026, decision 13), confirm screen (asks for 3 words, cannot be skipped), then the groups list. The seed is created, wrapped and stored; the phrase is dropped from memory.
 
 Done when: tests cover the confirm rules (wrong word, right words, cannot continue without confirming); the screens have the screenshot block set (checked on the emulator); the phrase is not in logs, saved state or the database.
 
@@ -185,13 +194,13 @@ Settle up and How it works are done and checked on the emulator. JVM tests, the 
 
 Off by default. Two modes, set in Settings (opened from About): Off, or **Phone lock** (owner decision, 4 Nov 2026; the own-PIN mode was dropped, so no PIN, salt, hash or try counter exists in the code).
 
-- Locks 30 seconds after the app leaves the screen (so a trip to a UPI app and back does not ask); always asks on a fresh start. While the lock is on, every screen blocks screenshots and the recent-apps preview.
+- Locks 30 seconds after the app leaves the screen (so a quick trip to another app and back does not ask), and at once when the phone locks (its screen goes off); always asks on a fresh start. Screenshots are allowed (decision 13).
 - Turning the lock on or off shows the phone's lock first (so it is proven to work before it is relied on).
 - The phone's lock is Android's `BiometricPrompt`: a strong fingerprint or face, or the screen lock PIN, pattern or password on Android 11 and newer; the screen lock on Android 10; a fingerprint on Android 9 and older (Android cannot combine the two there). We store only the chosen mode; Android applies its own wrong-try limits.
 - If the phone no longer has any lock (the person removed their screen lock), the app lock cannot protect anything, so it stops asking instead of trapping the person out of their own data; Settings says so.
 - Adds the normal `USE_BIOMETRIC` permission through the biometric library.
 
-Done when: JVM tests for the state machine, the Settings choices, the stored mode and the shared screenshot flag; the real prompt checked on the emulator.
+Done when: JVM tests for the state machine, the Settings choices and the stored mode; the real prompt checked on the emulator.
 
 ### T3.11 result
 
@@ -216,4 +225,10 @@ Checklist: `./gradlew test` and the debug build pass locally and in CI; the data
 - **No secret in logs:** `NoLoggingTest` and `NoPhraseLeaksTest` pass (no log calls, no saved state in the UI module); the lock stores only its mode.
 - **Interpretations for the owner to confirm:** (1) the "This changes balances" delete warning shows when a payment in the group involves someone on the expense; (2) How it works wording changed in two places (short list instead of "fewest", UPI wording); (3) the debug build's test-data button; (4) a phone without a screen lock makes the app lock stop asking instead of trapping the person; (5) amounts follow the phone's region, so two friends can see different grouping; (6) backup of the database includes this person's name and phone (settings table) and group ids in plain form, with the events encrypted: say if the settings should be excluded or kept out of the database.
 - **Known gaps:** one end-to-end test timeout was seen about once in five runs while the build host was busy and did not reproduce in six later runs (the test now prints the screen when it times out); a real fingerprint and Android 9 and 10 were not tried.
+
+### Changes after review, 4 Nov 2026
+
+Rebased onto `main` (PRs #5 to #7 were merged). Then the owner's second-round answers above (items 13 to 19) were applied: screenshot blocking removed (and its tests now assert the opposite), delete warning narrowed to marked or confirmed payments, the app locks when the phone locks, minSdk 30, UPI and the share sheet removed. Older result sections above describe what was true when they were written; where they differ, this section and items 13 to 19 win. T3.10 result: Pay no longer opens a share sheet. T3.12 interpretations 1 to 3 and 5 are now decided; number 4 (backup) is kept as is.
+
+Checked by hand on the emulator after these changes: with the lock on and a real device PIN, a fresh start asks; after the phone's screen went off and on again a few seconds later the app was locked; a screen capture of the open app is a normal picture (not black). Unit tests, emulator tests, debug and release builds and lint pass.
 

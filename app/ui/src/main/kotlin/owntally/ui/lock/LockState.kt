@@ -29,6 +29,9 @@ data class LockState(val mode: LockMode, val locked: Boolean, val backgroundedAt
         return copy(locked = locked || (mode != LockMode.OFF && tooLong), backgroundedAt = null)
     }
 
+    /** The phone itself locked (its screen went off). The app locks at once, with no grace period (owner decision, 4 Nov 2026). */
+    fun phoneLocked() = if (mode == LockMode.OFF) this else copy(locked = true, backgroundedAt = null)
+
     /** The person chose a mode on the Settings screen (after proving it works, when turning it on). Turning it off opens the app. */
     fun withMode(newMode: LockMode) = copy(mode = newMode, locked = locked && newMode != LockMode.OFF, backgroundedAt = null)
 

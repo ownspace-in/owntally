@@ -48,19 +48,4 @@ object LockGate {
     /** Show the lock screen only if the app is locked and the phone can really check. Otherwise the lock cannot protect anything and must not trap the person. */
     fun mustAsk(state: LockState, availability: PhoneLockAvailability) = state.locked && availability == PhoneLockAvailability.AVAILABLE
 
-    fun blockScreenshots(mode: LockMode) = mode != LockMode.OFF
-}
-
-/** Counts who wants the window kept secure, so the flag goes off only when the last one lets go. */
-class FlagHolds {
-    private var count = 0
-
-    /** True if this is the first holder (the flag must now be turned on). */
-    fun acquire(): Boolean = ++count == 1
-
-    /** True if this was the last holder (the flag must now be turned off). */
-    fun release(): Boolean {
-        if (count == 0) return false
-        return --count == 0
-    }
 }

@@ -330,12 +330,15 @@ object DeleteRules {
     }
 
     /**
-     * True when someone on this expense (who paid or shares it) is in a payment already written for the group, so deleting it
-     * moves amounts that people may have settled by.
+     * True when someone on this expense (who paid or shares it) is in a payment that has been marked paid or received, so deleting
+     * it moves amounts that people have settled by (owner decision, 4 Nov 2026). A disputed payment no longer counts, so it does not warn.
      */
     fun changesSettledAmounts(view: GroupView, e: Expense): Boolean {
         val involved = e.split.participantKeys + e.paidBy
-        return view.state.settlements.values.any { it.from in involved || it.to in involved }
+        return view.state.settlements.values.any {
+            (it.status == owntally.model.SettlementStatus.PAID_MARKED || it.status == owntally.model.SettlementStatus.CONFIRMED) &&
+                (it.from in involved || it.to in involved)
+        }
     }
 }
 
@@ -350,24 +353,15 @@ data class PaymentRow(
     /** The phone number of the person on the other side (the one I pay, or the one who pays me), as they entered it. */
     val phone: String?,
     val role: PaymentRole,
-    val fromName: String,
-    val toName: String,
-) {
-    /** Only a payment I have to make can be paid from here. */
-    val canPay: Boolean get() = role == PaymentRole.FROM_ME
-
-    /** The words handed to the share sheet when I tap Pay: who to pay, how much, and the number they gave. */
-    fun payText(groupName: String): String =
-        "Pay $toName $amount for $groupName." + (phone?.let { " Phone: $it." } ?: "") + " Sent from OwnTally."
-}
+)
 
 /** Settle up for the whole group: the core's plan, row for row. */
 data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, val footer: String, val groupName: String = "") {
     companion object {
-        const val INTRO = "A short list of payments that clear everyone. Pay in any UPI app or cash. OwnTally never moves or checks money."
+        const val INTRO = "A short list of payments that clear everyone. Pay however you like, outside OwnTally, then mark it here. OwnTally never moves or checks money."
         /** Marking payments as paid or received is not built yet, so those buttons are shown switched off. */
         const val ACTIONS_ENABLED = false
-        const val ACTIONS_NOTE = "Recording payments arrives in a later update. Pay opens your share sheet with the amount and number; the other buttons wait for that update."
+        const val ACTIONS_NOTE = "Recording payments arrives in a later update. Until then this is the list of who should pay whom."
 
         fun build(view: GroupView): SettleUpModel {
             fun name(k: PublicKey) = if (k == view.me) "You" else view.state.members[k]?.name?.takeIf { it.isNotBlank() } ?: "Someone"
@@ -381,7 +375,6 @@ data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, v
                 PaymentRow(
                     p.from, p.to, p.amount, MoneyFormat.format(p.amount), "${name(p.from)} → ${name(p.to)}",
                     if (role == PaymentRole.BETWEEN_OTHERS) view.state.members[p.to]?.phone else view.state.members[other]?.phone, role,
-                    name(p.from), name(p.to),
                 )
             }
             val inPlan = view.plan.flatMap { listOf(it.from, it.to) }.toSet()
@@ -405,7 +398,7 @@ object HowItWorks {
         InfoCard("1", "Everything lives on your phone", "Groups and expenses are saved in a local database. The app works fully in airplane mode."),
         InfoCard("2", "Every entry is a signed note", "Entries are never edited. A mistake is deleted and added again, so two phones can never conflict."),
         InfoCard("3", "Friends swap notes directly", "Join with a shared link or QR code, then sync nearby or over the internet. Each phone adds the notes it is missing, then works out the same balances."),
-        InfoCard("4", "Settling is a handoff", "OwnTally suggests a short list of payments, and you pay in any UPI app or cash. It never holds or moves money."),
+        InfoCard("4", "Settling is a handoff", "OwnTally suggests a short list of payments. You pay however you like, outside the app. It never holds or moves money."),
     )
     val note = InfoCard("", "Worth knowing", "If you lose your phone, your data goes with it unless you saved your 12-word recovery phrase. Other members can then send your groups back to you.")
 }
