@@ -21,7 +21,7 @@ Names marked "candidate" must be confirmed in M0 before depending on them.
 |---|---|
 | Language | Kotlin |
 | UI | Jetpack Compose, Material 3, light theme first, then dark |
-| Android | minSdk 26, targetSdk latest stable |
+| Android | minSdk 30 (Android 11; owner decision 4 Nov 2026), targetSdk latest stable |
 | Local storage | SQLite through Room (event log is one table, append only) |
 | Crypto | Google Tink or libsodium bindings (candidate): Ed25519 signatures, XChaCha20-Poly1305 or AES-256-GCM, X25519 key exchange, HKDF |
 | Recovery phrase | BIP39 word list, 12 words (candidate: a small Kotlin BIP39 library) |
@@ -118,9 +118,9 @@ Acceptance: a user can create a group, add and delete expenses, and see correct 
 
 ### M4. Membership, roles and ownership (still local)
 
-Members, owner, admins, join requests, approve or decline, remove with the before and after screen, ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
+Members, owner, admins, join requests, approve (the admin sets the member's name, which must be unique in the group) or decline, remove with the before and after screen (and a list, for the remover and the owner, of the removed member's late entries that were cancelled so they can be re-entered), ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
 
-Acceptance: every rule in DESIGN.md "Flows" has a test, including: only creator or admin can delete, only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
+Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
 
 ### M5. Sync protocol over a fake transport
 
@@ -136,9 +136,9 @@ Acceptance (two real phones): invite by QR, scan, approve, history arrives, add 
 
 ### M7. Internet sync and relay setting
 
-Internet transport (as chosen in M0), per-group relay switch (admin only), default `https://relay.ownspace.in`, custom address field, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
+Internet transport (as chosen in M0), the relay as last resort used automatically (no setting, no admin switch; owner decision 4 Nov 2026) at `https://relay.ownspace.in`, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (Nearby only when asked, 15 s; internet chain staggered: Iroh first, the WebSocket relay joins after 3 s if Iroh has not connected, first to connect wins; connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
 
-Acceptance: two phones on different mobile networks sync, the status shows the right chip, and turning the relay off makes relay-only pairs show "Needs relay" instead of failing silently.
+Acceptance: two phones on different mobile networks sync, the status shows the right chip, and a pair that can reach each other only through the relay shows "Via relay", and when nothing connects the status says so instead of failing silently.
 
 ### M8. Settling
 

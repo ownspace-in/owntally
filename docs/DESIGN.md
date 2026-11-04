@@ -9,14 +9,14 @@ UI mockups: see the design/ folder (screens to be exported there).
 |---|---|
 | Both phones online at the same moment to sync? | Yes, acceptable. No mailbox. |
 | License | MIT. |
-| Third party (relay) allowed? | Off by default. Admin can enable a relay per group (see Relay). |
+| Third party (relay) allowed? | Yes, as the last resort only: the app uses our relay when a direct connection fails. No setting and no admin switch; the app decides (owner decision, 4 Nov 2026, see Relay). |
 | Google Play Services? | Optional. Use Nearby Connections when available, fall back to same-Wi-Fi discovery. |
 | Encryption | Signed events, group-key encryption, encrypted transport (see Encryption). |
-| Minimum Android | 8 (API 26). |
+| Minimum Android | 11 (API 30). Owner decision, 4 Nov 2026: Android 10 and older are not supported. |
 | Backup / recovery | One-time recovery phrase at first run (see Recovery). No backup files. |
 | Who can add expenses? | Anyone in the group. |
 | Edit expenses? | Not allowed. To fix a mistake, delete and re-add. |
-| Delete expenses? | Creator, or an admin/owner. Entry stays in history, struck through, excluded from balances. Warn if it changes settled amounts. |
+| Delete expenses? | The creator, or the group owner (not admins; owner decision, 4 Nov 2026). Entry stays in history, struck through, excluded from balances. Warn if it changes settled amounts. |
 | Remove members? | Owner or any admin. Removal records which of the member's entries were seen; newer ones are ignored. |
 | Settlement plan | Simple matching: at most members minus 1 payments, not always the absolute minimum. |
 | WebSocket relay language | Go. |
@@ -60,22 +60,23 @@ Safety:
 1. Same room: Nearby Connections (Bluetooth / Wi-Fi / Wi-Fi Direct), no internet needed.
 2. Same network or IPv6: direct connection.
 3. Different networks or cities: direct internet connection via hole punching. Needs STUN for discovery, which is a third party. Expect roughly 60 to 80 percent of phone pairs to connect. Carrier-grade NAT blocks the rest.
-4. Fallback: if unreachable, tell the user to meet up or enable a relay for that group.
+4. Fallback: if unreachable, the app uses our relay by itself (owner decision, 4 Nov 2026); if that fails too, tell the user to meet up or try again later.
 
-**Owner decision, 2 Nov 2026 (supersedes the order above; the other sections below are not yet updated to match):** the app tries transports in this order: 1. Nearby (same room, no server), 2. the WebSocket relay at `wss://relay.ownspace.in/ws`, 3. Iroh (direct, with our Iroh relay at `relay.ownspace.in`). All three stay behind the `Transport` interface. Consequences still to settle with the owner:
+**Owner decision, 4 Nov 2026 (supersedes the 2 Nov decision below): the relay is the last resort, as in the Relay section. The app decides; there is no setting and no admin switch. The order becomes: 1. Nearby (same room), 2. direct connection (Iroh, with its hole punching), 3. our relay only if direct fails. **Final order (owner, 4 Nov 2026): 1. Nearby, 2. Iroh (direct first, with its own relay as help and fallback), 3. the WebSocket relay as the last resort.** All three ways stay in the app behind the `Transport` interface: Nearby, Iroh (direct, with our Iroh relay as its own fallback) and the WebSocket relay (owner decision, 4 Nov 2026: keep all three). Timeouts (owner decision, 4 Nov 2026): **Nearby runs only when the person asks for it** (the Nearby screen), with its own wait of 15 s; the internet chain is **staggered**: Iroh starts first, and if it has not connected after 3 s the WebSocket relay starts as well, both keep trying and the first to connect wins (the other is cancelled), with an overall connect wait of 15 s, a stall wait of 30 s, and retries after 1, 5 and 30 minutes. The two numbers the owner did not state (Nearby 15 s, overall 15 s) are taken from BUILD_PLAN. The 2 Nov text below is kept for history.**
+
+**Owner decision, 2 Nov 2026 (superseded by the 4 Nov decision above; it supersedes the order above; the other sections below are not yet updated to match):** the app tries transports in this order: 1. Nearby (same room, no server), 2. the WebSocket relay at `wss://relay.ownspace.in/ws`, 3. Iroh (direct, with our Iroh relay at `relay.ownspace.in`). All three stay behind the `Transport` interface. Consequences still to settle with the owner:
 - The WebSocket relay carries all data every time and never forms a direct link, so the "Relay" section's rule that nothing goes through a relay unless a group admin enables it needs rewording (or the relay becomes the default for internet sync).
 - The relay then sees every user's IP address, timing and data volume on every sync, not only for users who cannot connect directly.
 - Server load is higher than with Iroh first; the nginx limits and rate cap in `relay/iroh-relay/` and `relay/ws-relay/` matter more.
-- Each transport that fails costs its timeout before the next one is tried; the timeouts are not chosen yet.
+- The internet transports are staggered, not tried one after the other (see the timeouts above), so a blocked Iroh costs about 3 s before the relay is also tried. The relay is still the last resort in the sense that it only starts when Iroh has not connected within 3 s.
 
 ## Relay
 
 A relay forwards encrypted bytes between two phones that cannot reach each other directly (for example, both on carrier-grade NAT). It stores nothing and cannot read content.
 
-- Off by default. Nothing goes through a relay unless an admin enables it for the group.
-- When a direct link fails, the app says so and offers: enable relay for this group, or meet up.
-- Setting is per group and set by an admin, so all members use the same relay.
-- Server choice: the default is our own relay at `https://relay.ownspace.in`; the admin can enter a different relay address. Relay is still off until an admin enables it.
+- Last resort (owner decision, 4 Nov 2026): the app tries a direct link first and uses our relay only when that fails. Nothing is switched on or off by an admin or by anyone else; the app decides.
+- When even the relay cannot connect, the app says so and offers: meet up (Nearby) or try again later.
+- All members use the same relay: our own at `https://relay.ownspace.in`. (A custom relay address, and the "Hosting your own relay" steps below, are not part of the app for now; kept for later.)
 - Both phones connect outbound to the relay, which forwards by public id. Hole punching runs in parallel; if it works, traffic moves to the direct link and the relay drops out.
 - The relay sees public ids, IP addresses, timing and data volume. It never sees content.
 - A phone is a poor relay: it needs a public address and Android sleeps background apps. Recommend a small VPS, a home Raspberry Pi, or the public relay. Phones act as the connection point only for same-room sync.
@@ -94,7 +95,8 @@ Consequences and rules:
 - The ticket contains the group key: short expiry, single use, host approval.
 - No forward secrecy for stored events in v1 (MLS or a ratchet considered too heavy).
 - Metadata is visible to a relay or network observers.
-- Optional app lock (fingerprint or PIN).
+- Optional app lock: the phone's own fingerprint or screen lock (no PIN of our own; owner decision, 4 Nov 2026). It locks when the phone locks and after 30 seconds away; if the phone has no screen lock, the app stays locked until one is set. The app covers its own screen whenever it is not in front, so the recent-apps preview shows nothing.
+- Screenshots are allowed on every screen, the recovery phrase included (owner decision, 4 Nov 2026). A screenshot of the phrase can be copied by photo backups and other apps.
 
 ## Resources (estimates)
 
@@ -109,7 +111,7 @@ The recovery phrase restores your identity, not your data. Expense data is re-sy
 First run:
 1. The app creates the master seed and shows a 12-word recovery phrase (BIP39-style word list), derived from it.
 2. The user must write it down. The app then asks for 3 of the words to confirm before continuing.
-3. The phrase is never stored by the app after this screen, never sent anywhere, and screenshots are blocked on that screen.
+3. The phrase is never stored by the app after this screen, never sent anywhere. Screenshots are not blocked on that screen (owner decision, 4 Nov 2026).
 
 Restoring on a new phone:
 1. Enter the 12 words. The master seed and all per-group keypairs are re-derived (group keys come from numbered slots of the seed; `MemberJoined` records which slot a group used).
@@ -127,10 +129,11 @@ Limits:
 - Payments are recorded one by one (no frozen "settlement round"). Each suggested payment is marked "I paid" and "Received" separately. The group is settled when all balances reach zero.
 - The plan updates when an expense is added or deleted. Payments already marked stay in the log and are counted.
 
-- A member's profile is a name and a phone number. `MemberJoined` carries them, and `ProfileUpdated` lets the member change either later. No UPI id, email or other data is stored.
+- A member's profile is a name and a phone number. `MemberJoined` carries them, and `ProfileUpdated` lets the member change either later. No payment id, email or other data is stored.
+- **Names are unique inside a group** (owner decision, 4 Nov 2026): "Rohan" and "rohan" cannot both be members, "Rohan V" can; a removed member's name stays taken. The admin who approves a join sets the name (for example "Rohan V") and the joiner is told which name they were given. The same person can use different names in different groups. Phone numbers may be typed with `-`, `(`, `)` and `.` as well as digits, `+` and spaces.
 - The phone number is shown to group members, so the join screen says so. Using a different number or name per group is allowed.
 - The phone number is unverified. It identifies nobody on its own: identity is the key.
-- Settle up shows who pays whom and how much. A UPI payment link needs a UPI id, which we do not store, so the app cannot pre-fill a payment. Instead the debtor taps "Pay Rohan ₹1,850", which shows the phone number with copy and call buttons and opens their UPI app chooser, and pays to that number in their own UPI app.
+- Settle up shows who pays whom and how much. OwnTally opens no other app and refers to no payment service (owner decision, 4 Nov 2026): the person pays outside the app, however they like, and marks it there.
 - The debtor taps "I paid" and the creditor taps "Received". Until then the settlement is shown as unconfirmed, but it counts toward the balances from the moment it is recorded (owner decision, 3 Nov 2026); a dispute stops it counting. `SettlementRecorded` stores the amount, from, to, and the confirmation state.
 - Cash is always an option.
 - Reminders: the creditor can send a message through the share sheet.
@@ -177,7 +180,7 @@ Public relay caveat: the n0 public relays are free but rate-limited and document
 1. Welcome: one line saying data stays on this phone, no account.
 2. Enter a name and phone number (these are only defaults; each group asks again).
 3. Recovery phrase: show 12 words, then confirm 3 of them (see Recovery). Cannot be skipped.
-4. Optional app lock (fingerprint or PIN).
+4. Optional app lock (the phone's fingerprint or screen lock), turned on later in Settings.
 5. Empty home screen with two actions: "Create group" and "Join with link or code".
 Permissions are asked only when first needed: camera for scanning, Bluetooth/Nearby for same-room sync.
 
@@ -228,11 +231,11 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
 ### Transfer ownership and admins
 - Owner opens Members, picks a person, chooses "Make owner". Sheet explains: you become an admin, they become owner. The target gets a request and must accept; until then nothing changes.
 - On acceptance, `OwnershipTransferred` is recorded (signed by the old owner, accepted by the new one). Offline phones converge on the next sync.
-- Make admin / remove admin: owner only. Admins can approve joins, remove members, delete any entry and edit the relay setting.
-- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins keep the group running (approve joins, remove members, delete entries); the owner can restore their identity with the recovery phrase.
+- Make admin / remove admin: owner only. Admins can approve joins and remove members. Only the creator of an expense or the group owner can delete it. There is no relay setting.
+- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins keep the group running (approve joins, remove members; they cannot delete other people's entries); the owner can restore their identity with the recovery phrase.
 
 ### Delete expense
-Creator or an admin. Shows "This changes balances" when the entry is part of settled amounts. The entry stays in the list as struck through with who deleted it and when.
+The creator or the group owner. Shows "This changes balances" when the entry is part of settled amounts. The entry stays in the list as struck through with who deleted it and when.
 
 ### Payment not received
 - Shown to the creditor as "Not received" next to a payment the debtor marked as paid.
@@ -243,7 +246,7 @@ Creator or an admin. Shows "This changes balances" when the entry is part of set
 ### Can't reach a member
 - Shown when a member cannot be reached directly (for example Isha on a mobile network that blocks direct links).
 - Explains why and that no entries are lost: they stay on this phone and any member holding them can pass them on.
-- Options: turn on the relay and sync (owner or admin only; members are told to ask an admin), meet up and use Nearby, or try again later.
+- Options: meet up and use Nearby, or try again later. (The relay is used automatically as the last resort, so there is no "turn on the relay" option; owner decision, 4 Nov 2026.)
 - Turning on the relay applies to the whole group, and the screen states that the relay sees who connects but never the content.
 
 ### Sync states shown to the user

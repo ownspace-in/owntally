@@ -12,6 +12,7 @@ import owntally.model.Event
 import owntally.model.EventBody
 import owntally.model.EventLog
 import owntally.model.GroupId
+import owntally.model.GroupIds
 import owntally.model.IgnoreReason
 import owntally.model.Money
 import owntally.model.Split
@@ -19,7 +20,9 @@ import owntally.model.replay
 
 /** One test for each line of the M2 acceptance list in docs/BUILD_PLAN.md. The detail lives in the other test classes. */
 class M2AcceptanceTest {
+    /** Only for tickets and sealing, which do not check who created the group. Tests that replay a creating event make an id for their owner. */
     private val group = GroupId(ByteArray(16) { 9 })
+
 
     @Test
     fun phraseRestoreGivesTheSameKeys() {
@@ -41,6 +44,7 @@ class M2AcceptanceTest {
     fun aTamperedEventAWrongSignatureOrAnEventFromANonMemberIsRejected() {
         val seed = Bip39.seed(Bip39.generate())
         val owner = KeyDerivation.groupIdentity(seed, 0)
+        val group = GroupIds.create(owner.publicKey, ByteArray(8) { 9 })
         val member = KeyDerivation.groupIdentity(seed, 1)
         val outsider = KeyDerivation.groupIdentity(seed, 2)
         val key = GroupKey.generate()
@@ -80,6 +84,7 @@ class M2AcceptanceTest {
     fun aRemovedMemberCannotDecryptEventsFromTheNewEpoch() {
         val seed = Bip39.seed(Bip39.generate())
         val owner = KeyDerivation.groupIdentity(seed, 0)
+        val group = GroupIds.create(owner.publicKey, ByteArray(8) { 9 })
         val stays = KeyDerivation.groupIdentity(seed, 1)
         val leaves = KeyDerivation.groupIdentity(seed, 2)
         val k1 = GroupKey.generate()
@@ -88,7 +93,7 @@ class M2AcceptanceTest {
         log.append(Event(1, owner.publicKey, 1, emptyMap(), 1, EventBody.GroupCreated(group, "Trip", "INR", owner.encryptionKey)))
         log.append(Event(1, owner.publicKey, 2, mapOf(owner.publicKey to 1), 2, EventBody.MemberJoined(stays.publicKey, stays.encryptionKey, "Ben", "98765 00002")))
         log.append(Event(1, owner.publicKey, 3, mapOf(owner.publicKey to 2), 3, EventBody.MemberJoined(leaves.publicKey, leaves.encryptionKey, "Eve", "98765 00005")))
-        val sealed = KeyRotation.seal(group, 2, k2, KeyRotation.recipients(replay(log), excluding = setOf(leaves.publicKey)))
+        val sealed = KeyRotation.seal(owner.publicKey, group, 2, k2, KeyRotation.recipients(replay(log), excluding = setOf(leaves.publicKey)))
         val removal = Event(1, owner.publicKey, 4, mapOf(owner.publicKey to 3), 4, EventBody.MemberRemoved(leaves.publicKey, 2, sealed))
         log.append(removal)
         val state = replay(log)

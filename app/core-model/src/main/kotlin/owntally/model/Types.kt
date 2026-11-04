@@ -13,6 +13,13 @@ value class Money(val paise: Long) : Comparable<Money> {
 
     companion object {
         val ZERO = Money(0)
+
+        /**
+         * The largest amount of one expense or payment: 100,000,000 in whole currency units, whatever the currency (owner decision,
+         * 4 Nov 2026), which is 10,000,000,000 paise. Without a limit a member could write amounts so large that adding them up
+         * overflows and fails on every phone.
+         */
+        val MAX_AMOUNT = Money(10_000_000_000)
     }
 }
 
@@ -80,7 +87,12 @@ class SealedKey(bytes: ByteArray) {
 }
 
 /** A group's random 16-byte id. */
-class GroupId(bytes: ByteArray) : ByteId(bytes, 16)
+class GroupId(bytes: ByteArray) : ByteId(bytes, 16) {
+    companion object {
+        /** Reads 32 hex digits, or returns null (for example for an id that came from a navigation argument). */
+        fun fromHexOrNull(hex: String): GroupId? = if (hex.length == 32) try { GroupId(hexToBytes(hex)) } catch (e: IllegalArgumentException) { null } else null
+    }
+}
 
 /** An event is identified by its author and the author's counter, which starts at 1. */
 data class EventId(val author: PublicKey, val counter: Long) : Comparable<EventId> {

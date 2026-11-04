@@ -39,6 +39,15 @@ private class Run(private val forced: Set<EventId>) {
     fun state(held: List<EventId>) =
         GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
 
+    /**
+     * Names are unique in a group, removed members included (their names stay reserved); capitals and extra spaces do not count
+     * (see [NameKey]). A member may change the capitals of their own name, so [except] is left out. Owner decision, 4 Nov 2026.
+     */
+    private fun nameTaken(name: String, except: PublicKey?): Boolean {
+        val key = NameKey.of(name)
+        return members.values.any { it.key != except && it.name.isNotEmpty() && NameKey.of(it.name) == key }
+    }
+
     private fun currentKeys() = members.filterValues { !it.removed }.keys
 
     private fun current(key: PublicKey) = members[key]?.takeIf { !it.removed }
@@ -68,10 +77,12 @@ private class Run(private val forced: Set<EventId>) {
                 val existing = members[body.member]
                 if (existing != null) return if (existing.removed) IgnoreReason.NOT_ALLOWED else IgnoreReason.ALREADY_DONE
                 if (members.values.count { !it.removed } >= MAX_MEMBERS) return IgnoreReason.NOT_ALLOWED
+                if (nameTaken(body.name, except = null)) return IgnoreReason.INVALID
                 members[body.member] = Member(body.member, body.name, body.phone, Role.MEMBER, removed = false, encryptionKey = body.encryptionKey)
                 null
             }
             is EventBody.ProfileUpdated -> {
+                if (nameTaken(body.name, except = author)) return IgnoreReason.INVALID
                 members[author] = members.getValue(author).copy(name = body.name, phone = body.phone)
                 null
             }
@@ -83,7 +94,8 @@ private class Run(private val forced: Set<EventId>) {
             is EventBody.ExpenseDeleted -> {
                 val expense = expenses[body.expense] ?: return IgnoreReason.UNKNOWN_TARGET
                 if (expense.deleted) return IgnoreReason.ALREADY_DONE
-                if (author != expense.creator && !role.isAdmin) return IgnoreReason.NOT_ALLOWED
+                // Owner decision, 4 Nov 2026: the creator or the group owner, not admins.
+                if (author != expense.creator && role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 expenses[expense.id] = expense.copy(deleted = true, deletedBy = author)
                 null
             }
@@ -182,6 +194,9 @@ private class Run(private val forced: Set<EventId>) {
 
     private fun createGroup(event: Event, body: EventBody.GroupCreated): IgnoreReason? {
         if (event.counter != 1L || event.after.isNotEmpty()) return IgnoreReason.INVALID
+        // The group id must have been made for this author (GroupIds), so only the real creator can create the group: a member
+        // holding the group key cannot write a rival creating event and take over (owner decision, 4 Nov 2026).
+        if (!GroupIds.isCreatedBy(body.groupId, event.author)) return IgnoreReason.INVALID
         if (owner != null) return IgnoreReason.ALREADY_DONE
         groupId = body.groupId
         name = body.name

@@ -36,8 +36,9 @@ class ReplayTest {
     @Test
     fun aSecondGroupCreatedIsIgnored() {
         val s = standardGroup()
+        // Someone else who has seen nothing: the group id was not made for them, so it is not a creation at all (GroupIds).
         val second = s.emit(b, EventBody.GroupCreated(GROUP, "Other", "INR", ENC), seen = emptyMap())
-        assertEquals(IgnoreReason.ALREADY_DONE, s.reasonOf(second))
+        assertEquals(IgnoreReason.INVALID, s.reasonOf(second))
         assertEquals("Goa Trip", s.state().name)
         // One that has seen the group's events cannot be a creation at all.
         val seenSome = s.emit(c, EventBody.GroupCreated(GROUP, "Third", "INR", ENC))
@@ -127,7 +128,57 @@ class ReplayTest {
     }
 
     @Test
-    fun creatorOrAdminCanDeleteButOtherMembersCannot() {
+    fun anAdminCannotDeleteSomeoneElsesExpenseButTheOwnerAndTheCreatorCan() {
+        // Owner decision, 4 Nov 2026: only the creator and the group owner may delete an expense, not admins.
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val first = s.expense(c, rupees(10), c, all)
+        val second = s.expense(c, rupees(20), c, all)
+        val third = s.expense(b, rupees(30), b, all)
+        val byAdmin = s.emit(b, EventBody.ExpenseDeleted(first.id))
+        val byOwner = s.emit(a, EventBody.ExpenseDeleted(second.id))
+        val adminOwn = s.emit(b, EventBody.ExpenseDeleted(third.id))
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, byAdmin.reason(state))
+        assertTrue(!state.expenses.getValue(first.id).deleted)
+        assertNull(byOwner.reason(state))
+        assertNull(adminOwn.reason(state), "an admin may delete an expense they created")
+    }
+
+    @Test
+    fun anExpenseWrittenByARemovedMemberButPaidByAnotherStaysCountedAndOnlyTheOwnerCanDeleteIt() {
+        // The creator is removed, but the payer (c) is still in the group, so the expense still counts. The creator can no longer
+        // delete it (they were removed) and admins cannot either: only the owner can (owner decision, 4 Nov 2026).
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(d))
+        val e = s.expense(b, rupees(30), c, all)
+        s.remove(a, b)
+        val byRemoved = s.emit(b, EventBody.ExpenseDeleted(e.id))
+        val byAdmin = s.emit(d, EventBody.ExpenseDeleted(e.id))
+        val byOwner = s.emit(a, EventBody.ExpenseDeleted(e.id))
+        val state = s.state()
+        assertEquals(IgnoreReason.AFTER_REMOVAL, byRemoved.reason(state))
+        assertEquals(IgnoreReason.NOT_ALLOWED, byAdmin.reason(state))
+        assertNull(byOwner.reason(state))
+        assertTrue(state.expenses.getValue(e.id).deleted)
+    }
+
+    @Test
+    fun deletingFollowsTheOwnerWhenOwnershipMoves() {
+        val s = standardGroup()
+        val x = s.expense(c, rupees(10), c, all)
+        val y = s.expense(c, rupees(20), c, all)
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(b, EventBody.OwnershipAccepted)
+        val oldOwner = s.emit(a, EventBody.ExpenseDeleted(x.id))
+        val newOwner = s.emit(b, EventBody.ExpenseDeleted(y.id))
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, oldOwner.reason(state), "the old owner is now an admin")
+        assertNull(newOwner.reason(state))
+    }
+
+    @Test
+    fun creatorOrOwnerCanDeleteButOtherMembersCannot() {
         val s = standardGroup()
         val mine = s.expense(b, rupees(10), b, all)
         val other = s.expense(b, rupees(20), b, all)
@@ -579,5 +630,138 @@ class ReplayTest {
         assertTrue(accepted > 200, "accepted $accepted")
         assertTrue(rejected > 200, "rejected $rejected")
         assertTrue(removals > 20, "removals $removals")
+    }
+
+    @Test
+    fun aMemberCannotTakeOverTheGroupByWritingTheirOwnCreatingEvent() {
+        // A member who holds the group key writes a "create group" event as their first event, claiming to have seen nothing,
+        // with a key that sorts before the real owner's. The real owner must stay the owner.
+        val s = Sim()
+        val owner = key(9)
+        val thief = key(2) // sorts first
+        val id = GroupIds.create(owner, ByteArray(8) { 5 })
+        s.emit(owner, EventBody.GroupCreated(id, "Goa Trip", "INR", encKeyFor(owner)))
+        s.emit(owner, EventBody.ProfileUpdated("Asha", PHONE))
+        s.join(owner, thief, "Eve")
+        val forged = s.emit(thief, EventBody.GroupCreated(id, "Mine", "INR", encKeyFor(thief)), seen = emptyMap())
+        val state = s.state()
+        assertEquals(owner, state.owner, "the real owner stays the owner")
+        assertEquals("Goa Trip", state.name)
+        assertEquals(IgnoreReason.INVALID, forged.reason(state))
+        assertTrue(owner in state.currentMembers && thief in state.currentMembers, "Eve is still a member, admitted by the owner")
+        assertEquals(Role.MEMBER, state.members.getValue(thief).role)
+    }
+
+    @Test
+    fun aGroupIdNotMadeForItsCreatorIsNotAGroup() {
+        val s = Sim()
+        val creator = key(3)
+        s.emit(creator, EventBody.GroupCreated(GroupId(ByteArray(16) { 7 }), "Random id", "INR", encKeyFor(creator)))
+        s.emit(creator, EventBody.ProfileUpdated("Cy", PHONE))
+        val state = s.state()
+        assertEquals(null, state.owner)
+        assertEquals(null, state.groupId)
+        assertTrue(state.ignored.all { it.reason == IgnoreReason.INVALID || it.reason == IgnoreReason.NOT_MEMBER })
+    }
+
+    @Test
+    fun theRealCreatorWithAnIdMadeForThemBecomesTheOwnerWhateverTheKeyOrder() {
+        for (owner in listOf(key(1), key(9), key(200))) {
+            val s = Sim()
+            val id = GroupIds.create(owner, ByteArray(8) { 3 })
+            s.emit(owner, EventBody.GroupCreated(id, "G", "INR", encKeyFor(owner)))
+            assertEquals(owner, s.state().owner)
+            assertEquals(id, s.state().groupId)
+        }
+    }
+
+    @Test
+    fun aRivalCreatorCanStillMakeTheirOwnSeparateGroupWithTheirOwnId() {
+        val rival = key(2)
+        val s = Sim()
+        s.emit(rival, EventBody.GroupCreated(GroupIds.create(rival, ByteArray(8) { 1 }), "Rival's", "INR", encKeyFor(rival)))
+        assertEquals(rival, s.state().owner)
+    }
+
+    // ---- member names are unique within a group (owner decision, 4 Nov 2026) ----
+
+    @Test
+    fun aNameAlreadyInTheGroupIsRefusedWhateverTheCapitalsAndSpaces() {
+        val s = standardGroup() // Asha (owner, but her name is set by ProfileUpdated), Ben, Chitra, Dev
+        for ((n, name) in listOf("Ben", "ben", "BEN", " Ben ", "bEn  ").withIndex()) {
+            val join = s.join(a, key(20 + n), name)
+            assertEquals(IgnoreReason.INVALID, join.reason(s.state()), "\"$name\"")
+        }
+        assertEquals(4, s.state().currentMembers.size)
+    }
+
+    @Test
+    fun spacesInsideAreIgnoredToo() {
+        val s = standardGroup()
+        s.join(a, key(10), "Ben Kumar")
+        val clash = s.join(a, key(11), "  ben    KUMAR ")
+        assertEquals(IgnoreReason.INVALID, clash.reason(s.state()))
+        val different = s.join(a, key(12), "Ben Kumar V")
+        assertNull(different.reason(s.state()))
+    }
+
+    @Test
+    fun aSecondRohanMustBecomeRohanV() {
+        val s = standardGroup()
+        s.join(a, key(10), "Rohan")
+        assertEquals(IgnoreReason.INVALID, s.join(a, key(11), "Rohan").reason(s.state()))
+        assertNull(s.join(a, key(12), "Rohan V").reason(s.state()))
+    }
+
+    @Test
+    fun theOwnersNameIsTakenToo() {
+        val s = standardGroup() // owner's profile name is "Asha"
+        assertEquals(IgnoreReason.INVALID, s.join(a, key(10), "asha").reason(s.state()))
+    }
+
+    @Test
+    fun aRemovedMembersNameStaysReserved() {
+        val s = standardGroup()
+        s.remove(a, b) // Ben is removed
+        val reuse = s.join(a, key(10), "Ben")
+        assertEquals(IgnoreReason.INVALID, reuse.reason(s.state()))
+        assertNull(s.join(a, key(11), "Ben 2").reason(s.state()))
+    }
+
+    @Test
+    fun renamingToATakenNameIsRefusedButChangingTheCapitalsOfYourOwnIsFine() {
+        val s = standardGroup()
+        val toTaken = s.emit(b, EventBody.ProfileUpdated("chitra", PHONE))
+        val ownCaps = s.emit(b, EventBody.ProfileUpdated("BEN", PHONE))
+        val fresh = s.emit(c, EventBody.ProfileUpdated("Chitra S", PHONE))
+        val state = s.state()
+        assertEquals(IgnoreReason.INVALID, toTaken.reason(state))
+        assertNull(ownCaps.reason(state))
+        assertNull(fresh.reason(state))
+        assertEquals("BEN", state.members.getValue(b).name)
+        assertEquals("Chitra S", state.members.getValue(c).name)
+    }
+
+    @Test
+    fun theSameNameInADifferentGroupIsFine() {
+        val s1 = standardGroup()
+        val s2 = standardGroup()
+        assertNull(s1.join(a, key(10), "Rohan").reason(s1.state()))
+        assertNull(s2.join(a, key(10), "Rohan").reason(s2.state()))
+    }
+
+    @Test
+    fun twoAdminsAdmittingTheSameNameAtOnceGiveTheSameResultOnEveryPhone() {
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val seen = s.snapshot()
+        s.join(a, key(10), "Rohan") // the owner admits one Rohan ...
+        val byAdmin = s.emit(b, EventBody.MemberJoined(key(11), encKeyFor(key(11)), "rohan", PHONE), seen = seen) // ... while the admin, who has not seen that, admits another
+        val log1 = logOf(s.events + byAdmin)
+        val log2 = logOf((s.events + byAdmin).reversed())
+        val st1 = replay(log1)
+        val st2 = replay(log2)
+        assertEquals(st1.members.keys, st2.members.keys)
+        assertEquals(1, st1.members.values.count { it.name.equals("rohan", ignoreCase = true) })
     }
 }

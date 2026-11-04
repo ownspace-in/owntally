@@ -43,8 +43,11 @@ private fun checkName(name: String) =
     require(name.isNotBlank() && name.length in 1..40) { "name must be 1 to 40 characters" }
 
 private fun checkPhone(phone: String) =
-    require(phone.length in 5..20 && phone.all { it.isDigit() && it.code < 128 || it == '+' || it == ' ' }) {
-        "phone must be 5 to 20 characters from digits, + and spaces"
+    require(
+        phone.length in 5..20 && phone.count { it in '0'..'9' } >= 5 &&
+            phone.all { it in '0'..'9' || it == '+' || it == ' ' || it == '-' || it == '(' || it == ')' || it == '.' },
+    ) {
+        "phone must be 5 to 20 characters with at least 5 digits, from the digits 0 to 9, + space - ( ) and ."
     }
 
 sealed class EventBody {
@@ -80,6 +83,7 @@ sealed class EventBody {
         init {
             require(description.isNotBlank() && description.length in 1..80) { "description must be 1 to 80 characters" }
             require(total.isPositive()) { "total must be greater than 0" }
+            require(total <= Money.MAX_AMOUNT) { "total is above the limit" }
             if (split is Split.Exact) require(split.sum() == total) { "exact amounts must add up to the total" }
         }
     }
@@ -90,6 +94,7 @@ sealed class EventBody {
         init {
             require(from != to) { "a payment needs two different members" }
             require(amount.isPositive()) { "amount must be greater than 0" }
+            require(amount <= Money.MAX_AMOUNT) { "amount is above the limit" }
         }
     }
 

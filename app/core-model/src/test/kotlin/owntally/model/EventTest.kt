@@ -130,4 +130,51 @@ class EventTest {
         assertEquals(setOf(EventId(a, 3), EventId(b, 5), EventId(c, 2)), e.dependencies())
         assertEquals(emptySet(), event(1, EventBody.OwnershipAccepted).dependencies())
     }
+
+    @Test
+    fun anAmountAtTheLimitIsAcceptedAndOnePaisaMoreIsNot() {
+        // Owner decision, 4 Nov 2026: at most 100,000,000 in whole currency units (10,000,000,000 paise), whatever the currency.
+        assertEquals(10_000_000_000L, Money.MAX_AMOUNT.paise)
+        EventBody.ExpenseAdded("Villa", Money.MAX_AMOUNT, a, 1, Split.Equal(setOf(a, b)))
+        assertFailsWith<IllegalArgumentException> { EventBody.ExpenseAdded("Villa", Money(Money.MAX_AMOUNT.paise + 1), a, 1, Split.Equal(setOf(a, b))) }
+        assertFailsWith<IllegalArgumentException> { EventBody.ExpenseAdded("Villa", Money(Long.MAX_VALUE), a, 1, Split.Equal(setOf(a, b))) }
+        EventBody.SettlementRecorded(a, b, Money.MAX_AMOUNT)
+        assertFailsWith<IllegalArgumentException> { EventBody.SettlementRecorded(a, b, Money(Money.MAX_AMOUNT.paise + 1)) }
+    }
+
+    @Test
+    fun anExactSplitCannotGetAroundTheLimit() {
+        val half = Money(Money.MAX_AMOUNT.paise / 2 + 1)
+        val split = Split.Exact(mapOf(a to half, b to half))
+        assertFailsWith<IllegalArgumentException> { EventBody.ExpenseAdded("Big", split.sum(), a, 1, split) }
+    }
+
+    @Test
+    fun aHostileEncodedEventWithAnOversizedTotalIsRejectedWhenDecoding() {
+        val ok = Event(1, a, 1, emptyMap(), 1000, EventBody.ExpenseAdded("Villa", Money.MAX_AMOUNT, a, 5, Split.Equal(setOf(a, b))))
+        val bytes = EventCodec.encodePayload(ok)
+        val limit = ByteArray(8) { i -> (Money.MAX_AMOUNT.paise ushr (56 - 8 * i)).toByte() }
+        val at = (0..bytes.size - 8).first { i -> (0 until 8).all { bytes[i + it] == limit[it] } }
+        val oversized = (Money.MAX_AMOUNT.paise + 1)
+        val patched = bytes.copyOf().also { for (k in 0 until 8) it[at + k] = (oversized ushr (56 - 8 * k)).toByte() }
+        assertEquals(ok, EventCodec.decodePayload(1, a, 1, bytes))
+        assertFailsWith<DecodeException> { EventCodec.decodePayload(1, a, 1, patched) }
+    }
+
+    @Test
+    fun phoneNumbersAllowTheUsualWaysOfWritingThem() {
+        // Owner decision, 4 Nov 2026: digits, +, spaces, and also - ( ) and . ; 5 to 20 characters in all.
+        for (phone in listOf("+91 98765 43210", "98765-43210", "(022) 2345 6789", "98765.43210", "+1 (415) 555-0132", "12345", "1".repeat(20))) {
+            EventBody.MemberJoined(a, ENC, "Asha", phone)
+            EventBody.ProfileUpdated("Asha", phone)
+        }
+    }
+
+    @Test
+    fun phoneNumbersStillRefuseLettersOtherDigitsAndBadLengths() {
+        for (phone in listOf("98765 abc", "९८७६५ ४३२१०", "98765/43210", "98765_43210", "12 3", "1".repeat(21), "", "     ", "98765\n43210", "+91 98765 4321O")) {
+            assertFailsWith<IllegalArgumentException>("\"$phone\"") { EventBody.MemberJoined(a, ENC, "Asha", phone) }
+            assertFailsWith<IllegalArgumentException>("\"$phone\"") { EventBody.ProfileUpdated("Asha", phone) }
+        }
+    }
 }

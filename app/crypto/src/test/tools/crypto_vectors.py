@@ -87,10 +87,12 @@ def hpke_seal(recipient_pub, eph_sk, info, plaintext):
     key = _lexpand(_SUITE, secret, b"key", ctx, 32); nonce = _lexpand(_SUITE, secret, b"base_nonce", ctx, 12)
     return eph_pk + ChaCha20Poly1305(key).encrypt(nonce, plaintext, b"")
 
-def key_delivery(slot, group_id, epoch, group_key, eph_sk):
-    info = b"owntally/v1/key-delivery" + group_id + epoch.to_bytes(4, "big")
+def key_delivery(slot, sender_slot, group_id, epoch, group_key, eph_sk):
+    # info = label + the sender's public key (32 bytes) + group id (16) + epoch (4, big-endian); the sender is the author of the event
+    sender = bytes.fromhex(keys_for(sender_slot)["signPub"])
+    info = b"owntally/v1/key-delivery" + sender + group_id + epoch.to_bytes(4, "big")
     sealed = hpke_seal(bytes.fromhex(keys_for(slot)["encPub"]), eph_sk, info, group_key)
-    return {"recipientSlot": slot, "groupId": group_id.hex(), "epoch": epoch, "groupKey": group_key.hex(), "info": info.hex(), "sealed": sealed.hex()}
+    return {"recipientSlot": slot, "senderSlot": sender_slot, "sender": sender.hex(), "groupId": group_id.hex(), "epoch": epoch, "groupKey": group_key.hex(), "info": info.hex(), "sealed": sealed.hex()}
 
 # --- tickets, docs/CRYPTO.md section 7
 def ticket_bytes(ticket_id, host_id, group_id, epoch, group_key, expires, hint_bytes, version=1, hint_len=None):
@@ -148,8 +150,8 @@ out = {
     "tickets": T,
     "invalidTickets": IT,
     "keyDeliveries": [
-        key_delivery(1, bytes([9]) * 16, 2, bytes(range(32, 64)), bytes([9]) * 32),
-        key_delivery(2, bytes([9]) * 16, 3, bytes(range(64, 96)), bytes([5]) * 32),
+        key_delivery(1, 0, bytes([9]) * 16, 2, bytes(range(32, 64)), bytes([9]) * 32),
+        key_delivery(2, 0, bytes([9]) * 16, 3, bytes(range(64, 96)), bytes([5]) * 32),
     ],
     "sealed": [
         sealed_event(0, bytes([9]) * 16, 2, 1, bytes(range(32)), bytes(range(0x40, 0x58)), EXAMPLE_PAYLOAD),
