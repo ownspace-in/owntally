@@ -17,6 +17,7 @@ import owntally.model.Event
 import owntally.model.EventBody
 import owntally.model.EventLog
 import owntally.model.GroupId
+import owntally.model.GroupIds
 import owntally.model.IgnoreReason
 import owntally.model.Money
 import owntally.model.PublicKey
@@ -30,7 +31,6 @@ class KeyRotationTest {
 
     private val vectors: JsonObject = Json.parseToJsonElement(KeyRotationTest::class.java.getResource("/crypto-vectors.json")!!.readText()).jsonObject
     private val seed = MasterSeed(vectors.getValue("seed").jsonPrimitive.content.hex())
-    private val group = GroupId(ByteArray(16) { 9 })
 
     // Four members of one group (they share a seed here only to keep the test short).
     private val a = KeyDerivation.groupIdentity(seed, 10)
@@ -38,6 +38,9 @@ class KeyRotationTest {
     private val c = KeyDerivation.groupIdentity(seed, 12)
     private val d = KeyDerivation.groupIdentity(seed, 13)
     private val outsider = KeyDerivation.groupIdentity(seed, 14)
+
+    /** The group id is made for its creator, a (GroupIds): only that author can create the group. */
+    private val group = GroupIds.create(a.publicKey, ByteArray(8) { 9 })
 
     /** Writes events the way phones would: each knows its own counter and what it has seen. */
     private class Chain {

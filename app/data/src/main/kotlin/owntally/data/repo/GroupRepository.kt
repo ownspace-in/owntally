@@ -15,6 +15,7 @@ import owntally.model.Envelope
 import owntally.model.Event
 import owntally.model.EventBody
 import owntally.model.GroupId
+import owntally.model.GroupIds
 
 enum class RejectedBecause { UNKNOWN_GROUP, WRONG_GROUP, TOO_LARGE, BAD_SIGNATURE }
 
@@ -53,11 +54,12 @@ class GroupRepository(
     fun createGroup(name: String, currency: String = "INR"): GroupId {
         check(identity.state() == IdentityState.READY) { "first run is not complete" }
         val profile = checkNotNull(identity.defaultProfile()) { "no default profile" }
-        val groupId = GroupId(ByteArray(16).also { random.nextBytes(it) })
-        EventBody.GroupCreated(groupId, name, currency, EncryptionKey(ByteArray(32))) // validates name and currency before anything is used up
+        EventBody.GroupCreated(GroupId(ByteArray(16)), name, currency, EncryptionKey(ByteArray(32))) // validates name and currency before anything is used up
 
         val slot = identity.reserveSlot(events.groups().map { it.keySlot })
         val me = checkNotNull(identity.groupIdentity(slot)) { "no usable seed" }
+        // The group id is made for this creator (GroupIds), so nobody else can write a creating event for it.
+        val groupId = GroupIds.create(me.publicKey, ByteArray(8).also { random.nextBytes(it) })
         val key = GroupKey.generate(random)
         val nowMillis = clock.nowSeconds() * 1000
         val created = Event(1, me.publicKey, 1, emptyMap(), nowMillis, EventBody.GroupCreated(groupId, name, currency, me.encryptionKey))

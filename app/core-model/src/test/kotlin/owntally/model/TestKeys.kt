@@ -3,7 +3,8 @@ package owntally.model
 /** Test helper: a key whose first byte is [n], so keys sort by n. */
 fun key(n: Int) = PublicKey(ByteArray(32).also { it[0] = n.toByte() })
 
-val GROUP = GroupId(ByteArray(16) { 9 })
+/** The group id of the usual test group: made for key(1), the owner in [standardGroup]. */
+val GROUP = GroupIds.create(key(1), ByteArray(8) { 9 })
 
 fun rupees(n: Long) = Money(n * 100)
 

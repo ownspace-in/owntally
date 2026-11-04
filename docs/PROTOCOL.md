@@ -10,7 +10,7 @@ This file covers the data and rules in the pure Kotlin core. Encryption, signing
 |---|---|
 | `Money` | `Long`, paise (1 rupee = 100 paise). No floating point anywhere. |
 | `PublicKey` | 32 bytes (the member's per-group key). Compared and sorted as unsigned bytes. |
-| `GroupId` | 16 random bytes. |
+| `GroupId` | 16 bytes: 8 random bytes, then the first 8 bytes of SHA-256(creator's public key + those 8 random bytes). The id proves who created the group (owner decision, 4 Nov 2026). |
 | `EventId` | `(author: PublicKey, counter: Long)`. |
 | Day | `Long`, days since 1970-01-01, for expense dates. |
 
@@ -73,7 +73,7 @@ General: an event's author must be a current member, except `GroupCreated`. Reas
 
 | Body | Rule |
 |---|---|
-| `GroupCreated` | Must be the author's event number 1 with empty `after`, and the only one in the group. The author becomes owner, admin and member (name and phone come from a `ProfileUpdated` that must be the author's event number 2, or are blank until then). A second `GroupCreated` is ignored. |
+| `GroupCreated` | The group id must have been made for the author (see `GroupId`), else `INVALID`. Must be the author's event number 1 with empty `after`, and the only one in the group. The author becomes owner, admin and member (name and phone come from a `ProfileUpdated` that must be the author's event number 2, or are blank until then). A second `GroupCreated` is ignored. |
 | `MemberJoined` | Author must be owner or admin (approval is authorship). `member` must not be a current member and must never have been removed. Group must have fewer than 20 members. Valid name and phone. |
 | `ProfileUpdated` | Updates the author's own name and phone. Valid values. |
 | `ExpenseAdded` | Any member. `paidBy` and all participants must be current members. Valid amounts and split. |
@@ -165,7 +165,7 @@ None of these changes a decision the owner made. They fill gaps the approved tex
 
 1. **Ready means applied, not just present (section 3).** An event waits until every event it saw has itself been applied or ignored, which in turn needs what that event saw. For honest authors this is the same thing, because an event's `after` covers everything the events it saw covered. It only matters for hand-made input. **Confirmed by the owner, 4 Nov 2026 (option A: wait until judged).**
 2. **Events sharing an id wait for nothing.** Both are ignored (`DUPLICATE_ID`), so their `after` is not used. Events that depend on them still apply. **Confirmed by the owner, 4 Nov 2026 (option C): both ignored, and the app shows a notice such as "Two entries from Rohan clashed and were ignored" (built with the sync status screens, M5/M6).**
-3. **`GroupCreated` must have an empty `after`.** A creator who has already seen other events is `INVALID`, and so is any counter other than 1. A second creation by someone who has seen nothing is `ALREADY_DONE`. Until `ProfileUpdated`, the owner's name and phone are empty.
+3. **`GroupCreated` must have an empty `after`.** A creator who has already seen other events is `INVALID`, and so is any counter other than 1. A second creation by someone who has seen nothing is `ALREADY_DONE`. Until `ProfileUpdated`, the owner's name and phone are empty. **Changed and confirmed by the owner, 4 Nov 2026 (security fix):** the group id must also have been made for the author (8 random bytes + 8 bytes of SHA-256 of the author's key and those bytes), otherwise the event is `INVALID`. Without this, a member holding the group key could write a rival creating event with a key that sorts first and take over the group. Because of it, "a second creation by someone who has seen nothing" is now `INVALID`, not `ALREADY_DONE` (which stays only as a safety net). A rival can still make their own, separate group with their own id.
 4. **Reasons chosen where section 4 only said "ignored":**
    - `MemberJoined` for a current member is `ALREADY_DONE`; for a removed key, a plain member author, or a full group it is `NOT_ALLOWED`.
    - `ExpenseAdded` naming a non-member payer or participant is `INVALID`.

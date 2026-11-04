@@ -92,3 +92,5 @@ Consequence: `decode(bytes)` succeeds only if `encode(decode(bytes)) == bytes`. 
 ## 5. Test vectors
 
 `app/core-model/src/test/resources/fixtures/wire-vectors.json` holds 21 valid events, 17 bytes sequences that must be rejected (with the reason), 2 envelopes and 9 invalid envelopes, all with their exact hex. They were made before the Kotlin codec by a separate encoder written from this file (`app/core-model/src/test/tools/wire_vectors.py`), and they are the contract for other languages. The example in section 2 is vector `profile-updated`.
+
+Note (4 Nov 2026): the 16 bytes of a `groupId` are not all random. They are 8 random bytes followed by the first 8 bytes of SHA-256(creator's public key + those 8 bytes), and a `GroupCreated` is valid only if its id matches its author (PROTOCOL.md). The bytes on the wire are unchanged.

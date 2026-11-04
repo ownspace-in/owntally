@@ -3,6 +3,7 @@ package owntally.data.repo
 import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
@@ -265,4 +266,13 @@ class GroupRepositoryTest {
         assertNull(env.groups.group(GroupId(ByteArray(16) { 9 })))
     }
 
+
+    @Test
+    fun theGroupIdIsMadeForItsCreatorSoNobodyElseCanCreateIt() {
+        val id = env.groups.createGroup("Goa Trip")
+        val me = env.identity.groupIdentity(env.groups.group(id)!!.keySlot)!!
+        assertTrue(owntally.model.GroupIds.isCreatedBy(id, me.publicKey))
+        assertFalse(owntally.model.GroupIds.isCreatedBy(id, owntally.model.PublicKey(ByteArray(32) { 5 })))
+        assertNotEquals(id, env.groups.createGroup("Another"))
+    }
 }

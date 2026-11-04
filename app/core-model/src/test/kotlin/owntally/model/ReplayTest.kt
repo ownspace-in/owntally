@@ -36,8 +36,9 @@ class ReplayTest {
     @Test
     fun aSecondGroupCreatedIsIgnored() {
         val s = standardGroup()
+        // Someone else who has seen nothing: the group id was not made for them, so it is not a creation at all (GroupIds).
         val second = s.emit(b, EventBody.GroupCreated(GROUP, "Other", "INR", ENC), seen = emptyMap())
-        assertEquals(IgnoreReason.ALREADY_DONE, s.reasonOf(second))
+        assertEquals(IgnoreReason.INVALID, s.reasonOf(second))
         assertEquals("Goa Trip", s.state().name)
         // One that has seen the group's events cannot be a creation at all.
         val seenSome = s.emit(c, EventBody.GroupCreated(GROUP, "Third", "INR", ENC))
@@ -631,7 +632,6 @@ class ReplayTest {
         assertTrue(removals > 20, "removals $removals")
     }
 
-    @kotlin.test.Ignore // KNOWN GAP, awaiting the owner's decision: see docs/tasks/M3-storage-app-shell.md, "Security finding". Remove this line when fixed.
     @Test
     fun aMemberCannotTakeOverTheGroupByWritingTheirOwnCreatingEvent() {
         // A member who holds the group key writes a "create group" event as their first event, claiming to have seen nothing,
@@ -639,13 +639,47 @@ class ReplayTest {
         val s = Sim()
         val owner = key(9)
         val thief = key(2) // sorts first
-        s.emit(owner, EventBody.GroupCreated(GROUP, "Goa Trip", "INR", encKeyFor(owner)))
+        val id = GroupIds.create(owner, ByteArray(8) { 5 })
+        s.emit(owner, EventBody.GroupCreated(id, "Goa Trip", "INR", encKeyFor(owner)))
         s.emit(owner, EventBody.ProfileUpdated("Asha", PHONE))
         s.join(owner, thief, "Eve")
-        val forged = s.emit(thief, EventBody.GroupCreated(GROUP, "Mine", "INR", encKeyFor(thief)), seen = emptyMap())
+        val forged = s.emit(thief, EventBody.GroupCreated(id, "Mine", "INR", encKeyFor(thief)), seen = emptyMap())
         val state = s.state()
         assertEquals(owner, state.owner, "the real owner stays the owner")
         assertEquals("Goa Trip", state.name)
-        assertTrue(forged.id in state.ignored.map { it.id })
+        assertEquals(IgnoreReason.INVALID, forged.reason(state))
+        assertTrue(owner in state.currentMembers && thief in state.currentMembers, "Eve is still a member, admitted by the owner")
+        assertEquals(Role.MEMBER, state.members.getValue(thief).role)
+    }
+
+    @Test
+    fun aGroupIdNotMadeForItsCreatorIsNotAGroup() {
+        val s = Sim()
+        val creator = key(3)
+        s.emit(creator, EventBody.GroupCreated(GroupId(ByteArray(16) { 7 }), "Random id", "INR", encKeyFor(creator)))
+        s.emit(creator, EventBody.ProfileUpdated("Cy", PHONE))
+        val state = s.state()
+        assertEquals(null, state.owner)
+        assertEquals(null, state.groupId)
+        assertTrue(state.ignored.all { it.reason == IgnoreReason.INVALID || it.reason == IgnoreReason.NOT_MEMBER })
+    }
+
+    @Test
+    fun theRealCreatorWithAnIdMadeForThemBecomesTheOwnerWhateverTheKeyOrder() {
+        for (owner in listOf(key(1), key(9), key(200))) {
+            val s = Sim()
+            val id = GroupIds.create(owner, ByteArray(8) { 3 })
+            s.emit(owner, EventBody.GroupCreated(id, "G", "INR", encKeyFor(owner)))
+            assertEquals(owner, s.state().owner)
+            assertEquals(id, s.state().groupId)
+        }
+    }
+
+    @Test
+    fun aRivalCreatorCanStillMakeTheirOwnSeparateGroupWithTheirOwnId() {
+        val rival = key(2)
+        val s = Sim()
+        s.emit(rival, EventBody.GroupCreated(GroupIds.create(rival, ByteArray(8) { 1 }), "Rival's", "INR", encKeyFor(rival)))
+        assertEquals(rival, s.state().owner)
     }
 }

@@ -183,6 +183,9 @@ private class Run(private val forced: Set<EventId>) {
 
     private fun createGroup(event: Event, body: EventBody.GroupCreated): IgnoreReason? {
         if (event.counter != 1L || event.after.isNotEmpty()) return IgnoreReason.INVALID
+        // The group id must have been made for this author (GroupIds), so only the real creator can create the group: a member
+        // holding the group key cannot write a rival creating event and take over (owner decision, 4 Nov 2026).
+        if (!GroupIds.isCreatedBy(body.groupId, event.author)) return IgnoreReason.INVALID
         if (owner != null) return IgnoreReason.ALREADY_DONE
         groupId = body.groupId
         name = body.name
