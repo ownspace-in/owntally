@@ -163,7 +163,7 @@ Also answered on 3 Nov 2026: payments count at once; exact splits are re-split o
 
 None of these changes a decision the owner made. They fill gaps the approved text left open, and each has a test. If any is wrong, tell the builder and the code and tests change.
 
-1. **Ready means applied, not just present (section 3).** An event waits until every event it saw has itself been applied or ignored, which in turn needs what that event saw. For honest authors this is the same thing, because an event's `after` covers everything the events it saw covered. It only matters for hand-made input.
+1. **Ready means applied, not just present (section 3).** An event waits until every event it saw has itself been applied or ignored, which in turn needs what that event saw. For honest authors this is the same thing, because an event's `after` covers everything the events it saw covered. It only matters for hand-made input. **Confirmed by the owner, 4 Nov 2026 (option A: wait until judged).**
 2. **Events sharing an id wait for nothing.** Both are ignored (`DUPLICATE_ID`), so their `after` is not used. Events that depend on them still apply.
 3. **`GroupCreated` must have an empty `after`.** A creator who has already seen other events is `INVALID`, and so is any counter other than 1. A second creation by someone who has seen nothing is `ALREADY_DONE`. Until `ProfileUpdated`, the owner's name and phone are empty.
 4. **Reasons chosen where section 4 only said "ignored":**
