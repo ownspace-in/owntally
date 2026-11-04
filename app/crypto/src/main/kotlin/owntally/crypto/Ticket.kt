@@ -43,7 +43,14 @@ class Ticket(
     }
 
     fun ticketId(): ByteArray = id.copyOf()
+    /** The host's check, exact: [expiresAtSeconds] is the first second at which the ticket no longer works. */
     fun isExpired(nowSeconds: Long) = nowSeconds >= expiresAtSeconds
+
+    /**
+     * The joiner's check: forgives a clock that runs up to [CLOCK_ALLOWANCE_SECONDS] behind the host's, so a phone is not refused
+     * at the edge by its own slightly wrong clock. The host's own check still decides (owner decision, 4 Nov 2026).
+     */
+    fun isExpiredForJoiner(nowSeconds: Long) = nowSeconds >= expiresAtSeconds + CLOCK_ALLOWANCE_SECONDS
 
     /** The text people share: URL-safe base64 without padding. */
     fun encode(): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes())
@@ -62,6 +69,7 @@ class Ticket(
 
     companion object {
         const val LIFETIME_SECONDS = 8 * 3600L
+        const val CLOCK_ALLOWANCE_SECONDS = 60L
         const val ID_SIZE = 16
         const val MAX_HINT_BYTES = 100
         private const val VERSION = 1

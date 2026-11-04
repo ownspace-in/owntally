@@ -263,4 +263,32 @@ class TicketTest {
         assertFalse(ticket.ticketId().joinToString("") { "%02x".format(it) } in registry.toString())
         assertTrue("redacted" in registry.toString())
     }
+
+    @Test
+    fun theHostIsExactAndTheJoinerAllowsSixtySecondsOfClockDifference() {
+        // Owner decision, 4 Nov 2026 (clarification C6, option B). The expiry is the first second the ticket no longer works.
+        val t = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_000_000, "")
+        val e = t.expiresAtSeconds
+        assertEquals(60L, Ticket.CLOCK_ALLOWANCE_SECONDS)
+        // the host (isExpired): exact
+        assertFalse(t.isExpired(e - 1))
+        assertTrue(t.isExpired(e))
+        assertTrue(t.isExpired(e + 1))
+        // the joiner (isExpiredForJoiner): forgives a slow clock of up to 59 seconds, so the host decides at the edge
+        assertFalse(t.isExpiredForJoiner(e - 1))
+        assertFalse(t.isExpiredForJoiner(e))
+        assertFalse(t.isExpiredForJoiner(e + 59))
+        assertTrue(t.isExpiredForJoiner(e + 60))
+        assertTrue(t.isExpiredForJoiner(e + 3600))
+    }
+
+    @Test
+    fun theHostStaysExactEvenThoughTheJoinerForgives() {
+        val clock = object : Clock { var now = 1_000_000L; override fun nowSeconds() = now }
+        val registry = TicketRegistry(host, clock)
+        val t = registry.issue(group, 2, key)
+        clock.now = t.expiresAtSeconds + 30 // inside the joiner's allowance, but the host's own clock says expired
+        assertFalse(t.isExpiredForJoiner(clock.now))
+        assertFalse(registry.accept(t), "the host refuses it: its own clock decides")
+    }
 }
