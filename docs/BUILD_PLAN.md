@@ -120,7 +120,7 @@ Acceptance: a user can create a group, add and delete expenses, and see correct 
 
 Members, owner, admins, join requests, approve or decline, remove with the before and after screen, ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
 
-Acceptance: every rule in DESIGN.md "Flows" has a test, including: only creator or admin can delete, only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
+Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
 
 ### M5. Sync protocol over a fake transport
 
@@ -136,9 +136,9 @@ Acceptance (two real phones): invite by QR, scan, approve, history arrives, add 
 
 ### M7. Internet sync and relay setting
 
-Internet transport (as chosen in M0), per-group relay switch (admin only), default `https://relay.ownspace.in`, custom address field, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
+Internet transport (as chosen in M0), the relay as last resort used automatically (no setting, no admin switch; owner decision 4 Nov 2026) at `https://relay.ownspace.in`, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
 
-Acceptance: two phones on different mobile networks sync, the status shows the right chip, and turning the relay off makes relay-only pairs show "Needs relay" instead of failing silently.
+Acceptance: two phones on different mobile networks sync, the status shows the right chip, and a pair that can reach each other only through the relay shows "Via relay", and when nothing connects the status says so instead of failing silently.
 
 ### M8. Settling
 

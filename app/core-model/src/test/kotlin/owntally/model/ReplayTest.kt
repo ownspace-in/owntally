@@ -127,7 +127,39 @@ class ReplayTest {
     }
 
     @Test
-    fun creatorOrAdminCanDeleteButOtherMembersCannot() {
+    fun anAdminCannotDeleteSomeoneElsesExpenseButTheOwnerAndTheCreatorCan() {
+        // Owner decision, 4 Nov 2026: only the creator and the group owner may delete an expense, not admins.
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val first = s.expense(c, rupees(10), c, all)
+        val second = s.expense(c, rupees(20), c, all)
+        val third = s.expense(b, rupees(30), b, all)
+        val byAdmin = s.emit(b, EventBody.ExpenseDeleted(first.id))
+        val byOwner = s.emit(a, EventBody.ExpenseDeleted(second.id))
+        val adminOwn = s.emit(b, EventBody.ExpenseDeleted(third.id))
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, byAdmin.reason(state))
+        assertTrue(!state.expenses.getValue(first.id).deleted)
+        assertNull(byOwner.reason(state))
+        assertNull(adminOwn.reason(state), "an admin may delete an expense they created")
+    }
+
+    @Test
+    fun deletingFollowsTheOwnerWhenOwnershipMoves() {
+        val s = standardGroup()
+        val x = s.expense(c, rupees(10), c, all)
+        val y = s.expense(c, rupees(20), c, all)
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(b, EventBody.OwnershipAccepted)
+        val oldOwner = s.emit(a, EventBody.ExpenseDeleted(x.id))
+        val newOwner = s.emit(b, EventBody.ExpenseDeleted(y.id))
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, oldOwner.reason(state), "the old owner is now an admin")
+        assertNull(newOwner.reason(state))
+    }
+
+    @Test
+    fun creatorOrOwnerCanDeleteButOtherMembersCannot() {
         val s = standardGroup()
         val mine = s.expense(b, rupees(10), b, all)
         val other = s.expense(b, rupees(20), b, all)

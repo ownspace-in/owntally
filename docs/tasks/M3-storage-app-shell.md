@@ -238,3 +238,9 @@ Checked by hand on the emulator after these changes: with the lock on and a real
 
 Checked by hand on the emulator (second review round): lock on and no phone lock shows "OwnTally is locked" with the instruction; after setting a PIN and returning, the system prompt appears and the PIN opens the app (this found and fixed a stale-check bug: the state did not change on returning, so the screen kept saying there was no lock); after going Home, the recent-apps preview of the app is blank. Opening recents directly from the app still shows the live screen, which Android does by design.
 \n
+
+### Decisions of 4 Nov 2026, third round (after the review)
+
+22. **Delete rule:** only the creator of an expense or the group owner can delete it; **admins cannot** (changed from "creator or any admin"). It follows the owner when ownership moves (the old owner becomes an admin and loses it). Core rule, tests, the delete button, DESIGN.md, PROTOCOL.md and BUILD_PLAN are updated.
+23. **Relay:** a last resort used by the app on its own. No setting, no admin switch, nobody decides. Order: Nearby, direct (Iroh), then the relay. DESIGN.md and BUILD_PLAN M7 are updated; the "hosting your own relay" section and the custom relay address are kept but are not in the app for now. Timeouts for this order are still to be chosen. The "Can't reach a member" screen in the mockups mentions turning the relay on: it needs rewording when M7 is built.
+

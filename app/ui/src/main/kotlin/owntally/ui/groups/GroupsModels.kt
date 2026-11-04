@@ -322,11 +322,11 @@ data class AddExpenseModel(
 }
 
 object DeleteRules {
-    /** Creator or an admin, and not already deleted (the core's rule, so the button is only shown when it would work). */
+    /** Creator or the group owner (not admins), and not already deleted (the core's rule, so the button is only shown when it would work). */
     fun canDelete(view: GroupView, e: Expense): Boolean {
         if (e.deleted) return false
         val role = view.state.members[view.me]?.takeIf { !it.removed }?.role ?: return false
-        return e.creator == view.me || role.isAdmin
+        return e.creator == view.me || role == owntally.model.Role.OWNER
     }
 
     /**

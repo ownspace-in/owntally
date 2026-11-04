@@ -171,7 +171,7 @@ class GroupSessionTest {
         val benEnvelope = receiveFrom(ben, EventBody.ExpenseAdded("Ben's", rupees(50), ben.publicKey, 1, Split.Equal(setOf(ben.publicKey))))
         assertEquals(1, session.view.value.state.expenses.size)
         val benExpense = EventId(ben.publicKey, benEnvelope.counter)
-        // The owner is an admin and may delete Ben's entry.
+        // The owner may delete Ben's entry.
         assertAdded(session.deleteExpense(benExpense))
         // A plain member deleting the owner's entry is ignored by the core when it arrives.
         val ownersExpense = assertAdded(expense(owner, rupees(10), owner))

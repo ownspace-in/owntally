@@ -77,7 +77,7 @@ General: an event's author must be a current member, except `GroupCreated`. Reas
 | `MemberJoined` | Author must be owner or admin (approval is authorship). `member` must not be a current member and must never have been removed. Group must have fewer than 20 members. Valid name and phone. |
 | `ProfileUpdated` | Updates the author's own name and phone. Valid values. |
 | `ExpenseAdded` | Any member. `paidBy` and all participants must be current members. Valid amounts and split. |
-| `ExpenseDeleted` | Author is the expense's creator, or an admin, or the owner. Target must exist and not already be deleted. |
+| `ExpenseDeleted` | Author is the expense's creator or the group owner (not an admin; owner decision, 4 Nov 2026). Target must exist and not already be deleted. |
 | `SettlementRecorded` | Author must be `from` or `to`. `from` and `to` are different current members. If the author is `from`, the settlement is `PAID_MARKED`. If the author is `to`, it is `CONFIRMED` immediately. |
 | `SettlementConfirmed` | Author must be the settlement's `to`. Target is `PAID_MARKED` or `DISPUTED`. Becomes `CONFIRMED`. |
 | `PaymentDisputed` | Author must be the settlement's `to`. Target is `PAID_MARKED`. Becomes `DISPUTED`. |

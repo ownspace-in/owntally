@@ -9,14 +9,14 @@ UI mockups: see the design/ folder (screens to be exported there).
 |---|---|
 | Both phones online at the same moment to sync? | Yes, acceptable. No mailbox. |
 | License | MIT. |
-| Third party (relay) allowed? | Off by default. Admin can enable a relay per group (see Relay). |
+| Third party (relay) allowed? | Yes, as the last resort only: the app uses our relay when a direct connection fails. No setting and no admin switch; the app decides (owner decision, 4 Nov 2026, see Relay). |
 | Google Play Services? | Optional. Use Nearby Connections when available, fall back to same-Wi-Fi discovery. |
 | Encryption | Signed events, group-key encryption, encrypted transport (see Encryption). |
 | Minimum Android | 11 (API 30). Owner decision, 4 Nov 2026: Android 10 and older are not supported. |
 | Backup / recovery | One-time recovery phrase at first run (see Recovery). No backup files. |
 | Who can add expenses? | Anyone in the group. |
 | Edit expenses? | Not allowed. To fix a mistake, delete and re-add. |
-| Delete expenses? | Creator, or an admin/owner. Entry stays in history, struck through, excluded from balances. Warn if it changes settled amounts. |
+| Delete expenses? | The creator, or the group owner (not admins; owner decision, 4 Nov 2026). Entry stays in history, struck through, excluded from balances. Warn if it changes settled amounts. |
 | Remove members? | Owner or any admin. Removal records which of the member's entries were seen; newer ones are ignored. |
 | Settlement plan | Simple matching: at most members minus 1 payments, not always the absolute minimum. |
 | WebSocket relay language | Go. |
@@ -60,9 +60,11 @@ Safety:
 1. Same room: Nearby Connections (Bluetooth / Wi-Fi / Wi-Fi Direct), no internet needed.
 2. Same network or IPv6: direct connection.
 3. Different networks or cities: direct internet connection via hole punching. Needs STUN for discovery, which is a third party. Expect roughly 60 to 80 percent of phone pairs to connect. Carrier-grade NAT blocks the rest.
-4. Fallback: if unreachable, tell the user to meet up or enable a relay for that group.
+4. Fallback: if unreachable, the app uses our relay by itself (owner decision, 4 Nov 2026); if that fails too, tell the user to meet up or try again later.
 
-**Owner decision, 2 Nov 2026 (supersedes the order above; the other sections below are not yet updated to match):** the app tries transports in this order: 1. Nearby (same room, no server), 2. the WebSocket relay at `wss://relay.ownspace.in/ws`, 3. Iroh (direct, with our Iroh relay at `relay.ownspace.in`). All three stay behind the `Transport` interface. Consequences still to settle with the owner:
+**Owner decision, 4 Nov 2026 (supersedes the 2 Nov decision below): the relay is the last resort, as in the Relay section. The app decides; there is no setting and no admin switch. The order becomes: 1. Nearby (same room), 2. direct connection (Iroh, with its hole punching), 3. our relay only if direct fails. The timeouts for this order are still to be chosen. The 2 Nov text below is kept for history.**
+
+**Owner decision, 2 Nov 2026 (superseded by the 4 Nov decision above; it supersedes the order above; the other sections below are not yet updated to match):** the app tries transports in this order: 1. Nearby (same room, no server), 2. the WebSocket relay at `wss://relay.ownspace.in/ws`, 3. Iroh (direct, with our Iroh relay at `relay.ownspace.in`). All three stay behind the `Transport` interface. Consequences still to settle with the owner:
 - The WebSocket relay carries all data every time and never forms a direct link, so the "Relay" section's rule that nothing goes through a relay unless a group admin enables it needs rewording (or the relay becomes the default for internet sync).
 - The relay then sees every user's IP address, timing and data volume on every sync, not only for users who cannot connect directly.
 - Server load is higher than with Iroh first; the nginx limits and rate cap in `relay/iroh-relay/` and `relay/ws-relay/` matter more.
@@ -72,10 +74,9 @@ Safety:
 
 A relay forwards encrypted bytes between two phones that cannot reach each other directly (for example, both on carrier-grade NAT). It stores nothing and cannot read content.
 
-- Off by default. Nothing goes through a relay unless an admin enables it for the group.
-- When a direct link fails, the app says so and offers: enable relay for this group, or meet up.
-- Setting is per group and set by an admin, so all members use the same relay.
-- Server choice: the default is our own relay at `https://relay.ownspace.in`; the admin can enter a different relay address. Relay is still off until an admin enables it.
+- Last resort (owner decision, 4 Nov 2026): the app tries a direct link first and uses our relay only when that fails. Nothing is switched on or off by an admin or by anyone else; the app decides.
+- When even the relay cannot connect, the app says so and offers: meet up (Nearby) or try again later.
+- All members use the same relay: our own at `https://relay.ownspace.in`. (A custom relay address, and the "Hosting your own relay" steps below, are not part of the app for now; kept for later.)
 - Both phones connect outbound to the relay, which forwards by public id. Hole punching runs in parallel; if it works, traffic moves to the direct link and the relay drops out.
 - The relay sees public ids, IP addresses, timing and data volume. It never sees content.
 - A phone is a poor relay: it needs a public address and Android sleeps background apps. Recommend a small VPS, a home Raspberry Pi, or the public relay. Phones act as the connection point only for same-room sync.
@@ -229,11 +230,11 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
 ### Transfer ownership and admins
 - Owner opens Members, picks a person, chooses "Make owner". Sheet explains: you become an admin, they become owner. The target gets a request and must accept; until then nothing changes.
 - On acceptance, `OwnershipTransferred` is recorded (signed by the old owner, accepted by the new one). Offline phones converge on the next sync.
-- Make admin / remove admin: owner only. Admins can approve joins, remove members, delete any entry and edit the relay setting.
-- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins keep the group running (approve joins, remove members, delete entries); the owner can restore their identity with the recovery phrase.
+- Make admin / remove admin: owner only. Admins can approve joins and remove members. Only the creator of an expense or the group owner can delete it. There is no relay setting.
+- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins keep the group running (approve joins, remove members; they cannot delete other people's entries); the owner can restore their identity with the recovery phrase.
 
 ### Delete expense
-Creator or an admin. Shows "This changes balances" when the entry is part of settled amounts. The entry stays in the list as struck through with who deleted it and when.
+The creator or the group owner. Shows "This changes balances" when the entry is part of settled amounts. The entry stays in the list as struck through with who deleted it and when.
 
 ### Payment not received
 - Shown to the creditor as "Not received" next to a payment the debtor marked as paid.
@@ -244,7 +245,7 @@ Creator or an admin. Shows "This changes balances" when the entry is part of set
 ### Can't reach a member
 - Shown when a member cannot be reached directly (for example Isha on a mobile network that blocks direct links).
 - Explains why and that no entries are lost: they stay on this phone and any member holding them can pass them on.
-- Options: turn on the relay and sync (owner or admin only; members are told to ask an admin), meet up and use Nearby, or try again later.
+- Options: meet up and use Nearby, or try again later. (The relay is used automatically as the last resort, so there is no "turn on the relay" option; owner decision, 4 Nov 2026.)
 - Turning on the relay applies to the whole group, and the screen states that the relay sees who connects but never the content.
 
 ### Sync states shown to the user

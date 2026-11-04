@@ -171,6 +171,14 @@ class DeletePermissionTest {
         assertFalse(DeleteRules.canDelete(asRohan, e))
     }
 
+    @Test fun anAdminMayNotDeleteSomeoneElsesExpenseButMayDeleteTheirOwn() {
+        val e = expense()
+        val members = s.view.value.state.members
+        val adminView = s.view.value.let { v -> v.copy(me = rohan, state = v.state.copy(members = members + (rohan to members.getValue(rohan).copy(role = owntally.model.Role.ADMIN)))) }
+        assertFalse(DeleteRules.canDelete(adminView, e), "owner decision, 4 Nov 2026: admins cannot delete others' expenses")
+        assertTrue(DeleteRules.canDelete(adminView, e.copy(creator = rohan)))
+    }
+
     @Test fun aPlainMemberMayDeleteTheirOwnExpenseButNotMine() {
         val mine = expense()
         val asRohan = s.view.value.copy(me = rohan)

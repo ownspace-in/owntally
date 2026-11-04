@@ -83,7 +83,8 @@ private class Run(private val forced: Set<EventId>) {
             is EventBody.ExpenseDeleted -> {
                 val expense = expenses[body.expense] ?: return IgnoreReason.UNKNOWN_TARGET
                 if (expense.deleted) return IgnoreReason.ALREADY_DONE
-                if (author != expense.creator && !role.isAdmin) return IgnoreReason.NOT_ALLOWED
+                // Owner decision, 4 Nov 2026: the creator or the group owner, not admins.
+                if (author != expense.creator && role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 expenses[expense.id] = expense.copy(deleted = true, deletedBy = author)
                 null
             }
