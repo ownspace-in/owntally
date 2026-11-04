@@ -136,7 +136,7 @@ Acceptance (two real phones): invite by QR, scan, approve, history arrives, add 
 
 ### M7. Internet sync and relay setting
 
-Internet transport (as chosen in M0), the relay as last resort used automatically (no setting, no admin switch; owner decision 4 Nov 2026) at `https://relay.ownspace.in`, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
+Internet transport (as chosen in M0), the relay as last resort used automatically (no setting, no admin switch; owner decision 4 Nov 2026) at `https://relay.ownspace.in`, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (Nearby only when asked, 15 s; internet chain staggered: Iroh first, the WebSocket relay joins after 3 s if Iroh has not connected, first to connect wins; connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
 
 Acceptance: two phones on different mobile networks sync, the status shows the right chip, and a pair that can reach each other only through the relay shows "Via relay", and when nothing connects the status says so instead of failing silently.
 
