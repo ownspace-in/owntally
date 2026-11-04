@@ -181,6 +181,14 @@ Public relay caveat: the n0 public relays are free but rate-limited and document
 5. Empty home screen with two actions: "Create group" and "Join with link or code".
 Permissions are asked only when first needed: camera for scanning, Bluetooth/Nearby for same-room sync.
 
+**Location for same-room sync (owner decision, 3 Nov 2026).** Nearby Connections needs Android's Location permission, and on some phones the Location switch must also be on, because Android treats scanning for nearby Bluetooth and Wi-Fi devices as something that can reveal where a phone is. There is no other way to use Nearby, so the app asks for it, with these rules:
+- It is asked only when the person first starts same-room sync, never at first run.
+- Before Android's prompt, our own screen says why in plain words: "Android needs this to find phones near you. OwnTally never reads or stores your location."
+- The app never reads the location. It requests the permission only so that Nearby works, and the manifest asks for nothing beyond what Nearby needs.
+- If the permission is granted but the Location switch is off, the app detects it and says "Turn on Location in your phone's settings so Android can find nearby phones", with a button that opens that setting. (Without this, Nearby fails with a confusing error; seen on a Samsung phone in M0.)
+- If the person refuses, same-room sync is unavailable, and the app says how else to join or sync (the other transports in "Sync transports", or the same-Wi-Fi fallback). Nothing else in the app depends on Location.
+- The Play Store listing explains the permission in the same words.
+
 ### Create group
 Name, optional icon colour, currency (default INR). The creator becomes owner and admin. The app then offers "Invite friends" which opens the ticket share sheet.
 
