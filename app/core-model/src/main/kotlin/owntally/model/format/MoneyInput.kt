@@ -14,8 +14,8 @@ sealed class ParsedAmount {
 
 /** Reads an amount a person typed. Never throws, never rounds: a third decimal is refused. */
 object MoneyInput {
-    /** ₹100 crore. A sanity limit that also keeps every sum far from overflowing. */
-    val MAX = Money(100_000_000_000)
+    /** The same limit the event rules enforce ([Money.MAX_AMOUNT]): 100,000,000 whole units. */
+    val MAX = Money.MAX_AMOUNT
 
     /**
      * Reads what a person typed, with the decimal sign and grouping of [locale] (the phone's, if none is given). Where the decimal

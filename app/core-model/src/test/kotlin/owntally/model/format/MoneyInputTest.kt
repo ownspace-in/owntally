@@ -76,13 +76,13 @@ class MoneyInputTest {
     }
 
     @Test
-    fun theLimitIsOneHundredCroreRupees() {
-        assertEquals(Money(100_000_000_000), MoneyInput.MAX)
-        valid("1000000000", 100_000_000_000)
-        valid("1,00,00,00,000", 100_000_000_000)
-        valid("1000000000.00", 100_000_000_000)
-        invalid("1000000000.01", AmountProblem.TOO_LARGE)
-        invalid("1000000001", AmountProblem.TOO_LARGE)
+    fun theLimitIsOneHundredMillionWholeUnits() {
+        assertEquals(Money(10_000_000_000), MoneyInput.MAX)
+        valid("100000000", 10_000_000_000)
+        valid("10,00,00,000", 10_000_000_000)
+        valid("100000000.00", 10_000_000_000)
+        invalid("100000000.01", AmountProblem.TOO_LARGE)
+        invalid("100000001", AmountProblem.TOO_LARGE)
         invalid("9".repeat(50), AmountProblem.TOO_LARGE)
         invalid("9".repeat(500) + ".99", AmountProblem.TOO_LARGE)
     }

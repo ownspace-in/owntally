@@ -39,11 +39,11 @@ fun randomAnyEvent(rnd: Random): Event {
         3 -> {
             val parts = keys.shuffled(rnd).take(rnd.nextInt(1, 7))
             val split = if (rnd.nextBoolean()) Split.Equal(parts.toSet()) else Split.Exact(parts.associateWith { Money(rnd.nextLong(1, 1_000_000_000)) })
-            val total = if (split is Split.Exact) split.sum() else Money(rnd.nextLong(1, Long.MAX_VALUE / 4))
+            val total = if (split is Split.Exact) split.sum() else Money(rnd.nextLong(1, Money.MAX_AMOUNT.paise))
             EventBody.ExpenseAdded("D${rnd.nextInt()}", total, k(), rnd.nextLong(-5, 40_000), split)
         }
         4 -> EventBody.ExpenseDeleted(id())
-        5 -> k().let { from -> EventBody.SettlementRecorded(from, keys.first { it != from }, Money(rnd.nextLong(1, Long.MAX_VALUE / 4))) }
+        5 -> k().let { from -> EventBody.SettlementRecorded(from, keys.first { it != from }, Money(rnd.nextLong(1, Money.MAX_AMOUNT.paise))) }
         6 -> EventBody.SettlementConfirmed(id())
         7 -> EventBody.PaymentDisputed(id(), DisputeReason.values().random(rnd))
         8 -> EventBody.AdminAdded(k())

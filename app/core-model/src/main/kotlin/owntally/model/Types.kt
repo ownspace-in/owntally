@@ -13,6 +13,13 @@ value class Money(val paise: Long) : Comparable<Money> {
 
     companion object {
         val ZERO = Money(0)
+
+        /**
+         * The largest amount of one expense or payment: 100,000,000 in whole currency units, whatever the currency (owner decision,
+         * 4 Nov 2026), which is 10,000,000,000 paise. Without a limit a member could write amounts so large that adding them up
+         * overflows and fails on every phone.
+         */
+        val MAX_AMOUNT = Money(10_000_000_000)
     }
 }
 

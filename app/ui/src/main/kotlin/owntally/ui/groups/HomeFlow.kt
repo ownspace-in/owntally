@@ -257,6 +257,11 @@ private fun ExpenseDialog(view: owntally.data.session.GroupView, e: owntally.mod
 
 @Composable
 private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit) {
+    // Everything that must outlive an early return is declared first: a composable that returns early drops the state and the
+    // coroutine scope declared after the return, which once cancelled the save before it could close the screen.
+    var error by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -268,9 +273,6 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
         if (ui.addExpense?.first != id) ui.addExpense = id to withContext(Dispatchers.IO) { AddExpenseModel.start(s.view.value, s.nextCounter(), java.time.LocalDate.now().toEpochDay()) }
     }
     val model = ui.addExpense?.takeIf { it.first == id }?.second ?: return
-    var error by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     AddExpenseScreen(
         model, view.state.name ?: "", onChange = { ui.addExpense = id to it; error = null },
         onSave = {
@@ -282,7 +284,11 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
                 try {
                     val r = withContext(Dispatchers.IO) { s.addExpense(model.trimmedDescription, total, model.paidBy, model.day, split) }
                     when (r) {
-                        is owntally.data.session.AddResult.Added -> { ui.addExpense = null; withContext(Dispatchers.Main.immediate) { onDone() } }
+                        is owntally.data.session.AddResult.Added -> withContext(Dispatchers.Main.immediate) {
+                            // Close the screen first, then clear the form, both in one step that cannot be interrupted.
+                            onDone()
+                            ui.addExpense = null
+                        }
                         is owntally.data.session.AddResult.Refused -> error = "This expense can't be added (${r.reason.name.lowercase().replace('_', ' ')}). Someone may have left the group."
                         owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
                     }

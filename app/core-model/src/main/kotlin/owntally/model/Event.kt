@@ -80,6 +80,7 @@ sealed class EventBody {
         init {
             require(description.isNotBlank() && description.length in 1..80) { "description must be 1 to 80 characters" }
             require(total.isPositive()) { "total must be greater than 0" }
+            require(total <= Money.MAX_AMOUNT) { "total is above the limit" }
             if (split is Split.Exact) require(split.sum() == total) { "exact amounts must add up to the total" }
         }
     }
@@ -90,6 +91,7 @@ sealed class EventBody {
         init {
             require(from != to) { "a payment needs two different members" }
             require(amount.isPositive()) { "amount must be greater than 0" }
+            require(amount <= Money.MAX_AMOUNT) { "amount is above the limit" }
         }
     }
 

@@ -82,7 +82,7 @@ V = [
     ev("key-rotated", "asha", 15, {"asha": 14}, 1016, {"type": "KeyRotated", "newEpoch": 3, "sealedKeys": {"asha": SEALED(1), "ben": SEALED(2)}}),
     ev("unknown-tag", "asha", 16, {"asha": 15}, 1017, {"type": "Unknown", "tag": 200, "content": "0102"}),
     ev("unknown-tag-empty", "asha", 17, {"asha": 16}, 1018, {"type": "Unknown", "tag": 16, "content": ""}),
-    ev("large-numbers", "fay", 1099511627777, {"fay": 1099511627776, "asha": 4294967296}, -1, {"type": "ExpenseAdded", "description": "Big", "total": 1000000000000000, "paidBy": "fay", "day": -1, "split": {"type": "Equal", "participants": ["fay"]}}),
+    ev("large-numbers", "fay", 1099511627777, {"fay": 1099511627776, "asha": 4294967296}, -1, {"type": "ExpenseAdded", "description": "Big", "total": 10000000000, "paidBy": "fay", "day": -1, "split": {"type": "Equal", "participants": ["fay"]}}),
     ev("unicode-name", "asha", 2, {"asha": 1}, 1019, {"type": "ProfileUpdated", "name": "अशोक ☃", "phone": "+91 98765"}),
 ]
 payloads = []
@@ -131,6 +131,9 @@ INVALID_P.append({"name": "after-unsorted", "author": "ben", "counter": 3, "vers
 def with_(base, changes, name, why):
     d = json.loads(json.dumps(base)); d["body"].update(changes); return {"name": name, "author": d["author"], "counter": d["counter"], "version": 1, "hex": payload(d).hex(), "why": why}
 INVALID_P.append(with_(eq, {"total": 0}, "zero-total", "total must be greater than 0"))
+INVALID_P.append(with_(eq, {"total": 10000000001}, "total-over-limit", "total is above the limit of 10,000,000,000 paise (100,000,000 whole units)"))
+INVALID_P.append(with_(eq, {"total": 9223372036854775807}, "total-huge", "total is above the limit"))
+INVALID_P.append(with_(byname["settlement-recorded"], {"amount": 10000000001}, "payment-over-limit", "amount is above the limit"))
 INVALID_P.append(with_(byname["profile-updated"], {"name": ""}, "empty-name", "name must not be empty"))
 INVALID_P.append(with_(byname["group-created"], {"currency": "inr"}, "lowercase-currency", "currency must be 3 upper case letters"))
 INVALID_P.append(with_(ex, {"split": {"type": "Exact", "amounts": {"asha": 100000, "ben": 80001}}}, "exact-sum-mismatch", "exact amounts do not add up to the total"))
