@@ -630,4 +630,22 @@ class ReplayTest {
         assertTrue(rejected > 200, "rejected $rejected")
         assertTrue(removals > 20, "removals $removals")
     }
+
+    @kotlin.test.Ignore // KNOWN GAP, awaiting the owner's decision: see docs/tasks/M3-storage-app-shell.md, "Security finding". Remove this line when fixed.
+    @Test
+    fun aMemberCannotTakeOverTheGroupByWritingTheirOwnCreatingEvent() {
+        // A member who holds the group key writes a "create group" event as their first event, claiming to have seen nothing,
+        // with a key that sorts before the real owner's. The real owner must stay the owner.
+        val s = Sim()
+        val owner = key(9)
+        val thief = key(2) // sorts first
+        s.emit(owner, EventBody.GroupCreated(GROUP, "Goa Trip", "INR", encKeyFor(owner)))
+        s.emit(owner, EventBody.ProfileUpdated("Asha", PHONE))
+        s.join(owner, thief, "Eve")
+        val forged = s.emit(thief, EventBody.GroupCreated(GROUP, "Mine", "INR", encKeyFor(thief)), seen = emptyMap())
+        val state = s.state()
+        assertEquals(owner, state.owner, "the real owner stays the owner")
+        assertEquals("Goa Trip", state.name)
+        assertTrue(forged.id in state.ignored.map { it.id })
+    }
 }
