@@ -145,6 +145,24 @@ class ReplayTest {
     }
 
     @Test
+    fun anExpenseWrittenByARemovedMemberButPaidByAnotherStaysCountedAndOnlyTheOwnerCanDeleteIt() {
+        // The creator is removed, but the payer (c) is still in the group, so the expense still counts. The creator can no longer
+        // delete it (they were removed) and admins cannot either: only the owner can (owner decision, 4 Nov 2026).
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(d))
+        val e = s.expense(b, rupees(30), c, all)
+        s.remove(a, b)
+        val byRemoved = s.emit(b, EventBody.ExpenseDeleted(e.id))
+        val byAdmin = s.emit(d, EventBody.ExpenseDeleted(e.id))
+        val byOwner = s.emit(a, EventBody.ExpenseDeleted(e.id))
+        val state = s.state()
+        assertEquals(IgnoreReason.AFTER_REMOVAL, byRemoved.reason(state))
+        assertEquals(IgnoreReason.NOT_ALLOWED, byAdmin.reason(state))
+        assertNull(byOwner.reason(state))
+        assertTrue(state.expenses.getValue(e.id).deleted)
+    }
+
+    @Test
     fun deletingFollowsTheOwnerWhenOwnershipMoves() {
         val s = standardGroup()
         val x = s.expense(c, rupees(10), c, all)
