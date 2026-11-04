@@ -61,8 +61,14 @@ class LockController(
     var state by mutableStateOf(LockState.start(initialMode))
         private set
 
+    /** Goes up whenever the phone's lock should be looked at again (coming back to the app, or "Check again"), because the state alone may not change. */
+    var refreshCount by mutableStateOf(0)
+        private set
+
+    fun refresh() { refreshCount++ }
+
     fun backgrounded() { state = state.backgrounded(nowMillis()) }
-    fun foregrounded() { state = state.foregrounded(nowMillis()) }
+    fun foregrounded() { state = state.foregrounded(nowMillis()); refresh() }
     fun unlocked() { state = state.unlocked() }
     fun phoneLocked() { state = state.phoneLocked() }
 
@@ -99,12 +105,12 @@ fun LockHost(controller: LockController, content: @Composable () -> Unit) {
         )
         onDispose { context.unregisterReceiver(receiver) }
     }
-    val availability = controller.authenticator.availability()
-    if (LockGate.mustAsk(controller.state, availability)) LockScreen(controller) else content()
+    val availability = remember(controller.refreshCount) { controller.authenticator.availability() }
+    if (LockGate.mustAsk(controller.state, availability)) LockScreen(controller, availability) else content()
 }
 
 @Composable
-private fun LockScreen(controller: LockController) {
+private fun LockScreen(controller: LockController, availability: PhoneLockAvailability) {
     var asking by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     fun ask() {
@@ -115,7 +121,8 @@ private fun LockScreen(controller: LockController) {
             if (ok) controller.unlocked() else failed = true
         }
     }
-    LaunchedEffect(Unit) { ask() }
+    val canAsk = LockGate.canAsk(availability)
+    LaunchedEffect(canAsk) { if (canAsk) ask() }
     Column(
         Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding().padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -124,13 +131,13 @@ private fun LockScreen(controller: LockController) {
         Spacer(Modifier.height(28.dp))
         Text("OwnTally is locked", style = MaterialTheme.typography.headlineMedium, color = OwnTallyColors.Ink)
         Spacer(Modifier.height(10.dp))
-        Text("Use your fingerprint or your phone's screen lock to open it.", style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
-        if (failed) {
+        Text(LockGate.lockScreenText(availability), style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
+        if (failed && canAsk) {
             Spacer(Modifier.height(14.dp))
             Notice("That did not unlock it. Try again.")
         }
         Spacer(Modifier.height(24.dp))
-        PrimaryButton("Unlock", { failed = false; ask() }, Modifier.fillMaxWidth())
+        PrimaryButton(if (canAsk) "Unlock" else "Check again", { failed = false; if (canAsk) ask() else controller.refresh() }, Modifier.fillMaxWidth())
     }
 }
 

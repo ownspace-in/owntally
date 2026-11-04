@@ -46,6 +46,8 @@ Decided by the BUILD_PLAN or DESIGN already: Kotlin, Jetpack Compose with Materi
 16. **App lock:** locks at once when the phone locks (its screen goes off), and opens again with the phone's fingerprint or screen lock. If the phone has no screen lock any more the app cannot ask and does not (as built; the owner's answer did not cover this case, so it is still as built).
 17. **Minimum Android is 11 (API 30).** Android 10 and older are not supported; the biometric code no longer has older-version branches.
 18. **No reference to UPI anywhere, and the app opens no other app.** So the Pay share sheet was removed: all four Settle up buttons are switched off. How it works card 4 and the Settle up intro say "pay however you like, outside the app". Card 3 (joining and syncing) is kept as is.
+20. **No screen lock on the phone while the app lock is on:** the app stays locked until a screen lock is set again (changed from "stop asking"; item 16 is amended). The lock screen says what to do and has "Check again". Nothing is lost meanwhile: our keys are not tied to the screen lock.
+21. **Cover when not in front:** the app draws a plain cover whenever it is not in front, and on Android 13 and newer asks Android not to keep a picture of it in the recent-apps list. Screenshots still work normally.
 19. **Debug test-data button:** stays in debug builds only; both debug and release builds must build (they do).
 
 **Defaults the builder proposes (change any of them):**
@@ -232,3 +234,7 @@ Rebased onto `main` (PRs #5 to #7 were merged). Then the owner's second-round an
 
 Checked by hand on the emulator after these changes: with the lock on and a real device PIN, a fresh start asks; after the phone's screen went off and on again a few seconds later the app was locked; a screen capture of the open app is a normal picture (not black). Unit tests, emulator tests, debug and release builds and lint pass.
 
+
+
+Checked by hand on the emulator (second review round): lock on and no phone lock shows "OwnTally is locked" with the instruction; after setting a PIN and returning, the system prompt appears and the PIN opens the app (this found and fixed a stale-check bug: the state did not change on returning, so the screen kept saying there was no lock); after going Home, the recent-apps preview of the app is blank. Opening recents directly from the app still shows the live screen, which Android does by design.
+\n

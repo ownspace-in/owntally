@@ -94,7 +94,7 @@ Consequences and rules:
 - The ticket contains the group key: short expiry, single use, host approval.
 - No forward secrecy for stored events in v1 (MLS or a ratchet considered too heavy).
 - Metadata is visible to a relay or network observers.
-- Optional app lock: the phone's own fingerprint or screen lock (no PIN of our own; owner decision, 4 Nov 2026). It locks when the phone locks and after 30 seconds away.
+- Optional app lock: the phone's own fingerprint or screen lock (no PIN of our own; owner decision, 4 Nov 2026). It locks when the phone locks and after 30 seconds away; if the phone has no screen lock, the app stays locked until one is set. The app covers its own screen whenever it is not in front, so the recent-apps preview shows nothing.
 - Screenshots are allowed on every screen, the recovery phrase included (owner decision, 4 Nov 2026). A screenshot of the phrase can be copied by photo backups and other apps.
 
 ## Resources (estimates)

@@ -26,6 +26,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Android 13 and newer can leave the app's picture out of the recent-apps list; older versions rely on the cover drawn by the app.
+        if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         setContent {
             val start by produceState<AppStart>(AppStart.Loading) { value = withContext(Dispatchers.IO) { container.start() } }
             OwnTallyApp(start, onboarding = { onboarding }, sessions = { container.sessions }, debugTools = container.debugTools, lock = LockDeps(container.settings, BiometricAuthenticator(this)))

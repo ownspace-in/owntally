@@ -19,9 +19,9 @@ class SettingsModelTest {
         assertEquals("This phone cannot check a lock for apps.", SettingsModel(LockMode.OFF, PhoneLockAvailability.UNSUPPORTED).phoneNote)
     }
 
-    @Test fun ifTheLockIsOnButThePhoneLostItsLockTheNoteSaysItIsNotEnforced() {
+    @Test fun ifTheLockIsOnButThePhoneLostItsLockTheNoteSaysTheAppStaysLocked() {
         val m = SettingsModel(LockMode.PHONE, PhoneLockAvailability.NOT_SET_UP)
-        assertEquals("OwnTally's lock is not asking right now because your phone has no screen lock. Set one to use it again.", m.phoneNote)
+        assertEquals("Your phone has no screen lock, so OwnTally stays locked until you set one.", m.phoneNote)
     }
 
     @Test fun choosingTheCurrentModeDoesNothing() {
@@ -42,13 +42,35 @@ class SettingsModelTest {
         assertEquals(ModeChange.SetNow(LockMode.OFF), SettingsModel(LockMode.PHONE, PhoneLockAvailability.NOT_SET_UP).choose(LockMode.OFF))
     }
 
-    @Test fun theAppAsksOnlyWhenLockedAndThePhoneCanCheck() {
+    @Test fun aLockedAppShowsTheLockScreenWhateverThePhoneCanDo() {
         val locked = LockState.start(LockMode.PHONE)
         assertTrue(LockGate.mustAsk(locked, PhoneLockAvailability.AVAILABLE))
         assertFalse(LockGate.mustAsk(locked.unlocked(), PhoneLockAvailability.AVAILABLE))
-        // A phone with no screen lock cannot check anything, and must not shut the person out of their own data.
-        assertFalse(LockGate.mustAsk(locked, PhoneLockAvailability.NOT_SET_UP))
-        assertFalse(LockGate.mustAsk(locked, PhoneLockAvailability.UNSUPPORTED))
+        // Owner decision, 4 Nov 2026: with no screen lock on the phone the app stays locked until one is set (nothing is lost meanwhile).
+        assertTrue(LockGate.mustAsk(locked, PhoneLockAvailability.NOT_SET_UP))
+        assertTrue(LockGate.mustAsk(locked, PhoneLockAvailability.UNSUPPORTED))
         assertFalse(LockGate.mustAsk(LockState.start(LockMode.OFF), PhoneLockAvailability.AVAILABLE))
+        assertFalse(LockGate.mustAsk(LockState.start(LockMode.OFF), PhoneLockAvailability.NOT_SET_UP))
+    }
+
+    @Test fun theLockScreenOnlyAsksTheSystemWhenThePhoneCan() {
+        assertTrue(LockGate.canAsk(PhoneLockAvailability.AVAILABLE))
+        assertFalse(LockGate.canAsk(PhoneLockAvailability.NOT_SET_UP))
+        assertFalse(LockGate.canAsk(PhoneLockAvailability.UNSUPPORTED))
+    }
+
+    @Test fun lockScreenWordsSayWhatToDo() {
+        assertEquals("Use your fingerprint or your phone's screen lock to open it.", LockGate.lockScreenText(PhoneLockAvailability.AVAILABLE))
+        assertEquals("Your phone has no screen lock. Set a screen lock or fingerprint in your phone's settings, then come back.", LockGate.lockScreenText(PhoneLockAvailability.NOT_SET_UP))
+        assertEquals("This phone cannot check a lock for apps, so OwnTally cannot be opened while its lock is on.", LockGate.lockScreenText(PhoneLockAvailability.UNSUPPORTED))
+    }
+}
+
+class CoverRuleTest {
+    @Test fun theScreenIsCoveredWheneverTheAppIsNotInFront() {
+        assertFalse(CoverRule.covered(androidx.lifecycle.Lifecycle.State.RESUMED))
+        for (s in listOf(androidx.lifecycle.Lifecycle.State.STARTED, androidx.lifecycle.Lifecycle.State.CREATED, androidx.lifecycle.Lifecycle.State.INITIALIZED)) {
+            assertTrue(CoverRule.covered(s), "$s")
+        }
     }
 }

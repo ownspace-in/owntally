@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.compose.currentStateAsState
+import owntally.ui.lock.CoverRule
 import owntally.ui.lock.LockController
 import owntally.ui.lock.LockHost
 import owntally.ui.lock.LockSettingStore
@@ -70,10 +72,23 @@ private fun WithLock(lock: LockDeps?, content: @Composable (LockController?) -> 
     if (c == null) Box(Modifier.fillMaxSize().background(OwnTallyColors.Background)) else LockHost(c) { content(c) }
 }
 
+/** Draws a plain cover over everything whenever the app is not in front, so the recent-apps preview shows nothing of the person's data. */
+@Composable
+private fun WithCover(content: @Composable () -> Unit) {
+    val lifecycleState by androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    Box(Modifier.fillMaxSize()) {
+        content()
+        if (CoverRule.covered(lifecycleState)) {
+            Box(Modifier.fillMaxSize().background(OwnTallyColors.Background), contentAlignment = Alignment.Center) { Wordmark() }
+        }
+    }
+}
+
 /** The root of the app's screens. */
 @Composable
 fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions: () -> Sessions, debugTools: DebugTools? = null, lock: LockDeps? = null) {
     OwnTallyTheme {
+        WithCover {
         when (start) {
             AppStart.Loading -> Box(Modifier.fillMaxSize().background(OwnTallyColors.Background))
             AppStart.NeedsFirstRun -> {
@@ -89,6 +104,7 @@ fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions
                 "Secure storage isn't available",
                 "OwnTally keeps your keys in this phone's secure storage and can't start without it.",
             )
+        }
         }
     }
 }

@@ -31,7 +31,7 @@ data class SettingsModel(val mode: LockMode, val availability: PhoneLockAvailabi
         get() = when (availability) {
             PhoneLockAvailability.AVAILABLE -> null
             PhoneLockAvailability.NOT_SET_UP ->
-                if (mode == LockMode.PHONE) "OwnTally's lock is not asking right now because your phone has no screen lock. Set one to use it again."
+                if (mode == LockMode.PHONE) "Your phone has no screen lock, so OwnTally stays locked until you set one."
                 else "Set a screen lock or fingerprint in your phone's settings first."
             PhoneLockAvailability.UNSUPPORTED -> "This phone cannot check a lock for apps."
         }
@@ -45,7 +45,23 @@ data class SettingsModel(val mode: LockMode, val availability: PhoneLockAvailabi
 }
 
 object LockGate {
-    /** Show the lock screen only if the app is locked and the phone can really check. Otherwise the lock cannot protect anything and must not trap the person. */
-    fun mustAsk(state: LockState, availability: PhoneLockAvailability) = state.locked && availability == PhoneLockAvailability.AVAILABLE
+    /**
+     * Show the lock screen whenever the app is locked. If the phone has no screen lock to ask with, the app stays locked until one is
+     * set (owner decision, 4 Nov 2026); the person's data is not lost, because our keys are not tied to the screen lock.
+     */
+    fun mustAsk(state: LockState, @Suppress("UNUSED_PARAMETER") availability: PhoneLockAvailability) = state.locked
 
+    /** Whether the system's prompt can be shown at all. */
+    fun canAsk(availability: PhoneLockAvailability) = availability == PhoneLockAvailability.AVAILABLE
+
+    fun lockScreenText(availability: PhoneLockAvailability) = when (availability) {
+        PhoneLockAvailability.AVAILABLE -> "Use your fingerprint or your phone's screen lock to open it."
+        PhoneLockAvailability.NOT_SET_UP -> "Your phone has no screen lock. Set a screen lock or fingerprint in your phone's settings, then come back."
+        PhoneLockAvailability.UNSUPPORTED -> "This phone cannot check a lock for apps, so OwnTally cannot be opened while its lock is on."
+    }
+}
+
+/** The app covers its own screen whenever it is not in front, so the recent-apps preview shows nothing (owner decision, 4 Nov 2026). */
+object CoverRule {
+    fun covered(state: androidx.lifecycle.Lifecycle.State) = state != androidx.lifecycle.Lifecycle.State.RESUMED
 }
