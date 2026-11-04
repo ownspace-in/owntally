@@ -68,6 +68,28 @@ class EventSealingTest {
     }
 
     @Test
+    fun anEnvelopeFromSomeoneNotInTheKnownMembersIsNotOpenedBeforeAnyDecryption() {
+        // Owner decision, 4 Nov 2026 (clarification C7, option B): when the members are known, the author must be one of them
+        // before anything is decrypted. The envelope is not thrown away: the caller keeps it for when the author is admitted.
+        val envelope = EventSealing.seal(a, group, 2, key, profile())
+        val ring = keyring(2L to key)
+        assertEquals(OpenResult.UnknownAuthor, EventSealing.open(envelope, ring, listOf(b.publicKey)))
+        assertEquals(OpenResult.UnknownAuthor, EventSealing.open(envelope, keyring(), listOf(b.publicKey)), "no key needed to know the author is unknown")
+        assertEquals(profile(), opened(EventSealing.open(envelope, ring, listOf(a.publicKey, b.publicKey))))
+        assertEquals(profile(), opened(EventSealing.open(envelope, ring, null)), "no member list: as before")
+        assertEquals(profile(), opened(EventSealing.open(envelope, ring)))
+    }
+
+    @Test
+    fun aBadSignatureIsRejectedForGoodEvenFromAnUnknownAuthor() {
+        val envelope = EventSealing.seal(a, group, 2, key, profile())
+        val bytes = envelope.encode().also { it[it.size - 1] = (it[it.size - 1].toInt() xor 1).toByte() }
+        val tampered = Envelope.decode(bytes)
+        assertEquals(OpenResult.Rejected(RejectReason.BAD_SIGNATURE), EventSealing.open(tampered, keyring(2L to key), listOf(b.publicKey)))
+        assertEquals(OpenResult.Rejected(RejectReason.BAD_SIGNATURE), EventSealing.open(tampered, keyring(2L to key), listOf(a.publicKey)))
+    }
+
+    @Test
     fun theSameEventSealedTwiceGivesDifferentBytes() {
         val one = EventSealing.seal(a, group, 2, key, profile())
         val two = EventSealing.seal(a, group, 2, key, profile())
