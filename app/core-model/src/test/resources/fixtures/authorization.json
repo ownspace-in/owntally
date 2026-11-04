@@ -1,5 +1,5 @@
 {
- "description": "One rule broken per ignored event. Asha creates the group, makes Ben an admin and hands over ownership to Ben.",
+ "description": "One rule broken per ignored event. Asha creates the group, makes Ben an admin and hands over ownership to Ben. Since 4 Nov 2026 only the owner removes members, so Asha (an admin after the hand-over) cannot remove Dev: that event is NOT_ALLOWED and Dev stays.",
  "keys": {
   "asha": "0100000000000000000000000000000000000000000000000000000000000000",
   "ben": "0200000000000000000000000000000000000000000000000000000000000000",
@@ -245,11 +245,10 @@
   "currentMembers": [
    "asha",
    "ben",
-   "chitra"
-  ],
-  "removed": [
+   "chitra",
    "dev"
   ],
+  "removed": [],
   "owner": "ben",
   "roles": {
    "asha": "ADMIN",
@@ -260,7 +259,8 @@
   "balances": {
    "asha": 0,
    "ben": 0,
-   "chitra": 0
+   "chitra": 0,
+   "dev": 0
   },
   "plan": [],
   "ignored": [
@@ -293,8 +293,13 @@
     "chitra",
     4,
     "UNKNOWN_TYPE"
+   ],
+   [
+    "asha",
+    6,
+    "NOT_ALLOWED"
    ]
   ],
-  "epoch": 2
+  "epoch": 1
  }
 }

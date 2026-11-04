@@ -17,10 +17,10 @@ UI mockups: see the design/ folder (screens to be exported there).
 | Who can add expenses? | Anyone in the group. |
 | Edit expenses? | Not allowed. To fix a mistake, delete and re-add. |
 | Delete expenses? | The creator, or the group owner (not admins; owner decision, 4 Nov 2026). Entry stays in history, struck through, excluded from balances. Warn if it changes settled amounts. |
-| Remove members? | Owner or any admin. Removal records which of the member's entries were seen; newer ones are ignored. |
+| Remove members? | **Only the owner** (owner decision, 4 Nov 2026). Admins cannot remove anyone, themselves included; a plain member can leave. Removal records which of the member's entries were seen; newer ones are ignored. |
 | Settlement plan | Simple matching: at most members minus 1 payments, not always the absolute minimum. |
 | WebSocket relay language | Go. |
-| Transfer ownership? | Yes: owner signs `OwnershipTransferred`, new owner accepts. Ownership moves only when the owner offers it and the new owner accepts. No admin takeover in v1. The owner can name co-admins, who can approve joins and remove members, so a group whose owner loses their phone can still run. |
+| Transfer ownership? | Yes: owner signs `OwnershipTransferred`, new owner accepts. Ownership moves only when the owner offers it and the new owner accepts. No admin takeover in v1. The owner can name co-admins, who can approve joins and invite (they cannot remove anyone or change the key). If the owner is away, members can still add and delete their own expenses and settle; joins by admins still work, but removals and key changes wait for the owner. |
 | Sign-up / identity | No global account. A master seed is created on first run. Each group gets its own keypair derived from the seed, so members of different groups cannot link you. Only a name and a phone number are collected, set per group on join. The phone adds up cross-group totals locally. One seed backup restores every group. |
 | Join approval | Admin approves or declines. No fingerprint check. Tickets: single use, 8 hours; an admin sends a new one if expired. |
 | Removal with unsettled balance | Allowed. Balances are rebalanced as if the removed member were never in the group; their entries and payments involving them stay in history but are excluded. Before-and-after shown to the admin, who must confirm. |
@@ -215,7 +215,7 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
 - Tickets are single use and expire after 8 hours. When one expires, an admin sends a new ticket. Admins can revoke unused tickets.
 
 ### Remove member
-1. Admin opens a member, chooses Remove, sees what happens: they stay in history, can no longer add entries, and the group key will change.
+1. The owner opens a member, chooses Remove, sees what happens: they stay in history, can no longer add entries, and the group key will change.
 2. Removal rebalances the group. The removed member is taken out of the calculation, as if they had never been part of it:
    - Expenses they paid are excluded, so nobody owes them for those.
    - Their share is removed from expenses others paid. Equal splits are re-split among the remaining participants. For exact-amount splits, their share is divided equally among the remaining participants of that expense (owner decision, 3 Nov 2026), so the payer is repaid in full.
@@ -231,8 +231,8 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
 ### Transfer ownership and admins
 - Owner opens Members, picks a person, chooses "Make owner". Sheet explains: you become an admin, they become owner. The target gets a request and must accept; until then nothing changes.
 - On acceptance, `OwnershipTransferred` is recorded (signed by the old owner, accepted by the new one). Offline phones converge on the next sync.
-- Make admin / remove admin: owner only. Admins can approve joins and remove members. Only the creator of an expense or the group owner can delete it. There is no relay setting.
-- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins keep the group running (approve joins, remove members; they cannot delete other people's entries); the owner can restore their identity with the recovery phrase.
+- Make admin / remove admin: owner only. Admins can approve joins and invite; only the owner removes members and changes the key. Only the creator of an expense or the group owner can delete it. There is no relay setting.
+- Admin takeover when the owner is unreachable is not in v1. If the owner loses their phone, co-admins can keep admitting people (they cannot remove anyone, change the key, or delete other people's entries), but removals and key changes wait for the owner; the owner can restore their identity with the recovery phrase.
 
 ### Delete expense
 The creator or the group owner. Shows "This changes balances" when the entry is part of settled amounts. The entry stays in the list as struck through with who deleted it and when.

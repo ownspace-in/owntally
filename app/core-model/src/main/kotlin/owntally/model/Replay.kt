@@ -159,7 +159,8 @@ private class Run(private val forced: Set<EventId>) {
                 null
             }
             is EventBody.KeyRotated -> {
-                if (!role.isAdmin) return IgnoreReason.NOT_ALLOWED
+                // Owner decision, 4 Nov 2026: only the owner changes the key (admins approve joins, which do not change it).
+                if (role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys()) return IgnoreReason.INVALID
                 epoch = body.newEpoch
                 epochStarts[epoch] = event.id
@@ -168,11 +169,11 @@ private class Run(private val forced: Set<EventId>) {
             is EventBody.MemberRemoved -> {
                 val target = current(body.member) ?: return IgnoreReason.UNKNOWN_TARGET
                 if (target.role == Role.OWNER) return IgnoreReason.NOT_ALLOWED
+                // Owner decision, 4 Nov 2026: only the owner removes anyone. A plain member may leave; an admin may not (the owner
+                // makes them a plain member first, or removes them).
                 val allowed = when {
-                    author == target.key -> true
-                    role == Role.OWNER -> true
-                    role == Role.ADMIN -> target.role == Role.MEMBER
-                    else -> false
+                    author == target.key -> role == Role.MEMBER
+                    else -> role == Role.OWNER
                 }
                 if (!allowed) return IgnoreReason.NOT_ALLOWED
                 // A leave keeps the epoch and carries no keys; a removal by someone else starts the next epoch and seals

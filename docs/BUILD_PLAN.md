@@ -120,7 +120,7 @@ Acceptance: a user can create a group, add and delete expenses, and see correct 
 
 Members, owner, admins, join requests, approve (the admin sets the member's name, which must be unique in the group) or decline, remove with the before and after screen (and a list, for the remover and the owner, of the removed member's late entries that were cancelled so they can be re-entered), ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
 
-Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
+Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only the owner changes admins, only the owner removes members and changes the key (admins and members cannot, and an admin cannot leave), admins can approve joins, owner cannot be removed until ownership moves.
 
 ### M5. Sync protocol over a fake transport
 
