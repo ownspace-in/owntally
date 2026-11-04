@@ -240,4 +240,22 @@ class SharesTest {
             }
         }
     }
+
+    @kotlin.test.Ignore // KNOWN GAP, awaiting the owner's decision (clarification P8): see docs/tasks/M3-storage-app-shell.md, "Security finding 2".
+    @Test
+    fun hugeAmountsFromAMemberCannotCrashTheBalancesForEveryone() {
+        // A member writes expenses so large that adding them would overflow 64 bits. Phones must still work out balances.
+        val s = standardGroup()
+        val d = key(4)
+        val everyone = setOf(a, b, c, d)
+        s.expense(b, Money(Long.MAX_VALUE), b, Split.Equal(everyone))
+        s.expense(c, Money(Long.MAX_VALUE), c, Split.Equal(everyone))
+        s.expense(d, Money(Long.MAX_VALUE), d, Split.Equal(everyone))
+        val state = s.state()
+        assertEquals(3, state.expenses.size, "the huge expenses were accepted: ${state.ignored}")
+        val result = runCatching { balances(state) }
+        assertTrue(result.isSuccess, "balances must not throw: ${result.exceptionOrNull()}")
+        assertTrue(runCatching { settlementPlan(result.getOrThrow()) }.isSuccess)
+        assertTrue(runCatching { totalSpent(state) }.isSuccess)
+    }
 }
