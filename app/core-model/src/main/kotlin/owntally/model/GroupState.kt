@@ -5,7 +5,7 @@ enum class IgnoreReason { NOT_MEMBER, NOT_ALLOWED, INVALID, UNKNOWN_TARGET, ALRE
 
 enum class SettlementStatus { PAID_MARKED, CONFIRMED, DISPUTED }
 
-data class Member(val key: PublicKey, val name: String, val phone: String, val role: Role, val removed: Boolean)
+data class Member(val key: PublicKey, val name: String, val phone: String, val role: Role, val removed: Boolean, val encryptionKey: EncryptionKey)
 
 data class Expense(
     val id: EventId,
@@ -42,6 +42,10 @@ data class GroupState(
     val members: Map<PublicKey, Member>,
     val owner: PublicKey?,
     val pendingOffer: PublicKey?,
+    /** The current group key epoch: 1 after the group is created, +1 for each rotation. 0 before the group exists. */
+    val epoch: Long,
+    /** For each epoch after the first, the accepted event that started it. Only such an event may deliver that epoch's key. */
+    val epochStarts: Map<Long, EventId>,
     /** All expenses, deleted ones included (they stay in history). */
     val expenses: Map<EventId, Expense>,
     val settlements: Map<EventId, Settlement>,

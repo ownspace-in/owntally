@@ -14,4 +14,5 @@ dependencyResolutionManagement {
 }
 
 include(":app:core-model")
+include(":app:crypto")
 include(":app:sync")

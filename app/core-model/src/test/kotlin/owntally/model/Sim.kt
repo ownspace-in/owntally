@@ -24,7 +24,21 @@ class Sim {
     fun log() = logOf(events)
     fun state() = replay(log())
 
-    fun join(by: PublicKey, member: PublicKey, name: String) = emit(by, EventBody.MemberJoined(member, name, PHONE))
+    fun join(by: PublicKey, member: PublicKey, name: String) = emit(by, EventBody.MemberJoined(member, encKeyFor(member), name, PHONE))
+
+    /** A well-formed removal (or leave, when [by] is [member]) for the group as it stands now. */
+    fun removalBody(by: PublicKey, member: PublicKey): EventBody.MemberRemoved {
+        val st = state()
+        return if (by == member) EventBody.MemberRemoved(member, maxOf(st.epoch, 1), emptyMap())
+        else EventBody.MemberRemoved(member, st.epoch + 1, (st.currentMembers.keys - member).associateWith { sealed(it.bytes()[0].toInt()) })
+    }
+
+    fun remove(by: PublicKey, member: PublicKey, seen: Map<PublicKey, Long>? = null) = emit(by, removalBody(by, member), seen)
+
+    fun rotate(by: PublicKey): Event {
+        val st = state()
+        return emit(by, EventBody.KeyRotated(st.epoch + 1, st.currentMembers.keys.associateWith { sealed(it.bytes()[0].toInt()) }))
+    }
     fun expense(by: PublicKey, total: Money, paidBy: PublicKey, split: Split, description: String = "Dinner") =
         emit(by, EventBody.ExpenseAdded(description, total, paidBy, 20_000, split))
 }
@@ -32,7 +46,7 @@ class Sim {
 /** Owner key(1) creates a group and admits key(2) Ben, key(3) Chitra and key(4) Dev. */
 fun standardGroup(): Sim = Sim().also { s ->
     val a = key(1)
-    s.emit(a, EventBody.GroupCreated(GROUP, "Goa Trip", "INR"))
+    s.emit(a, EventBody.GroupCreated(GROUP, "Goa Trip", "INR", encKeyFor(a)))
     s.emit(a, EventBody.ProfileUpdated("Asha", PHONE))
     s.join(a, key(2), "Ben")
     s.join(a, key(3), "Chitra")
@@ -64,22 +78,22 @@ fun randomScenario(rnd: Random, steps: Int = 40): List<Event> {
                     else EventBody.ExpenseAdded("E", total, pick(), 20_000, Split.Exact(first + (list.last() to rest)))
                 }
             }
-            4 -> pool.randomOrNull(rnd)?.let { EventBody.ExpenseDeleted(it) } ?: EventBody.Unknown("noop")
+            4 -> pool.randomOrNull(rnd)?.let { EventBody.ExpenseDeleted(it) } ?: EventBody.Unknown(250, ByteArray(0))
             5, 6 -> {
                 val from = pick(); var to = pick()
                 if (to == from) to = everyone.first { it != from }
                 EventBody.SettlementRecorded(from, to, amount())
             }
-            7 -> pool.randomOrNull(rnd)?.let { EventBody.SettlementConfirmed(it) } ?: EventBody.Unknown("noop")
-            8 -> pool.randomOrNull(rnd)?.let { EventBody.PaymentDisputed(it, DisputeReason.NOT_CHECKED) } ?: EventBody.Unknown("noop")
+            7 -> pool.randomOrNull(rnd)?.let { EventBody.SettlementConfirmed(it) } ?: EventBody.Unknown(250, ByteArray(0))
+            8 -> pool.randomOrNull(rnd)?.let { EventBody.PaymentDisputed(it, DisputeReason.NOT_CHECKED) } ?: EventBody.Unknown(250, ByteArray(0))
             9 -> if (rnd.nextBoolean()) EventBody.AdminAdded(pick()) else EventBody.AdminRemoved(pick())
             10 -> when (rnd.nextInt(3)) {
                 0 -> EventBody.OwnershipOffered(pick())
                 1 -> EventBody.OwnershipAccepted
                 else -> EventBody.OwnershipOfferCancelled
             }
-            11 -> EventBody.MemberRemoved(pick())
-            12 -> EventBody.MemberJoined(pick(), "New", PHONE)
+            11 -> sim.removalBody(author, pick())
+            12 -> pick().let { EventBody.MemberJoined(it, encKeyFor(it), "New", PHONE) }
             else -> EventBody.ProfileUpdated("P${rnd.nextInt(9)}", PHONE)
         }
         val e = sim.emit(author, body, seen)

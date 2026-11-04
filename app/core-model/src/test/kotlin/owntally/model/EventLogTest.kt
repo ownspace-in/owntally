@@ -14,10 +14,10 @@ class EventLogTest {
     private val a = key(1)
     private val b = key(2)
 
-    private fun ev(author: PublicKey, counter: Long, vararg seen: Pair<PublicKey, Long>, type: String = "x"): Event {
+    private fun ev(author: PublicKey, counter: Long, vararg seen: Pair<PublicKey, Long>, tag: Int = 200): Event {
         val after = seen.toMap().toMutableMap()
         if (counter > 1) after[author] = counter - 1
-        return Event(1, author, counter, after, 0, EventBody.Unknown(type))
+        return Event(1, author, counter, after, 0, EventBody.Unknown(tag, ByteArray(0)))
     }
 
     @Test
@@ -75,7 +75,7 @@ class EventLogTest {
 
     @Test
     fun twoDifferentEventsWithTheSameIdAreBothKeptAndFlagged() {
-        val log = logOf(listOf(ev(a, 1, type = "one"), ev(a, 1, type = "two"), ev(a, 2)))
+        val log = logOf(listOf(ev(a, 1, tag = 201), ev(a, 1, tag = 202), ev(a, 2)))
         assertEquals(setOf(EventId(a, 1)), log.conflictedIds())
         val order = log.applicationOrder()
         assertEquals(listOf(EventId(a, 1), EventId(a, 2)), order.map { it.id })
@@ -86,8 +86,8 @@ class EventLogTest {
 
     @Test
     fun conflictResultDoesNotDependOnArrivalOrder() {
-        val e1 = ev(a, 1, type = "one")
-        val e2 = ev(a, 1, type = "two")
+        val e1 = ev(a, 1, tag = 201)
+        val e2 = ev(a, 1, tag = 202)
         assertEquals(logOf(listOf(e1, e2)), logOf(listOf(e2, e1)))
         assertEquals(logOf(listOf(e1, e2)).applicationOrder(), logOf(listOf(e2, e1)).applicationOrder())
     }

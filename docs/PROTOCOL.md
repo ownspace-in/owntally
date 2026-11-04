@@ -22,7 +22,7 @@ Every event has:
 
 | Field | Meaning |
 |---|---|
-| `version` | Protocol version, 1 for now. |
+| `version` | Envelope version (docs/WIRE_FORMAT.md), 1 for now. |
 | `author` | The member's `PublicKey`. One phone per member in v1, so this also identifies the device. |
 | `counter` | 1 for the author's first event in this group, then +1 each time. No gaps. A phone restored from the recovery phrase continues from the highest counter its group peers have for that key (needs a sync first; M2). |
 | `after` | Map of author to the highest counter of theirs that the author had seen when writing this event. Includes the author's own previous counter. |
@@ -35,8 +35,8 @@ Every event has:
 
 | Body | Fields |
 |---|---|
-| `GroupCreated` | `groupId`, `name`, `currency` |
-| `MemberJoined` | `member`, `name`, `phone` |
+| `GroupCreated` | `groupId`, `name`, `currency`, `encryptionKey` |
+| `MemberJoined` | `member`, `encryptionKey`, `name`, `phone` |
 | `ProfileUpdated` | `name`, `phone` |
 | `ExpenseAdded` | `description`, `total`, `paidBy`, `day`, `split` |
 | `ExpenseDeleted` | `expense: EventId` |
@@ -47,9 +47,10 @@ Every event has:
 | `OwnershipOffered` | `to` |
 | `OwnershipOfferCancelled` | none |
 | `OwnershipAccepted` | none |
-| `MemberRemoved` | `member` |
+| `MemberRemoved` | `member`, `newEpoch`, `sealedKeys` |
+| `KeyRotated` | `newEpoch`, `sealedKeys` |
 
-`split` is either `Equal(participants)` or `Exact(amounts)`, where `amounts` maps each participant to a `Money` greater than 0. For `Exact`, the amounts must sum to `total`. For `Equal`, `participants` is a non-empty set. All participants must be current members when the expense is added.
+`encryptionKey` is the member's X25519 public key for this group; `sealedKeys` maps each member who stays to the new group key sealed to their `encryptionKey` (docs/CRYPTO.md). `split` is either `Equal(participants)` or `Exact(amounts)`, where `amounts` maps each participant to a `Money` greater than 0. For `Exact`, the amounts must sum to `total`. For `Equal`, `participants` is a non-empty set. All participants must be current members when the expense is added.
 
 ## 3. Order
 
@@ -85,7 +86,8 @@ General: an event's author must be a current member, except `GroupCreated`. Reas
 | `OwnershipOffered` | Owner only. `to` is a current member other than the owner. Replaces any pending offer. |
 | `OwnershipOfferCancelled` | Owner only. There is a pending offer. |
 | `OwnershipAccepted` | Author must be the `to` of the pending offer. Author becomes owner, and the previous owner becomes admin. The offer is cleared. |
-| `MemberRemoved` | Owner may remove any current member except themselves. An admin may remove a current `MEMBER` only. A `MEMBER` may remove themselves (leave). The owner cannot be removed and cannot leave while owner. After this, the member is removed and can never rejoin with the same key. |
+| `MemberRemoved` | Owner may remove any current member except themselves. An admin may remove a current `MEMBER` only. A `MEMBER` may remove themselves (leave). The owner cannot be removed and cannot leave while owner. After this, the member is removed and can never rejoin with the same key. Key epoch: when someone else is removed, `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the members who stay, else `INVALID`; the removal starts that epoch. A leave must carry the current epoch and no keys, else `INVALID`, and starts no epoch. |
+| `KeyRotated` | Owner or admin only (`NOT_ALLOWED` otherwise). `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the current members, else `INVALID`. Starts that epoch. This is how an admin rotates the key after a leave. |
 
 **After removal.** An event by a removed member is ignored with `AFTER_REMOVAL` if its counter is greater than `after[member]` in the `MemberRemoved` event (that is, they wrote it without having seen the removal).
 
@@ -146,6 +148,8 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 13. **Payments count at once** (section 5), owner decision of 3 Nov 2026.
 14. **One phone per member in v1.** The author key stands in for the device id used in DESIGN.md.
 15. **Added:** a `version` field on every event, `DUPLICATE_ID` and `UNKNOWN_TYPE` handling (section 3).
+16. **Key epochs (M2, owner-approved 3 Nov 2026).** The group starts in epoch 1. `GroupCreated` and `MemberJoined` carry the member's encryption key. `MemberRemoved` carries the new epoch and the sealed keys, a leave rotates nothing, and `KeyRotated` lets an admin rotate afterwards. The state holds the current `epoch` and which event started each epoch (`epochStarts`). Because a rotation must name exactly the current members, two removals written at the same time leave only the first in the deterministic order; the other is `INVALID` and its author has to send it again.
+17. **`Unknown` keeps its tag and content** so an event of a newer type can be passed on byte for byte (docs/WIRE_FORMAT.md).
 
 ## Owner answers (3 Nov 2026)
 

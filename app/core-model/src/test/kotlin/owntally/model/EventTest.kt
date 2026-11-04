@@ -16,8 +16,8 @@ class EventTest {
     fun everyBodyTypeCanBeBuilt() {
         val id = EventId(a, 3)
         val bodies = listOf(
-            EventBody.GroupCreated(GROUP, "Goa Trip", "INR"),
-            EventBody.MemberJoined(b, "Ben", "+91 98765 43210"),
+            EventBody.GroupCreated(GROUP, "Goa Trip", "INR", ENC),
+            EventBody.MemberJoined(b, ENC, "Ben", "+91 98765 43210"),
             EventBody.ProfileUpdated("Asha", "98765 43210"),
             EventBody.ExpenseAdded("Dinner", rupees(900), a, 20_000, Split.Equal(setOf(a, b, c))),
             EventBody.ExpenseAdded("Taxi", rupees(600), b, 20_000, Split.Exact(mapOf(a to rupees(200), b to rupees(400)))),
@@ -30,8 +30,9 @@ class EventTest {
             EventBody.OwnershipOffered(b),
             EventBody.OwnershipOfferCancelled,
             EventBody.OwnershipAccepted,
-            EventBody.MemberRemoved(c),
-            EventBody.Unknown("FutureThing"),
+            EventBody.MemberRemoved(c, 2, mapOf(a to sealed(1), b to sealed(2))),
+            EventBody.KeyRotated(3, mapOf(a to sealed(1))),
+            EventBody.Unknown(200, byteArrayOf(1, 2, 3)),
         )
         bodies.forEachIndexed { i, body -> event(i + 1L, body) }
     }
@@ -80,15 +81,15 @@ class EventTest {
 
     @Test
     fun namesPhonesAndCurrencyAreChecked() {
-        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "", "INR") }
-        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "   ", "INR") }
-        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "x".repeat(41), "INR") }
-        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "Trip", "inr") }
-        EventBody.GroupCreated(GROUP, "x".repeat(40), "INR")
-        assertFailsWith<IllegalArgumentException> { EventBody.MemberJoined(b, "Ben", "1234") }
-        assertFailsWith<IllegalArgumentException> { EventBody.MemberJoined(b, "Ben", "12345abc") }
-        assertFailsWith<IllegalArgumentException> { EventBody.MemberJoined(b, "Ben", "1".repeat(21)) }
-        EventBody.MemberJoined(b, "Ben", "+91 98765 43210")
+        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "", "INR", ENC) }
+        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "   ", "INR", ENC) }
+        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "x".repeat(41), "INR", ENC) }
+        assertFailsWith<IllegalArgumentException> { EventBody.GroupCreated(GROUP, "Trip", "inr", ENC) }
+        EventBody.GroupCreated(GROUP, "x".repeat(40), "INR", ENC)
+        assertFailsWith<IllegalArgumentException> { EventBody.MemberJoined(b, ENC, "Ben", "1234") }
+        assertFailsWith<IllegalArgumentException> { EventBody.MemberJoined(b, ENC, "Ben", "12345abc") }
+        assertFailsWith<IllegalArgumentException> { EventBody.MemberJoined(b, ENC, "Ben", "1".repeat(21)) }
+        EventBody.MemberJoined(b, ENC, "Ben", "+91 98765 43210")
     }
 
     @Test
