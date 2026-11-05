@@ -106,16 +106,17 @@ fun OwnTallyField(
 }
 
 @Composable
-fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, loading: Boolean = false) {
+fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, loading: Boolean = false, destructive: Boolean = false) {
+    val container = if (destructive) OwnTallyColors.Red else OwnTallyColors.Green
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
         modifier = modifier.fillMaxWidth().height(54.dp),
         shape = RoundedCornerShape(27.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = OwnTallyColors.Green,
+            containerColor = container,
             contentColor = Color.White,
-            disabledContainerColor = OwnTallyColors.Green.copy(alpha = 0.35f),
+            disabledContainerColor = container.copy(alpha = 0.35f),
             disabledContentColor = Color.White,
         ),
     ) {

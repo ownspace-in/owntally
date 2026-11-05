@@ -73,4 +73,29 @@ class MembersScreenImagesInstrumentedTest {
         rule.onNodeWithText("Make owner").assertIsDisplayed()
         save("member-actions")
     }
+
+    @Test
+    fun saveTheRemoveMemberScreen() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        fun r(n: Int, label: String, now: String, nk: owntally.model.format.BalanceKind, after: String, ak: owntally.model.format.BalanceKind?) = RemoveRow(key(n), label, now, nk, after, ak)
+        val owed = owntally.model.format.BalanceKind.OWED
+        val owes = owntally.model.format.BalanceKind.OWES
+        val zero = owntally.model.format.BalanceKind.SETTLED
+        val model = RemoveMemberModel(
+            "Remove Kabir?",
+            listOf(
+                "Kabir will no longer see or add expenses. The group will switch to a new key so they can't read new entries.",
+                "The group is recalculated as if Kabir had never joined. Kabir's entries stay in the history but don't count.",
+            ),
+            listOf(
+                r(0, "You", "+₹3,200", owed, "+₹2,740", owed), r(1, "Rohan", "-₹1,850", owes, "-₹1,520", owes), r(2, "Meera", "-₹1,350", owes, "-₹1,220", owes),
+                r(3, "Isha", "₹0", zero, "₹0", zero), r(4, "Kabir", "₹0", zero, "Removed", null),
+            ),
+            LeftOutBox("12 expenses Kabir paid, Kabir's share of 9 others", listOf("Kabir paid You ₹900. It no longer counts.")),
+            "Remove Kabir",
+        )
+        rule.setContent { OwnTallyTheme { Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) { RemoveMemberScreen(model, onCancel = {}, onConfirm = {}) } } }
+        rule.onNodeWithText("Remove Kabir?").assertIsDisplayed()
+        save("remove-member")
+    }
 }

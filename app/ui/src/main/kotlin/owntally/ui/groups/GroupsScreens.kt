@@ -44,7 +44,7 @@ import owntally.ui.components.PrimaryButton
 import owntally.ui.components.Wordmark
 import owntally.ui.theme.OwnTallyColors
 
-private fun BalanceKind.colour(onDark: Boolean = false) = when (this) {
+internal fun BalanceKind.colour(onDark: Boolean = false) = when (this) {
     BalanceKind.OWED -> if (onDark) OwnTallyColors.Mint else OwnTallyColors.Green
     BalanceKind.OWES -> if (onDark) OwnTallyColors.PeachOnDark else OwnTallyColors.Red
     BalanceKind.SETTLED -> if (onDark) OwnTallyColors.OnDarkMuted else OwnTallyColors.TextSecondary

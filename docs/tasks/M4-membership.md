@@ -16,7 +16,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.4 join requests | Done (5 Nov 2026), see below. |
 | T4.5 members screen | Done (5 Nov 2026), see below. |
 | T4.6 member actions | Done (5 Nov 2026), see below. |
-| T4.7 to T4.14 | Not started. |
+| T4.7 remove member | Done (5 Nov 2026), see below. |
+| T4.8 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -116,6 +117,9 @@ Done when: model tests for every combination of viewer and target; compared with
 ### T4.7 Remove member (mockup 13)
 Do: the before and after table from `previewRemoval`, the "Also left out of the group" box (counts of expenses, shares and payments, with the payments listed by who paid whom), the confirmation, and the result. Uses T4.3 `removeMember`.
 Done when: the table equals `previewRemoval` row for row; the payment line names who will owe again; removal writes the event and the new key; compared with mockup 13.
+
+
+**T4.7 result (5 Nov 2026).** `RemoveMemberModels.build(view, target)` (pure, 7 JVM tests): the table is built from `previewRemoval` (You first, the others by name, the removed person last with "Removed"; a test compares every row with the preview and another removes the person and checks the balances are the ones the table promised); the "Also left out of the group" box counts expenses the person paid, expenses only they took part in, and their share of other expenses, and lists each payment by who paid whom ("You paid Kabir ₹50. You will owe that amount again."; "Kabir paid You ₹900. It no longer counts."); no box when nothing is left out; null (no screen) for anyone but the owner, for the owner on themselves, and for a person already gone. Screen `RemoveMemberScreen` (route `Screen.RemoveMember`, reached from "Remove from group"); the red **Remove Kabir** button calls `removeMember` (T4.3: new key, saved first) and returns to the Members list, where the person now appears under "No longer in the group". Compared with design/13 on the emulator: same layout. **Differences from the mockup:** (1) the words never use "he/his"; the app does not know anyone's pronouns, so it says "they" and repeats the name ("Kabir's entries"); (2) the payment line has no date ("9 Oct"), because a payment event carries no date the state keeps; (3) the mockup's sentence "If you paid him, you will owe that amount again" is split into one exact line per payment, as above. Three rules checked by putting the old behaviour back (after = before, an admin may remove, the owe-again wording swapped): each failed tests.
 
 ### T4.8 Ownership (mockups 14b and 14c, and D1)
 Do: "Make Rohan the owner?" with the corrected text and **Send request**; the waiting screen with **Cancel request** (and "Rohan declined" after a decline); for the person offered, the banner with **Accept** and **Decline** on the group screen and the tag on the group's card in the Groups list (D1).

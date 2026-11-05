@@ -73,7 +73,8 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
             is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) })
-            is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back)
+            is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) })
+            is Screen.RemoveMember -> RemoveMemberRoute(sessions, screen.id, screen.member, onCancel = back, onRemoved = { ui.nav = ui.nav.pop().pop() })
             is Screen.AddExpense -> AddExpenseRoute(sessions, screen.id, onDone = back)
             is Screen.Group -> GroupRoute(
                 sessions, screen.id, debugTools, onBack = back,
@@ -333,7 +334,7 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
 }
 
 @Composable
-private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onClose: () -> Unit) {
+private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onClose: () -> Unit, onRemove: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -353,12 +354,13 @@ private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally
         return
     }
     MemberActionsScreen(model, onClose, error = error, onAction = { kind ->
+        if (kind == ActionKind.REMOVE) return@MemberActionsScreen onRemove()
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 when (kind) {
                     ActionKind.MAKE_ADMIN -> s.makeAdmin(member)
                     ActionKind.REMOVE_ADMIN -> s.removeAdmin(member)
-                    // Make owner and Remove from group have their own screens (T4.8, T4.7).
+                    // Make owner has its own screen (T4.8); Remove from group is handled above.
                     ActionKind.MAKE_OWNER, ActionKind.REMOVE -> null
                 }
             }
@@ -369,6 +371,43 @@ private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally
                 owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
                 null -> Unit
             }
+        }
+    })
+}
+
+@Composable
+private fun RemoveMemberRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onCancel: () -> Unit, onRemoved: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val model = remember(view) { RemoveMemberModels.build(view, member) }
+    val scope = rememberCoroutineScope()
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    if (model == null) {
+        // Gone by other means (not while this phone is removing them: then onRemoved closes this screen and the one before it).
+        if (!busy) LaunchedEffect(Unit) { onCancel() }
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    RemoveMemberScreen(model, onCancel, busy = busy, error = error, onConfirm = {
+        if (busy) return@RemoveMemberScreen
+        busy = true
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { s.removeMember(member) }
+            when (r) {
+                is owntally.data.session.AddResult.Added -> onRemoved()
+                is owntally.data.session.AddResult.Refused -> error = "That can't be done now (${r.reason.name.lowercase().replace('_', ' ')})."
+                is owntally.data.session.AddResult.Invalid -> error = r.problem
+                owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
+            }
+            if (r !is owntally.data.session.AddResult.Added) busy = false
         }
     })
 }
