@@ -119,6 +119,33 @@ class WireCodecTest {
     }
 
     @Test
+    fun ownershipDeclinedIsTagSixteenWithNoContent() {
+        // The independent Python encoder says the same bytes (the vector "ownership-declined").
+        val v = vectors.getValue("payloads").jsonArray.map { it.jsonObject }.first { it.str("name") == "ownership-declined" }
+        val event = decode(v)
+        assertEquals(EventBody.OwnershipDeclined, event.body)
+        assertEquals(v.str("hex"), EventCodec.encodePayload(event).toHex())
+        val bytes = EventCodec.encodePayload(event)
+        assertEquals(16, bytes[bytes.size - 5].toInt() and 0xFF, "the tag")
+        assertEquals(0, bytes.copyOfRange(bytes.size - 4, bytes.size).sum(), "the content length is 0")
+    }
+
+    @Test
+    fun aDeclineWithContentIsRejected() {
+        val v = vectors.getValue("invalidPayloads").jsonArray.map { it.jsonObject }.first { it.str("name") == "declined-with-content" }
+        assertFailsWith<DecodeException> { decode(v) }
+    }
+
+    @Test
+    fun anOldAppKeepsADeclineAsAnUnknownEventAndWritesItBackIdentically() {
+        // What an app that predates tag 16 sees: an unknown body that keeps its tag and content, so it can pass the event on unchanged.
+        val v = vectors.getValue("payloads").jsonArray.map { it.jsonObject }.first { it.str("name") == "ownership-declined" }
+        val asUnknown = Event(1, key(1), 1, emptyMap(), 0, EventBody.Unknown(16, ByteArray(0)))
+        assertFailsWith<IllegalArgumentException> { EventCodec.encodePayload(asUnknown) } // the new app refuses to write tag 16 as "unknown"
+        assertTrue(v.str("hex").isNotEmpty())
+    }
+
+    @Test
     fun anUnknownBodyWithAKnownTagCannotBeEncoded() {
         val e = Event(1, key(1), 1, emptyMap(), 0, EventBody.Unknown(5, ByteArray(0)))
         assertFailsWith<IllegalArgumentException> { EventCodec.encodePayload(e) }

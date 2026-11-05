@@ -53,7 +53,8 @@ fun randomAnyEvent(rnd: Random): Event {
         12 -> EventBody.OwnershipAccepted
         13 -> EventBody.MemberRemoved(k(), rnd.nextLong(1, 0xFFFF_FFFFL), sealedMap())
         14 -> EventBody.KeyRotated(rnd.nextLong(1, 0xFFFF_FFFFL), sealedMap())
-        else -> EventBody.Unknown(listOf(0, 16, 17, 200, 255).random(rnd), ByteArray(rnd.nextInt(0, 30)) { rnd.nextInt(256).toByte() })
+        15 -> EventBody.OwnershipDeclined
+        else -> EventBody.Unknown(listOf(0, 17, 18, 200, 255).random(rnd), ByteArray(rnd.nextInt(0, 30)) { rnd.nextInt(256).toByte() })
     }
     val author = k()
     val counter = if (rnd.nextBoolean()) rnd.nextLong(1, 20) else rnd.nextLong(1, Long.MAX_VALUE / 2)

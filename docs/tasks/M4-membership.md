@@ -11,7 +11,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | Task | Status |
 |---|---|
 | T4.1 plan and decisions | Done (5 Nov 2026): every decision D1 to D7 is made (below). Waiting for the owner's go-ahead to build T4.2. |
-| T4.2 to T4.14 | Not started. |
+| T4.2 core helpers | Done (5 Nov 2026), see below. |
+| T4.3 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -76,6 +77,8 @@ Every task is tests first, with the mutation check used in M3 (put the old behav
 ### T4.2 Core helpers (pure Kotlin)
 Do: (0) **the new event `OwnershipDeclined`** (tag 16, empty; offered person only; clears the offer; D1) in `EventBody`, the codec, replay, vectors and tests; (a) `isNameTaken(state, name, except)`: one public function that replay and the screens both use, so the "name already taken" message can never disagree with the rule; (b) `cancelledEntries(log, state)`: the removed members' late events that replay cancelled (expense description, amount, payer; payments and other events as counts), per removed member; (c) `GroupState` helpers the screens need (who can do what: `canApproveJoins`, `canRemove`, `canTransfer`, derived from the role, never copied into the UI).
 Done when: `OwnershipDeclined` is accepted from the offered person only, refused from anyone else or with no offer, clears the offer, survives encode and decode byte for byte, and an old decoder keeps it as an unknown event; tests for each helper, including the same name with capitals, spaces and a removed member's name; cancelled entries listed after a removal with a late event; permissions table tested for owner, admin and member.
+
+**T4.2 result (5 Nov 2026).** In `core-model`: the event `OwnershipDeclined` (tag 16, empty; offered person only; clears the offer; an old decoder keeps it as an unknown event; unknown-tag examples in the tests and vectors moved from 16 to 17; the independent Python encoder gained it and a "declined with content" invalid vector); `isNameTaken(state, name, except)` (replay now uses the same function, so the screens cannot disagree with the rule); `Permissions` (one table of who may do what, with `roleOf`; tests run every action by every role through replay and check the table tells the truth); `cancelledEntries(log, state)` (the removed members' late entries as expense, payment or other, in event order, growing when a late event arrives). Every rule was checked by putting the old behaviour back and seeing tests fail (14 mutations, all caught). 260 core tests pass.
 
 ### T4.3 Group operations in the data layer
 Do: on `GroupSession`: `approveJoin(request, name)`, `removeMember(member)` (new key made, sealed to the members who stay, **saved on the phone before the event is written and deleted again if the rules refuse the event**), `leave()`, `rotateKey()`, `makeAdmin`/`removeAdmin`, `offerOwnership(to)`, `cancelOffer()`, `acceptOwnership()`, `updateProfile(name, phone)`. Each returns what the core said (`Added` or the refusal reason) so the screen can say why.

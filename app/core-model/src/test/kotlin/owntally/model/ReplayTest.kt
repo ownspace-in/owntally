@@ -313,6 +313,62 @@ class ReplayTest {
     }
 
     @Test
+    fun theOfferedMemberCanDeclineAndNobodyElseCan() {
+        // Owner decision, 5 Nov 2026 (M4, D1): a real Decline, so the owner can see the answer.
+        val s = standardGroup()
+        s.emit(a, EventBody.OwnershipOffered(b))
+        val byOther = s.emit(c, EventBody.OwnershipDeclined)
+        val byOwner = s.emit(a, EventBody.OwnershipDeclined)
+        assertEquals(b, s.state().pendingOffer, "a refused decline leaves the offer")
+        val decline = s.emit(b, EventBody.OwnershipDeclined)
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, byOther.reason(state))
+        assertEquals(IgnoreReason.NOT_ALLOWED, byOwner.reason(state))
+        assertNull(decline.reason(state))
+        assertNull(state.pendingOffer)
+        assertEquals(a, state.owner, "nothing changes")
+        assertEquals(Role.MEMBER, state.members.getValue(b).role)
+    }
+
+    @Test
+    fun aDeclineWithNoOfferIsRefusedAndAnAcceptAfterADeclineIsToo() {
+        val s = standardGroup()
+        val early = s.emit(b, EventBody.OwnershipDeclined)
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(b, EventBody.OwnershipDeclined)
+        val lateAccept = s.emit(b, EventBody.OwnershipAccepted)
+        val again = s.emit(b, EventBody.OwnershipDeclined)
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, early.reason(state), "no offer to decline")
+        assertEquals(IgnoreReason.NOT_ALLOWED, lateAccept.reason(state), "the offer is gone")
+        assertEquals(IgnoreReason.NOT_ALLOWED, again.reason(state))
+        assertEquals(a, state.owner)
+    }
+
+    @Test
+    fun theOwnerCanOfferAgainAfterADeclineAndThenTheNewOfferCanBeAccepted() {
+        val s = standardGroup()
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(b, EventBody.OwnershipDeclined)
+        s.emit(a, EventBody.OwnershipOffered(c))
+        val staleDecline = s.emit(b, EventBody.OwnershipDeclined) // b's offer is gone; this changes nothing
+        s.emit(c, EventBody.OwnershipAccepted)
+        val state = s.state()
+        assertEquals(IgnoreReason.NOT_ALLOWED, staleDecline.reason(state))
+        assertEquals(c, state.owner)
+    }
+
+    @Test
+    fun aDeclineOfAReplacedOfferIsRefusedAndTheNewOfferStays() {
+        val s = standardGroup()
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(a, EventBody.OwnershipOffered(c)) // replaces the offer to b
+        val declineByB = s.emit(b, EventBody.OwnershipDeclined)
+        assertEquals(IgnoreReason.NOT_ALLOWED, declineByB.reason(s.state()))
+        assertEquals(c, s.state().pendingOffer)
+    }
+
+    @Test
     fun onlyTheOwnerCanOfferAndTheOfferGoesToAnotherCurrentMember() {
         val s = standardGroup()
         s.emit(a, EventBody.AdminAdded(b))

@@ -44,6 +44,7 @@ class JsonEvents(val keys: Map<String, PublicKey>) {
             "OwnershipOffered" -> EventBody.OwnershipOffered(k("to"))
             "OwnershipOfferCancelled" -> EventBody.OwnershipOfferCancelled
             "OwnershipAccepted" -> EventBody.OwnershipAccepted
+            "OwnershipDeclined" -> EventBody.OwnershipDeclined
             "MemberRemoved" -> EventBody.MemberRemoved(k("member"), o.getValue("newEpoch").jsonPrimitive.long, sealedKeys(o))
             "KeyRotated" -> EventBody.KeyRotated(o.getValue("newEpoch").jsonPrimitive.long, sealedKeys(o))
             "Unknown" -> EventBody.Unknown(o.getValue("tag").jsonPrimitive.int, hexToBytes(s("content")))

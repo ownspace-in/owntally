@@ -47,6 +47,7 @@ Every event has:
 | `OwnershipOffered` | `to` |
 | `OwnershipOfferCancelled` | none |
 | `OwnershipAccepted` | none |
+| `OwnershipDeclined` | none (tag 16; M4, owner decision 5 Nov 2026) |
 | `MemberRemoved` | `member`, `newEpoch`, `sealedKeys` |
 | `KeyRotated` | `newEpoch`, `sealedKeys` |
 
@@ -86,6 +87,7 @@ General: an event's author must be a current member, except `GroupCreated`. Reas
 | `OwnershipOffered` | Owner only. `to` is a current member other than the owner. Replaces any pending offer. |
 | `OwnershipOfferCancelled` | Owner only. There is a pending offer. |
 | `OwnershipAccepted` | Author must be the `to` of the pending offer. Author becomes owner, and the previous owner becomes admin. The offer is cleared. |
+| `OwnershipDeclined` | Author must be the `to` of the pending offer (`NOT_ALLOWED` otherwise, including when there is no offer). The offer is cleared; nothing else changes. The owner can then offer ownership again. An app that does not know this event keeps it as an unknown event with no effect. |
 | `MemberRemoved` | **Only the owner** removes someone else (any current member except themselves; owner decision, 4 Nov 2026). A plain `MEMBER` may remove themselves (leave). **An admin cannot remove anyone, themselves included**: the owner makes them a plain member first, or removes them. The owner cannot be removed and cannot leave while owner. After this, the member is removed and can never rejoin with the same key. Key epoch: when someone else is removed, `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the members who stay, else `INVALID`; the removal starts that epoch. A leave must carry the current epoch and no keys, else `INVALID`, and starts no epoch. |
 | `KeyRotated` | **Owner only** (`NOT_ALLOWED` otherwise; owner decision, 4 Nov 2026, so two people can never start the same epoch at once). `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the current members, else `INVALID`. Starts that epoch. This is how the owner rotates the key after a leave. |
 

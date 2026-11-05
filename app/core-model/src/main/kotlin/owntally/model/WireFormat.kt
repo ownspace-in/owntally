@@ -97,7 +97,8 @@ private class Reader(private val data: ByteArray, private var pos: Int = 0, priv
 
 /** Event payloads as bytes: docs/WIRE_FORMAT.md section 2. */
 object EventCodec {
-    private const val FIRST_UNKNOWN_TAG = 16
+    /** Tags 1 to 16 are known event types; a body can only be unknown when its tag is 0 or 17 and above. */
+    private const val FIRST_UNKNOWN_TAG = 17
 
     fun encodePayload(event: Event): ByteArray {
         val content = Writer()
@@ -154,6 +155,7 @@ object EventCodec {
             is EventBody.OwnershipOffered -> { w.key(body.to); return 11 }
             is EventBody.OwnershipOfferCancelled -> return 12
             is EventBody.OwnershipAccepted -> return 13
+            is EventBody.OwnershipDeclined -> return 16
             is EventBody.MemberRemoved -> { w.key(body.member).u32(body.newEpoch); writeSealed(w, body.sealedKeys); return 14 }
             is EventBody.KeyRotated -> { w.u32(body.newEpoch); writeSealed(w, body.sealedKeys); return 15 }
             is EventBody.Unknown -> {
@@ -179,6 +181,7 @@ object EventCodec {
             11 -> EventBody.OwnershipOffered(r.key())
             12 -> EventBody.OwnershipOfferCancelled
             13 -> EventBody.OwnershipAccepted
+            16 -> EventBody.OwnershipDeclined
             14 -> EventBody.MemberRemoved(r.key(), r.u32(), readSealed(r))
             15 -> EventBody.KeyRotated(r.u32(), readSealed(r))
             else -> return EventBody.Unknown(tag, r.bytes(r.remaining.toLong()))

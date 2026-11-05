@@ -39,14 +39,8 @@ private class Run(private val forced: Set<EventId>) {
     fun state(held: List<EventId>) =
         GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
 
-    /**
-     * Names are unique in a group, removed members included (their names stay reserved); capitals and extra spaces do not count
-     * (see [NameKey]). A member may change the capitals of their own name, so [except] is left out. Owner decision, 4 Nov 2026.
-     */
-    private fun nameTaken(name: String, except: PublicKey?): Boolean {
-        val key = NameKey.of(name)
-        return members.values.any { it.key != except && it.name.isNotEmpty() && NameKey.of(it.name) == key }
-    }
+    /** Names are unique in a group (owner decision, 4 Nov 2026): the rule lives in [isNameTaken], shared with the screens. */
+    private fun nameTaken(name: String, except: PublicKey?): Boolean = isNameTaken(members.values, name, except)
 
     private fun currentKeys() = members.filterValues { !it.removed }.keys
 
@@ -146,6 +140,12 @@ private class Run(private val forced: Set<EventId>) {
             is EventBody.OwnershipOfferCancelled -> {
                 if (role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 if (pendingOffer == null) return IgnoreReason.ALREADY_DONE
+                pendingOffer = null
+                null
+            }
+            is EventBody.OwnershipDeclined -> {
+                // Only the member the pending offer is for can decline it (owner decision, 5 Nov 2026, M4 D1).
+                if (pendingOffer != author) return IgnoreReason.NOT_ALLOWED
                 pendingOffer = null
                 null
             }
