@@ -141,4 +141,20 @@ class MembersScreenImagesInstrumentedTest {
         rule.onNodeWithText("Decline").assertIsDisplayed()
         save("ownership-banner")
     }
+
+    @Test
+    fun saveTheJoinRequestsScreen() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        val model = JoinRequestsScreenModel(
+            "Goa Trip", "Waiting for you · 2",
+            listOf(
+                JoinRequestRow(key(2), "Aarav", "+91 91234 56780", "A", 2, "12 min ago"),
+                JoinRequestRow(key(3), "Naina", "+91 90000 11122", "N", 3, "1 hr ago"),
+            ),
+            null, false, "Approving lets the person read every expense in this group. Decline anyone you don't recognise.",
+        )
+        rule.setContent { OwnTallyTheme { Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) { JoinRequestsScreen(model, {}, {}, {}) } } }
+        rule.onNodeWithText("Aarav").assertIsDisplayed()
+        save("join-requests")
+    }
 }

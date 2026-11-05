@@ -72,7 +72,8 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
             Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
-            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) })
+            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) })
+            is Screen.JoinRequests -> JoinRequestsRoute(sessions, joinRequests, screen.id, onBack = back)
             is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) }, onMakeOwner = { ui.nav = ui.nav.push(Screen.OwnerOffer(screen.id, screen.member)) })
             is Screen.OwnerOffer -> OwnerOfferRoute(sessions, screen.id, screen.member, onClose = back, onChoose = { ui.nav = ui.nav.pop() })
             is Screen.RemoveMember -> RemoveMemberRoute(sessions, screen.id, screen.member, onCancel = back, onRemoved = { ui.nav = ui.nav.pop().pop() })
@@ -340,7 +341,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit) {
+private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -351,7 +352,7 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
     }
     val view by s.view.collectAsStateWithLifecycle()
     val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
-    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) })
+    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null)
 }
 
 @Composable
@@ -474,4 +475,46 @@ private fun OwnerOfferRoute(sessions: Sessions, id: GroupId, member: owntally.mo
             }
         },
     )
+}
+
+@Composable
+private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null || joinRequests == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    var version by remember { mutableStateOf(0) }
+    val waiting by produceState(emptyList<owntally.data.store.JoinRequest>(), id, view, version) { value = withContext(Dispatchers.IO) { joinRequests.waiting(id) } }
+    val model = remember(view, waiting) { JoinRequestsModels.build(view, waiting, System.currentTimeMillis() / 1000) }
+    val scope = rememberCoroutineScope()
+    var approving by remember { mutableStateOf<JoinRequestRow?>(null) }
+    if (model == null) {
+        // This person can no longer approve joins (for example, an admin who lost the role).
+        LaunchedEffect(Unit) { onBack() }
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    JoinRequestsScreen(
+        model, onBack, onApprove = { approving = it },
+        onDecline = { row -> scope.launch { withContext(Dispatchers.IO) { joinRequests.decline(id, row.member) }; version++ } },
+    )
+    val target = approving
+    if (target != null) {
+        ApproveDialog(
+            view, target, onCancel = { approving = null },
+            onApprove = { name ->
+                scope.launch {
+                    // The dialog already checked the name and the member limit, so the usual answer is Approved; any other answer leaves the request waiting.
+                    withContext(Dispatchers.IO) { joinRequests.approve(id, target.member, name) }
+                    approving = null
+                    version++
+                }
+            },
+        )
+    }
 }

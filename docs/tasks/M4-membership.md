@@ -18,7 +18,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.6 member actions | Done (5 Nov 2026), see below. |
 | T4.7 remove member | Done (5 Nov 2026), see below. |
 | T4.8 ownership | Done (5 Nov 2026), see below. |
-| T4.9 to T4.14 | Not started. |
+| T4.9 join requests screen | Done (5 Nov 2026), see below. |
+| T4.10 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -132,6 +133,9 @@ Done when: offer, cancel, decline, accept and the role change (the old owner bec
 ### T4.9 Join requests screen (mockup 11)
 Do: waiting requests with Decline and Approve; Approve opens the name field (filled with the requested name, live "already taken" check, 20-member message); the "Open invites" section is left out until M6.
 Done when: model tests; approving with a clashing name is blocked; compared with mockup 11.
+
+
+**T4.9 result (5 Nov 2026).** `JoinRequestsModels.build(view, requests, now)` (pure): only the owner and admins get it (null for a member); waiting requests only, oldest first, with phone as entered and "12 min ago" (`RelativeTime`, plain words, a clock slightly ahead counts as "just now"); "Waiting for you · N"; "No one is waiting." when empty; the footer note; `full` when the group has 20 people (Approve is switched off and a red line says why). `ApproveCheck.of(view, typed)` is the live check in the Approve dialog: the name starts as the requested one, may be changed, is trimmed, and is blocked when blank, over 40 letters, taken (the core's own `isNameTaken`: capitals, spaces and invisible characters do not make a different name, removed members' names stay taken, with the hint "Try adding an initial, like Rohan V."), or when the group is full. The screen (`JoinRequestsScreen`, route `Screen.JoinRequests`, opened from the Members row, which now works) and the dialog were compared with design/11 on the emulator: same layout; **left out on purpose:** the "Open invites" section (M6). Decline marks the request declined on this phone only. 11 JVM tests; four rules checked by putting the old behaviour back (name clash allowed, full group ignored, a member sees the list, newest first): each failed tests. **Not yet:** how requests arrive on this phone (M5/M6), so on a real phone the list is empty until then; the debug tool in T4.13 will add a pretend request.
 
 ### T4.10 Profile and leave (D3, D4)
 Do: **Leave group** from both places (D4) with the before-and-after table, the messages for an admin and the owner, and the group hidden at once afterwards; edit my name and phone from both entry points (the "You" row on Members and the role line on the Group screen; the group's unique-name rule shown as a message); Leave group with a warning when the balance is not settled, then a read-only "You left" state on this phone.
