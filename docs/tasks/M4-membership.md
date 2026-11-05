@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D4 decided; D5 to D7 still open. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D4 and D5a decided; D5b, D6 and D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -55,11 +55,13 @@ So M4 is mostly the data-layer operations, a small local store for join requests
 
 - **Entries of removed or departed people (5 Nov 2026): kept in the list.** Expenses they paid, and payments involving them, stay visible on the Group screen, greyed and not counted, with the reason: **"Excluded: Kabir was removed"** or **"Excluded: Kabir left"**. They are never erased (the log is signed and append-only). Expenses that others paid and that include them are not "their entries": those still count, re-split. **This also fixes a fault in the M3 Group screen**, which shows any uncounted expense as "Deleted · not counted", struck through; an expense excluded because its payer left or was removed is not deleted.
 
+- **D5a (5 Nov 2026): the Members screen lists people who were removed or left.** A greyed **"Removed or left"** section below the current members, with "Removed" or "Left" beside each name (their names stay reserved). Tapping a name does nothing yet beyond what D5b decides.
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D5. Removed members:** a "Removed" section on the Members screen, and a screen listing the late entries that were cancelled after a removal (decided 4 Nov: listed to the remover and the owner).
+- **D5b. The list of late entries that were cancelled after a removal** (decided 4 Nov: listed to the remover, who is always the owner): where it is reached from, and whether each entry can be re-entered in one tap.
 - **D6. Join requests before M6.** Real requests arrive over a transport in M6. In M4 the screen and the store exist, a debug build can add a pretend request, and release builds show an empty list.
 - **D7. How many pretend members the debug tool may add** (M3 limited it to three in total until M4).
 
