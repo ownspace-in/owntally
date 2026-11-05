@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 and D2 decided; D3 to D7 still open. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D3 decided; D4 to D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -44,11 +44,12 @@ So M4 is mostly the data-layer operations, a small local store for join requests
   - It must not loop: after the rotation the leave is covered, so a further refresh does nothing.
   - Cost the owner accepted: while the owner is away the leaver can still read new entries; every leave costs one small event.
 
+- **D3 (5 Nov 2026): where a person edits their own name and phone.** **Both** places open the same screen, "Your name and phone in Goa Trip": tap the **"You" row on the Members screen**, or tap the **"You are the owner / an admin / a member" line under the group name on the Group screen**. It is per group (the first-run name and phone are only starting values; changing them in one group changes nothing in another). Saving writes `ProfileUpdated`; old entries then show the new name to everyone; a taken name gives "That name is already taken in this group" (changing only the capitals of your own name is fine); the phone follows the rule of 4 Nov (digits, `+`, spaces, `-`, `(`, `)`, `.`, at least 5 digits).
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D3. Where a person edits their own name and phone.**
 - **D4. Where "Leave group" lives, and what the leaver sees afterwards** (their phone cannot be told it was removed until sync exists).
 - **D5. Removed members:** a "Removed" section on the Members screen, and a screen listing the late entries that were cancelled after a removal (decided 4 Nov: listed to the remover and the owner).
 - **D6. Join requests before M6.** Real requests arrive over a transport in M6. In M4 the screen and the store exist, a debug build can add a pretend request, and release builds show an empty list.
@@ -91,7 +92,7 @@ Do: waiting requests with Decline and Approve; Approve opens the name field (fil
 Done when: model tests; approving with a clashing name is blocked; compared with mockup 11.
 
 ### T4.10 Profile and leave (D3, D4)
-Do: edit my name and phone (the group's unique-name rule shown as a message); Leave group with a warning when the balance is not settled, then a read-only "You left" state on this phone.
+Do: edit my name and phone from both entry points (the "You" row on Members and the role line on the Group screen; the group's unique-name rule shown as a message); Leave group with a warning when the balance is not settled, then a read-only "You left" state on this phone.
 Done when: tests for the rename clash, a phone with the allowed characters, the warning text, and that a leaver cannot add entries.
 
 ### T4.11 The key after a leave (D2)
