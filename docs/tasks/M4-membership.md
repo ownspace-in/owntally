@@ -1,0 +1,99 @@
+# M4 tasks: membership, roles and ownership (still local)
+
+Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M4. Rules: [DESIGN.md](../DESIGN.md) ("Flows"), [PROTOCOL.md](../PROTOCOL.md), [CRYPTO.md](../CRYPTO.md). Mockups: [11](../../design/11-join-requests.png), [12](../../design/12-members.png), [13](../../design/13-remove-member.png), [14](../../design/14-ownership.png), [14b](../../design/14b-ownership-confirm.png), [14c](../../design/14c-ownership-sent.png). Tests first. No network code (sync is M5 to M7).
+
+Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, remove with the before and after screen, ownership transfer with acceptance, profile updates (name and phone only). Rules are enforced in the core, not the UI.
+
+**This file is a draft: nothing below is built until the owner approves it** (section "Decisions needed").
+
+## Progress
+
+| Task | Status |
+|---|---|
+| T4.1 plan and decisions | Drafted (5 Nov 2026), waiting for the owner. |
+| T4.2 to T4.14 | Not started. |
+
+## What already exists (so it is not rebuilt)
+
+- **Core rules (M1, and the decisions of 3 and 4 Nov):** `MemberJoined`, `MemberRemoved`, `KeyRotated`, `AdminAdded`, `AdminRemoved`, `OwnershipOffered`, `OwnershipOfferCancelled`, `OwnershipAccepted`, `ProfileUpdated`, with every permission rule and a test for each. Only the owner removes members and changes the key; admins approve joins; names are unique per group; a member may leave, an admin may not; the owner cannot be removed or leave.
+- **`previewRemoval(state, member)`** (core): each remaining member's balance before and after, and the expenses and payments that stop counting. Mockup 13 is this, drawn.
+- **Crypto:** `KeyRotation.seal`, `open` and `receive` (the sender is part of the sealed key's context).
+- **Data layer:** `GroupSession.append` (events are checked by the core's rules before they are stored) and `Sessions`.
+
+So M4 is mostly the data-layer operations, a small local store for join requests, a few core helpers, and the screens.
+
+## Differences from the mockups (already settled by earlier decisions)
+
+1. **Role descriptions on mockup 12 are out of date.** New text: *Owner: adds and removes admins, removes members, changes the group key, transfers ownership. Admin: approves joins and invites. Member: adds expenses, deletes their own.* (The mockup says admins remove members, delete any entry and change the relay.)
+2. **Mockup 14b** says Rohan "will be able to add and remove admins and transfer ownership"; it also gains "remove members and change the group key".
+3. **The invite icon (top right of mockup 12) and "Open invites" (mockup 11)** belong to M6 (tickets). They are left out until then: no controls that do nothing.
+4. **The "…" menu on a member** appears only for the owner. An admin or a plain member has nothing to do to other people, so no menu is shown. The "Join requests" row is shown to the owner and admins.
+5. **Mockup 14 for a plain member** offers "Make admin" in place of "Remove admin role". The owner sees "Make owner", "Make admin" or "Remove admin role", and "Remove from group".
+6. **Names:** the admin sets the member's name when approving a join (decided 4 Nov); the name field is on the approval, with a live "name already taken" check.
+
+## Decisions needed
+
+Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
+
+- **D1. How the person offered ownership accepts.** The mockups show only the owner's side ("Waiting for Rohan to accept"). The offered person needs a way to say yes.
+- **D2. The group key after a member leaves.** A leave does not change the key (decided 3 Nov), so the leaver can still read new entries until the owner changes it. The owner's phone could do it by itself when it sees a leave, or show a button.
+- **D3. Where a person edits their own name and phone.**
+- **D4. Where "Leave group" lives, and what the leaver sees afterwards** (their phone cannot be told it was removed until sync exists).
+- **D5. Removed members:** a "Removed" section on the Members screen, and a screen listing the late entries that were cancelled after a removal (decided 4 Nov: listed to the remover and the owner).
+- **D6. Join requests before M6.** Real requests arrive over a transport in M6. In M4 the screen and the store exist, a debug build can add a pretend request, and release builds show an empty list.
+- **D7. How many pretend members the debug tool may add** (M3 limited it to three in total until M4).
+
+## Tasks
+
+Every task is tests first, with the mutation check used in M3 (put the old behaviour back, a test must fail). Core and data tasks run on the JVM; screens are also checked on the emulator against the mockups.
+
+### T4.2 Core helpers (pure Kotlin)
+Do: (a) `isNameTaken(state, name, except)`: one public function that replay and the screens both use, so the "name already taken" message can never disagree with the rule; (b) `cancelledEntries(log, state)`: the removed members' late events that replay cancelled (expense description, amount, payer; payments and other events as counts), per removed member; (c) `GroupState` helpers the screens need (who can do what: `canApproveJoins`, `canRemove`, `canTransfer`, derived from the role, never copied into the UI).
+Done when: tests for each, including the same name with capitals, spaces and a removed member's name; cancelled entries listed after a removal with a late event; permissions table tested for owner, admin and member.
+
+### T4.3 Group operations in the data layer
+Do: on `GroupSession`: `approveJoin(request, name)`, `removeMember(member)` (new key made, sealed to the members who stay, **saved on the phone before the event is written and deleted again if the rules refuse the event**), `leave()`, `rotateKey()`, `makeAdmin`/`removeAdmin`, `offerOwnership(to)`, `cancelOffer()`, `acceptOwnership()`, `updateProfile(name, phone)`. Each returns what the core said (`Added` or the refusal reason) so the screen can say why.
+Done when: tests with several identities (owner, admin, member, outsider): each operation works for who may and is refused for who may not, a refused removal leaves no key behind, the new key opens only for the members who stay, a leave carries no key, the owner can offer, cancel and (as the target) accept ownership, and a name clash is refused with the reason.
+
+### T4.4 Join requests (local store)
+Do: a `join_requests` table in the database (new schema version with a migration and a migration test): group, the requester's member key and encryption key, name, phone, time received, state (waiting, approved, declined). A repository. Decline marks it declined on this phone (nothing is sent). Approve writes `MemberJoined` (T4.3) and marks it approved.
+Done when: tests: create, list waiting, approve (event written, name set by the admin, request marked), decline, the same requester twice, 20-member limit refused with a clear reason, the migration keeps the existing groups and events (checked on the emulator against a database made by the M3 build).
+
+### T4.5 Members screen (mockup 12) and models
+Do: list with role badges, phone as entered, "You" first, the "Join requests" row with a count, the corrected role text; the "…" menu for the owner only; a "Removed" section (D5). Pure models with JVM tests for what each role sees.
+Done when: model tests for owner, admin, member views; the screen compared with mockup 12 on the emulator; reachable from the Group screen's members icon.
+
+### T4.6 Member actions (mockup 14)
+Do: the screen for one member: Make owner, Make admin or Remove admin role, Remove from group, by who is looking and who is looked at (the owner cannot act on themselves).
+Done when: model tests for every combination of viewer and target; compared with mockup 14.
+
+### T4.7 Remove member (mockup 13)
+Do: the before and after table from `previewRemoval`, the "Also left out of the group" box (counts of expenses, shares and payments, with the payments listed by who paid whom), the confirmation, and the result. Uses T4.3 `removeMember`.
+Done when: the table equals `previewRemoval` row for row; the payment line names who will owe again; removal writes the event and the new key; compared with mockup 13.
+
+### T4.8 Ownership (mockups 14b and 14c, and D1)
+Do: "Make Rohan the owner?" with the corrected text and **Send request**; the waiting screen with **Cancel request**; the screen for the person offered, as decided in D1.
+Done when: offer, cancel, accept and the role change (the old owner becomes an admin) on two identities; the screens follow the mockups.
+
+### T4.9 Join requests screen (mockup 11)
+Do: waiting requests with Decline and Approve; Approve opens the name field (filled with the requested name, live "already taken" check, 20-member message); the "Open invites" section is left out until M6.
+Done when: model tests; approving with a clashing name is blocked; compared with mockup 11.
+
+### T4.10 Profile and leave (D3, D4)
+Do: edit my name and phone (the group's unique-name rule shown as a message); Leave group with a warning when the balance is not settled, then a read-only "You left" state on this phone.
+Done when: tests for the rename clash, a phone with the allowed characters, the warning text, and that a leaver cannot add entries.
+
+### T4.11 The key after a leave (D2)
+Do: as decided in D2.
+Done when: after a leave the owner's phone either changes the key by itself or shows the button; tests for the new epoch and that the leaver cannot open entries written after it.
+
+### T4.12 Cancelled late entries (D5)
+Do: a screen for the owner (and the remover) listing the removed member's late entries that were cancelled, so someone can re-enter them.
+Done when: model tests; the list grows when a late event syncs after the removal (tested with the session).
+
+### T4.13 Debug tools (D6, D7)
+Do: debug builds only: add a pretend join request, and act as a pretend member (accept an ownership offer, write an event), so every screen above can be tried before M6. Release builds contain none of it.
+Done when: the release build has no trace of them (the existing manifest and class checks), and each screen was exercised on the emulator through them.
+
+### T4.14 Hand back
+Checklist: every rule in DESIGN.md "Flows" has a test (a table in the task notes maps each rule to its test); `./gradlew` tests, lint, debug and release builds and the vulnerability check pass locally and in CI; the data survives a restart (add a member, remove one, rotate the key, kill and reopen); no secret in logs; the release build has no network permission; docs match; every interpretation is listed in the pull request.
