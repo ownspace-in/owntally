@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D5 decided; D6 and D7 still open. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D6 decided; D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -61,11 +61,12 @@ So M4 is mostly the data-layer operations, a small local store for join requests
 
 - **D5c (5 Nov 2026): "Add again" on each cancelled expense.** Yes. The button opens the Add expense form filled in with the description, amount, payer and split. A removed person is taken out of an equal split; for an exact split their share is left blank and the owner assigns it before saving. The new entry is written by the owner (so only the owner or the creator can delete it later). The cancelled entry stays in the list; it is not marked "added again" in M4 (a possible later nicety).
 
+- **D6 (5 Nov 2026): join requests before M6.** The "Join requests" row and screen are shown **in all builds**. With nothing waiting the screen says **"No one is waiting to join. Invites arrive in a later update."** (the mockup's "Open invites" section is left out until M6). Debug builds can add a pretend request. The row is shown to the owner and admins only.
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D6. Join requests before M6.** Real requests arrive over a transport in M6. In M4 the screen and the store exist, a debug build can add a pretend request, and release builds show an empty list.
 - **D7. How many pretend members the debug tool may add** (M3 limited it to three in total until M4).
 
 ## Tasks
