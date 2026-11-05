@@ -164,6 +164,7 @@ fun GroupScreen(
     onAdd: (() -> Unit)? = null,
     onSettle: (() -> Unit)? = null,
     onOpenExpense: (ExpenseRow) -> Unit = {},
+    onMembers: (() -> Unit)? = null,
     extra: @Composable () -> Unit = {},
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -174,9 +175,14 @@ fun GroupScreen(
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(model.name, style = MaterialTheme.typography.titleLarge, color = OwnTallyColors.Ink)
                     Text(model.roleText, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                }
+                if (onMembers != null) {
+                    Box(Modifier.size(44.dp).clickable(onClick = onMembers).semantics { contentDescription = "Members"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                        GlyphIcon(Glyph.GROUPS, OwnTallyColors.Ink)
+                    }
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -249,13 +255,14 @@ private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
 @Composable
 private fun ExpenseRowView(row: ExpenseRow, modifier: Modifier = Modifier) {
     val strike = if (row.deleted) TextDecoration.LineThrough else null
+    val grey = row.deleted || row.excluded
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.InfoBackground, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
             Text(row.description.trim().take(1).uppercase(), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(row.description, style = MaterialTheme.typography.labelLarge, color = if (row.deleted) OwnTallyColors.TextHint else OwnTallyColors.Ink, textDecoration = strike, maxLines = 2)
+            Text(row.description, style = MaterialTheme.typography.labelLarge, color = if (grey) OwnTallyColors.TextHint else OwnTallyColors.Ink, textDecoration = strike, maxLines = 2)
             Text(row.subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
         }
         Spacer(Modifier.width(8.dp))
@@ -263,7 +270,7 @@ private fun ExpenseRowView(row: ExpenseRow, modifier: Modifier = Modifier) {
             if (row.caption != null) Text(row.caption, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
             Text(
                 row.amount, style = MaterialTheme.typography.labelLarge, textDecoration = strike,
-                color = if (row.deleted) OwnTallyColors.TextHint else row.kind.colour(),
+                color = if (grey) OwnTallyColors.TextHint else row.kind.colour(),
             )
         }
     }

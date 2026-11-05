@@ -14,7 +14,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.2 core helpers | Done (5 Nov 2026), see below. |
 | T4.3 group operations | Done (5 Nov 2026), see below. |
 | T4.4 join requests | Done (5 Nov 2026), see below. |
-| T4.5 to T4.14 | Not started. |
+| T4.5 members screen | Done (5 Nov 2026), see below. |
+| T4.6 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -100,6 +101,9 @@ Done when: tests: create, list waiting, approve (event written, name set by the 
 Do: list with role badges, phone as entered, "You" first, the "Join requests" row with a count, the corrected role text; the "…" menu for the owner only; a "Removed" section (D5). Pure models with JVM tests for what each role sees.
 Also here: the Group screen's expense rows say "Excluded: Kabir was removed" or "Excluded: Kabir left" (greyed, not struck through) for expenses that stop counting because of a removal or leave, and keep "Deleted by Rohan · not counted" for real deletes; payments are not listed on this screen today, so their reason is shown where payments are shown (Settle up, M8).
 Done when: model tests for owner, admin, member views; model tests for the three kinds of uncounted expense (deleted, payer removed, payer left); the screen compared with mockup 12 on the emulator; reachable from the Group screen's members icon.
+
+
+**T4.5 result (5 Nov 2026).** `MembersModels.build(view, waitingRequests)` (pure, 8 JVM tests): "You" first then the others by name; Owner and Admin badges; the "…" menu only for the owner and never on their own row; the "Join requests" row (with count) and the invite icon only for the owner and admins (they read `Permissions`); a "No longer in the group" section with "Removed" or "Left" (a leave is a removal whose author is the member); the role text follows the rules, not the mockup: Owner "adds and removes admins, removes members, changes the key, deletes any expense, transfers ownership", Admin "approves joins and invites people", Member "adds expenses, deletes their own, can leave the group". Expense rows: an expense whose payer was removed or left shows "Excluded: Kabir was removed" or "Excluded: Kabir left", greyed and not struck through (`ExpenseRow.excluded`); real deletes keep "Deleted by Rohan · not counted" (3 JVM tests). The screen (`MembersScreen`, route `Screen.Members`, members icon in the Group screen header) was compared with design/12 on the emulator using a picture the test `MembersScreenImagesInstrumentedTest` saves; after narrowing the badge and menu so a phone number no longer wraps it matches the mockup layout. **Not wired yet, on purpose:** the invite icon, the Join requests row and the "…" menu are drawn but do nothing until their screens exist (T4.9, the invite screen in M5, T4.6); `JoinRequests` is passed down from `AppContainer` so the count is real.
 
 ### T4.6 Member actions (mockup 14)
 Do: the screen for one member: Make owner, Make admin or Remove admin role, Remove from group, by who is looking and who is looked at (the owner cannot act on themselves).

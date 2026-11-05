@@ -33,6 +33,7 @@ class AppContainer(private val context: Context) {
 
     val settings: RoomSettingsStore by lazy { RoomSettingsStore(database) }
     val sessions: Sessions by lazy { Sessions(groups, secrets, identity, Clock.SYSTEM, settings) }
+    val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
     val debugTools: DebugTools? by lazy { DebugToolsFactory.create(this) }
 
     val firstRun: FirstRun = object : FirstRun {

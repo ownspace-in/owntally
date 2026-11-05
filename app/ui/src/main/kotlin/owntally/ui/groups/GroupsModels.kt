@@ -83,6 +83,8 @@ data class ExpenseRow(
     val amount: String,
     val kind: BalanceKind,
     val deleted: Boolean,
+    /** Not counted because the person who paid was removed or left (shown greyed, not struck through). */
+    val excluded: Boolean = false,
 )
 
 data class GroupScreenModel(
@@ -145,6 +147,15 @@ object GroupScreenModels {
         }
         val payer = if (e.paidBy == view.me) "You" else nameOf(view, e.paidBy)
         val shares = sharesOf(view.state, e)
+        if (shares == null && !e.deleted) {
+            val gone = view.state.members[e.paidBy]
+            val left = view.state.removals[e.paidBy]?.let { it.by == it.member } == true
+            val who = gone?.name?.takeIf { it.isNotBlank() } ?: "Someone"
+            return ExpenseRow(
+                e.id, e.description, "Excluded: $who ${if (left) "left" else "was removed"}",
+                null, MoneyFormat.format(e.total), BalanceKind.SETTLED, deleted = false, excluded = true,
+            )
+        }
         if (shares == null) {
             val by = e.deletedBy?.let { nameOf(view, it) }
             return ExpenseRow(

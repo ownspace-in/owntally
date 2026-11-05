@@ -52,7 +52,7 @@ interface DebugTools {
 
 /** The screens after first run: the four tabs, and the Group and New group screens above them. */
 @Composable
-fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.ui.lock.LockController? = null) {
+fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.ui.lock.LockController? = null, joinRequests: owntally.data.session.JoinRequests? = null) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { sessions.refresh() } }
@@ -72,11 +72,13 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
             Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
+            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back)
             is Screen.AddExpense -> AddExpenseRoute(sessions, screen.id, onDone = back)
             is Screen.Group -> GroupRoute(
                 sessions, screen.id, debugTools, onBack = back,
                 onAdd = { ui.nav = ui.nav.push(Screen.AddExpense(screen.id)) },
                 onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(screen.id)) },
+                onMembers = { ui.nav = ui.nav.push(Screen.Members(screen.id)) },
             )
         }
     }
@@ -180,7 +182,7 @@ private fun CreateGroupRoute(sessions: Sessions, onDone: () -> Unit) {
 }
 
 @Composable
-private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?, onBack: () -> Unit, onAdd: () -> Unit, onSettle: () -> Unit) {
+private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?, onBack: () -> Unit, onAdd: () -> Unit, onSettle: () -> Unit, onMembers: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -193,7 +195,7 @@ private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?,
     val model = remember(view) { GroupScreenModels.build(view) }
     val scope = rememberCoroutineScope()
     var opened by remember { mutableStateOf<owntally.model.EventId?>(null) }
-    GroupScreen(model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }) {
+    GroupScreen(model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }, onMembers = onMembers) {
         if (debugTools != null) {
             androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
             owntally.ui.components.TextAction("Add test friends and expenses (debug build)", { scope.launch { withContext(Dispatchers.IO) { debugTools.addTestData(s) } } })
@@ -312,4 +314,19 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
     val s = session ?: return Box(Modifier.fillMaxSize())
     val view by s.view.collectAsStateWithLifecycle()
     SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack)
+}
+
+@Composable
+private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
+    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack)
 }
