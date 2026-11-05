@@ -35,4 +35,28 @@ class DependencyRulesTest {
         val version = Regex("""(?m)^tink\s*=\s*"([^"]+)"""").find(catalog)!!.groupValues[1]
         assertTrue(Regex("""\d+\.\d+\.\d+""").matches(version), "pinned exactly, got $version")
     }
+
+    /** The build plugins that must move together. A bot that bumps one of them alone breaks the whole build (it did once, on 5 Nov 2026). */
+    private val rootBuild = File(root, "build.gradle.kts").readText()
+
+    /** Every plugin line of the root build file as (name, version), whether written id("...") or kotlin("..."). */
+    private val plugins: List<Pair<String, String>> =
+        Regex("""(?:id\("([\w.\-]+)"\)|kotlin\("([\w.\-]+)"\))\s+version\s+"([^"]+)"""").findAll(rootBuild)
+            .map { (it.groupValues[1].ifEmpty { "org.jetbrains.kotlin." + it.groupValues[2] }) to it.groupValues[3] }.toList()
+
+    private fun versionsOf(idPrefix: String) = plugins.filter { it.first.startsWith(idPrefix) }
+
+    @Test
+    fun theAndroidPluginsAllHaveTheSameVersion() {
+        val plugins = versionsOf("com.android.")
+        assertTrue(plugins.size >= 2, "expected the application and library plugins, found $plugins")
+        assertEquals(1, plugins.map { it.second }.toSet().size, "the Android plugins must move together: $plugins")
+    }
+
+    @Test
+    fun theKotlinPluginsAllHaveTheSameVersion() {
+        val plugins = versionsOf("org.jetbrains.kotlin")
+        assertTrue(plugins.size >= 2, "expected the Kotlin plugins, found $plugins")
+        assertEquals(1, plugins.map { it.second }.toSet().size, "the Kotlin plugins must move together: $plugins")
+    }
 }
