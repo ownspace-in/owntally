@@ -9,7 +9,7 @@ kotlin {
 dependencies {
     implementation(project(":app:core-model"))
     // Pinned. Released 16 Oct 2026. All cryptography comes from here or from the JDK (docs/CRYPTO.md).
-    implementation("com.google.crypto.tink:tink:1.24.0")
+    implementation(libs.tink)
 
     testImplementation(kotlin("test"))
     testImplementation("io.kotest:kotest-property:5.9.1")

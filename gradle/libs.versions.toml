@@ -1,0 +1,11 @@
+# One place for library versions that more than one module uses (owner decision, 4 Nov 2026, clarification C9).
+# Dependabot reads this file and proposes updates as pull requests.
+
+[versions]
+# Google Tink: all the app's cryptography. The JVM artifact (used by the pure-Kotlin crypto module and its tests) and the Android
+# artifact must always be the same version, which is why the version lives here once.
+tink = "1.24.0"
+
+[libraries]
+tink = { module = "com.google.crypto.tink:tink", version.ref = "tink" }
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }

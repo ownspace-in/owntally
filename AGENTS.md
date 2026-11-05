@@ -16,3 +16,4 @@ Rules:
 
 Commands:
 - Test: `./gradlew :app:core-model:test` (more modules later)
+- Known vulnerabilities in shipped libraries: `python3 tools/check_vulnerabilities.py` (needs network; CI runs it on every pull request and weekly). Library versions shared by several modules live in `gradle/libs.versions.toml`.

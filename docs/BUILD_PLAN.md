@@ -165,6 +165,7 @@ Acceptance: a release build installs, runs on a 2 GB phone, and passes the full 
 - All acceptance items have an automated test, or a written manual test where hardware is needed.
 - `./gradlew test lint` passes locally and in CI.
 - No new network calls other than sync, no analytics, no secrets in the repo.
+- The vulnerability check (`tools/check_vulnerabilities.py`) finds nothing, or every finding is listed with a reason in `tools/vulnerability-ignores.txt`.
 - `DESIGN.md` and the mockups still match behaviour. If they changed, they were updated in the same pull request.
 
 ## What the owner decides, not the builder

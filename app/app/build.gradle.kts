@@ -32,6 +32,7 @@ android {
     testOptions {
         // The rule tests read these files directly. Declaring them makes Gradle re-run the tests when one changes.
         unitTests.all { test ->
+            test.inputs.files("../../gradle/libs.versions.toml", "../core-model/build.gradle.kts", "../crypto/build.gradle.kts", "../sync/build.gradle.kts", "../data/build.gradle.kts", "../ui/build.gradle.kts", "build.gradle.kts")
             test.systemProperty("user.language", "en")
             test.systemProperty("user.country", "IN")
             test.inputs.dir("src/main")

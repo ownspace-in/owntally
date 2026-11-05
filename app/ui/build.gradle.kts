@@ -44,7 +44,7 @@ dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
     implementation(project(":app:data"))
-    implementation("com.google.crypto.tink:tink-android:1.24.0")
+    implementation(libs.tink.android)
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")

@@ -1,0 +1,32 @@
+name: Vulnerabilities
+
+# Checks the libraries that ship in the app against OSV, the public database of known vulnerabilities (CRYPTO.md, clarification C9).
+# Runs on every pull request, on main, and every Monday, because a vulnerability can be published for a library we already use.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test the check itself
+        working-directory: tools
+        run: python3 -m unittest -v test_check_vulnerabilities
+      - name: Prove the check can flag a known-vulnerable library
+        run: python3 tools/check_vulnerabilities.py --self-test
+      - name: Check the shipped libraries
+        run: python3 tools/check_vulnerabilities.py
