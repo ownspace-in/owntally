@@ -46,8 +46,14 @@ import owntally.ui.components.GlyphIcon
 import owntally.ui.theme.OwnTallyColors
 
 /** Things only debug builds have (test friends and sample expenses). Release builds pass null, so no such control is drawn. */
+/** One debug button: what it says and what it does (run off the main thread). */
+class DebugAction(val label: String, val run: () -> Unit)
+
 interface DebugTools {
     fun addTestData(session: GroupSession)
+
+    /** More buttons that depend on the group's state (pretend friends, a pretend join request, acting as a pretend member). */
+    fun actions(session: GroupSession): List<DebugAction> = emptyList()
 }
 
 /** The screens after first run: the four tabs, and the Group and New group screens above them. */
@@ -216,6 +222,9 @@ private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?,
         if (debugTools != null) {
             androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
             owntally.ui.components.TextAction("Add test friends and expenses (debug build)", { scope.launch { withContext(Dispatchers.IO) { debugTools.addTestData(s) } } })
+            for (action in remember(view) { debugTools.actions(s) }) {
+                owntally.ui.components.TextAction(action.label + " (debug)", { scope.launch { withContext(Dispatchers.IO) { action.run() } } })
+            }
         }
     }
     if (confirmAccept && banner != null) {

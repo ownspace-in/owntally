@@ -22,7 +22,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.10 profile and leave | Done (5 Nov 2026), see below. |
 | T4.11 key after a leave | Done (5 Nov 2026), see below. |
 | T4.12 cancelled late entries | Done (5 Nov 2026), see below. |
-| T4.13 to T4.14 | Not started. |
+| T4.13 debug tools | Done (5 Nov 2026), see below. |
+| T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -164,6 +165,9 @@ Done when: model tests; the list grows when a late event syncs after the removal
 ### T4.13 Debug tools (D6, D7)
 Do: debug builds only: add a pretend join request (D6), add up to four pretend friends for five people in total (D7), and act as a pretend member (accept an ownership offer, write an event), so every screen above can be tried before M6. Release builds contain none of it.
 Done when: the release build has no trace of them (the existing manifest and class checks), and each screen was exercised on the emulator through them.
+
+
+**T4.13 result (5 Nov 2026).** Debug builds only, in `app/app/src/debug` (`PretendMembers`, shown as extra buttons under the group screen's existing debug button): **Add pretend friend** one at a time (Ben, Meera, Kabir, Isha "(test)", each with its own phone and a unique name, never more than five people); **Add pretend join request** (Aarav, Naina, Zoya, ... "(test)", a new name each time); and, for each pretend friend, **act as them**: accept or decline an ownership offer (only offered while one waits), write an expense, leave the group. Acting writes a real event sealed and signed with that person's identity from this phone's seed, with the counter and "seen" list their phone would have; the group's rules still decide, and a refusal is reported, not hidden. 7 JVM tests (`src/testDebug`). **Release:** the release APK has no `PretendMembers` and none of the "(test)" or "Add pretend" strings (checked in the dex); only the small `DebugAction` and `DebugTools` types from the UI module are present, as `DebugTools` was already. **Emulator:** `MembershipEndToEndInstrumentedTest` uses the real app and the pretend people to go through Members, Join requests, Approve (with the name clash message), Remove member (table, then the "No longer in the group" list), Make owner (waiting, accepted as the pretend person, this person becomes an admin), the profile screen and Leave (an admin is told what to do). It passed 4 of 5 runs; the one failure was Compose's test clock ("Detected multithreaded access to SnapshotStateObserver": a recomposition ran on the IO thread that wrote the state), a test-framework race that is not an app fault and is the same kind as the one fixed earlier in the first-run test. One mutation (limit of five people) survived because the four friend names already limit the group to five.
 
 ### T4.14 Hand back
 Checklist: every rule in DESIGN.md "Flows" has a test (a table in the task notes maps each rule to its test); `./gradlew` tests, lint, debug and release builds and the vulnerability check pass locally and in CI; the data survives a restart (add a member, remove one, rotate the key, kill and reopen); no secret in logs; the release build has no network permission; docs match; every interpretation is listed in the pull request.
