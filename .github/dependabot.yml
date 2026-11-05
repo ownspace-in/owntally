@@ -1,17 +1,37 @@
-# Opens a pull request when a library or a GitHub Action has a new version (CRYPTO.md, clarification C9). Nothing is merged
-# automatically: the owner decides. Tink's version lives in gradle/libs.versions.toml, which Dependabot reads.
+# Dependabot (CRYPTO.md, clarification C9). Nothing is merged automatically: the owner decides.
+#
+# ONE pull request per week for everything (owner request, 5 Nov 2026): all ecosystems share one group, so a week's updates arrive
+# together in a single PR instead of a dozen. The three big jumps that broke `main` on 5 Nov 2026 (the Android plugin, Gradle itself,
+# the Kotlin plugins) are major versions that must move together and need a deliberate migration, so major version updates are not
+# proposed here. A major upgrade is done on purpose, as its own task.
+#
+# Tink's version lives in gradle/libs.versions.toml, which Dependabot reads.
 version: 2
+
+multi-ecosystem-groups:
+  weekly:
+    schedule:
+      interval: weekly
+
 updates:
   - package-ecosystem: gradle
     directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+    patterns: ["*"]
+    multi-ecosystem-group: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
-    schedule:
-      interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: gomod
     directory: "/relay/ws-relay"
-    schedule:
-      interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
