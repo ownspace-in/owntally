@@ -14,7 +14,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Test core model
         run: ./gradlew :app:core-model:test :app:crypto:test :app:sync:test --console=plain
 
@@ -26,7 +26,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build, test and lint the Android app
         run: >
           ./gradlew :app:app:assembleDebug
