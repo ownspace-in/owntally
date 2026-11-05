@@ -43,7 +43,7 @@ class JoinRequestsModelTest {
     @Test fun answeredRequestsAreNotListed() {
         val m = model(me, request(1, "Aarav", "98765 11111", 60, JoinState.APPROVED), request(2, "Naina", "98765 22222", 60, JoinState.DECLINED))!!
         assertEquals(emptyList(), m.rows)
-        assertEquals("No one is waiting.", m.empty)
+        assertEquals("No one is waiting to join. Invites arrive in a later update.", m.empty)
         assertEquals("Waiting for you · 0", m.heading)
     }
 

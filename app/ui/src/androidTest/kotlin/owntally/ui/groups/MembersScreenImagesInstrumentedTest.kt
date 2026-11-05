@@ -51,7 +51,7 @@ class MembersScreenImagesInstrumentedTest {
                 row(0, "You", "+91 98765 00001", Role.OWNER, me = true), row(1, "Rohan", "+91 98765 43210", Role.ADMIN),
                 row(2, "Meera", "+91 99887 76655", Role.MEMBER), row(3, "Kabir", "+91 97000 12345", Role.MEMBER), row(4, "Isha", "+91 96000 55443", Role.MEMBER),
             ),
-            2, true, MembersModels.roleLines, listOf(RemovedRowModel("Dev", "+91 95000 11111", "Left")),
+            2, true, MembersModels.roleLines, listOf(RemovedRowModel("Dev", "+91 95000 11111", "Left", key(9))),
         )
         rule.setContent { OwnTallyTheme { Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) { MembersScreen(owner, onBack = {}, onInvite = {}, onMenu = {}) } } }
         rule.onNodeWithText("Join requests").assertIsDisplayed()

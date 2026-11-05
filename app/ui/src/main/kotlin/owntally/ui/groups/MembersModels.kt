@@ -21,7 +21,17 @@ data class MemberRowModel(
     val hasMenu: Boolean,
 )
 
-data class RemovedRowModel(val name: String, val phone: String, /** "Removed" or "Left". */ val how: String)
+data class RemovedRowModel(
+    val name: String,
+    val phone: String,
+    /** "Removed" or "Left". */
+    val how: String,
+    val key: PublicKey,
+    /** Late entries of this person that were cancelled (D5b); only the owner is told. */
+    val lateEntries: Int = 0,
+    /** The owner can tap the person to see those entries. */
+    val tappable: Boolean = false,
+)
 
 data class RoleLine(val role: Role, val label: String, val text: String)
 
@@ -61,7 +71,10 @@ object MembersModels {
             )
         }
         val removed = state.members.values.filter { it.removed }.sortedBy { name(it).lowercase() }.map {
-            RemovedRowModel(name(it), it.phone, if (state.removals[it.key]?.let { r -> r.by == r.member } == true) "Left" else "Removed")
+            RemovedRowModel(
+                name(it), it.phone, if (state.removals[it.key]?.let { r -> r.by == r.member } == true) "Left" else "Removed", it.key,
+                lateEntries = if (viewer == Role.OWNER) view.cancelled.count { c -> c.author == it.key } else 0, tappable = viewer == Role.OWNER,
+            )
         }
         val n = rows.size
         return MembersScreenModel(

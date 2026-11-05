@@ -183,6 +183,27 @@ class GroupOperationsTest {
         assertTrue(r is AddResult.Refused, "after leaving: $r")
     }
 
+    // ---- late entries of a removed member (D5b) --------------------------------------------------------------------
+
+    @Test fun lateEntriesThatSyncInAfterARemovalAreCancelledAndTheListGrows() {
+        val chitra = joined("Chitra")
+        everyoneSyncs(owner, chitra)
+        assertTrue(added(owner.session.removeMember(chitra.key)))
+        assertEquals(emptyList(), owner.session.view.value.cancelled)
+        // Chitra's phone has not heard of the removal and writes an expense.
+        assertTrue(added(chitra.session.addExpense("Late dinner", rupees(500), chitra.key, 20_000, Split.Equal(setOf(chitra.key, owner.key)))))
+        owner.receiveFrom(chitra)
+        val first = owner.session.view.value.cancelled.single() as owntally.model.CancelledEntry.Expense
+        assertEquals("Late dinner", first.description)
+        assertEquals(chitra.key, first.author)
+        assertTrue(owner.state.expenses.values.none { it.description == "Late dinner" && sharesCount(it) > 0 }, "it does not count")
+        assertTrue(added(chitra.session.addExpense("Later still", rupees(70), chitra.key, 20_000, Split.Equal(setOf(chitra.key)))))
+        owner.receiveFrom(chitra)
+        assertEquals(listOf("Late dinner", "Later still"), owner.session.view.value.cancelled.map { (it as owntally.model.CancelledEntry.Expense).description })
+    }
+
+    private fun sharesCount(e: owntally.model.Expense) = owner.session.view.value.state.let { owntally.model.sharesOf(it, e)?.size ?: 0 }
+
     // ---- the key after a leave (D2) --------------------------------------------------------------------------------
 
     @Test fun afterALeaveTheOwnersPhoneChangesTheKeyOnceAndFurtherRefreshesDoNothing() {

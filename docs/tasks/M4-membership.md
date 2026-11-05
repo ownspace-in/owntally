@@ -21,7 +21,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.9 join requests screen | Done (5 Nov 2026), see below. |
 | T4.10 profile and leave | Done (5 Nov 2026), see below. |
 | T4.11 key after a leave | Done (5 Nov 2026), see below. |
-| T4.12 to T4.14 | Not started. |
+| T4.12 cancelled late entries | Done (5 Nov 2026), see below. |
+| T4.13 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -156,6 +157,9 @@ Done when: tests: after a leave the owner's session writes the rotation once and
 ### T4.12 Cancelled late entries (D5b, D5c)
 Do: a screen for the owner listing the removed member's late entries that were cancelled, reached only by tapping the person in the "Removed or left" section (no note on the Group screen), so someone can re-enter them; "Add again" as decided in D5c.
 Done when: model tests; the list grows when a late event syncs after the removal (tested with the session); "Add again" fills the form from the cancelled expense, drops a removed person from an equal split, leaves their share blank in an exact split so Save stays off until the amounts add up, and saves as an expense written by the owner.
+
+
+**T4.12 result (5 Nov 2026).** `GroupView.cancelled` (from the core's `cancelledEntries`) is on every view. **List (D5b):** `CancelledListModels.build(view, member)`, owner only and only for someone who was removed or left: "Late entries not counted: N", each expense with amount and payer and an **Add again** link, payments and other events as counts. It is reached only by tapping the person in the "No longer in the group" section of Members (owner only; the row also shows the count); nothing on the Group screen. A two-phone test shows the list grow: the owner removes a member, the member's phone (which has not heard) writes an expense, it syncs in and is cancelled and listed, and a second late entry later extends the list. **Add again (D5c):** `AddExpenseModel.fromCancelled` fills description, amount, payer, split and date; people no longer in the group are left out of an equal split; in an exact split their share is left blank, so Save stays off until the amounts add up ("₹400 left to assign"); a future date becomes today; if the payer is gone **the owner becomes the payer** (my choice: an expense a removed person paid would not count; the form lets the owner change it); the new entry is written by the owner through the normal form. The cancelled entry stays in the list. **Also fixed (D6):** the empty join-requests screen now says "No one is waiting to join. Invites arrive in a later update." Mutations (removed person kept in an equal split, their exact share kept, removed payer kept, an admin sees the list): each failed tests. **Not covered:** the real screens on the emulator against a picture (no mockup exists for this screen).
 
 ### T4.13 Debug tools (D6, D7)
 Do: debug builds only: add a pretend join request (D6), add up to four pretend friends for five people in total (D7), and act as a pretend member (accept an ownership offer, write an event), so every screen above can be tried before M6. Release builds contain none of it.

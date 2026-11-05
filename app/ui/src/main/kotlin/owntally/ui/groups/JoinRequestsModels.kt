@@ -42,7 +42,7 @@ object JoinRequestsModels {
             JoinRequestRow(it.member, it.name, it.phone, it.name.trim().take(1).uppercase(), (it.member.bytes()[0].toInt() and 0xff) % MembersModels.COLOURS, RelativeTime.ago(now, it.receivedAtSeconds))
         }
         return JoinRequestsScreenModel(
-            view.state.name ?: "Group", "Waiting for you · ${rows.size}", rows, if (rows.isEmpty()) "No one is waiting." else null,
+            view.state.name ?: "Group", "Waiting for you · ${rows.size}", rows, if (rows.isEmpty()) "No one is waiting to join. Invites arrive in a later update." else null,
             view.state.currentMembers.size >= MAX_MEMBERS,
             "Approving lets the person read every expense in this group. Decline anyone you don't recognise.",
         )

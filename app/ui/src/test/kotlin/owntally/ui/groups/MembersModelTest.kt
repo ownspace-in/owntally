@@ -65,7 +65,8 @@ class MembersModelTest {
         val m = model()
         assertEquals(listOf("You", "Kabir", "Rohan"), m.rows.map { it.label })
         assertEquals("Goa Trip · 3 people", m.subtitle)
-        assertEquals(listOf(RemovedRowModel("Meera", "98765 00002", "Removed")), m.removed)
+        assertEquals(listOf("Meera"), m.removed.map { it.name })
+        assertEquals(listOf("Removed"), m.removed.map { it.how })
     }
 
     @Test fun aMemberWhoLeftIsShownAsLeftNotRemoved() {

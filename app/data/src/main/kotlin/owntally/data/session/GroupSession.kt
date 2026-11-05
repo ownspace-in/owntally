@@ -47,6 +47,8 @@ data class GroupView(
     val counts: Counts,
     /** Epochs whose key is stored but cannot be opened (for example the Keystore key was lost). */
     val unreadableKeyEpochs: Set<Long>,
+    /** Late entries of removed or departed members that the rules cancelled, in event order (M4, D5b). */
+    val cancelled: List<owntally.model.CancelledEntry> = emptyList(),
 )
 
 sealed class AddResult {
@@ -326,6 +328,7 @@ class GroupSession(
             plan = settlementPlan(b),
             counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), rejected.size, damaged, deferred.size),
             unreadableKeyEpochs = unreadableKeyEpochs,
+            cancelled = owntally.model.cancelledEntries(log, s),
         )
     }
 

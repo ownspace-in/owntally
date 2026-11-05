@@ -327,6 +327,27 @@ data class AddExpenseModel(
         const val INPUT_LIMIT = 120
         const val AMOUNT_LIMIT = 16
 
+        /**
+         * The form filled in from a cancelled late entry (D5c). People who are no longer in the group are left out: out of an equal split,
+         * and their share of an exact split is left blank to be assigned. If the payer is gone the owner becomes the payer. A date in the future is brought back to today.
+         */
+        fun fromCancelled(view: GroupView, counter: Long, today: Long, entry: owntally.model.CancelledEntry.Expense): AddExpenseModel {
+            val base = start(view, counter, today)
+            val here = base.people.map { it.key }.toSet()
+            val day = minOf(entry.day, today)
+            val common = base.copy(
+                description = entry.description, amountText = MoneyFormat.editable(entry.total), day = day,
+                paidBy = if (entry.paidBy in here) entry.paidBy else view.me,
+            )
+            return when (val split = entry.split) {
+                is Split.Equal -> common.copy(mode = SplitMode.EQUAL, selected = split.participants.filter { it in here }.toSet())
+                is Split.Exact -> common.copy(
+                    mode = SplitMode.EXACT, selected = here,
+                    exactText = split.amounts.filterKeys { it in here }.mapValues { MoneyFormat.editable(it.value) },
+                )
+            }
+        }
+
         fun start(view: GroupView, counter: Long, today: Long): AddExpenseModel {
             val others = view.state.currentMembers.values.filter { it.key != view.me }
                 .sortedBy { it.name.lowercase() }.map { Person(it.key, it.name.ifBlank { "Someone" }) }

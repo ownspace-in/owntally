@@ -46,6 +46,7 @@ fun MembersScreen(
     onMenu: ((MemberRowModel) -> Unit)? = null,
     onMyProfile: (() -> Unit)? = null,
     onLeave: (() -> Unit)? = null,
+    onRemovedTap: ((RemovedRowModel) -> Unit)? = null,
 ) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
@@ -114,10 +115,13 @@ fun MembersScreen(
                 Text("NO LONGER IN THE GROUP", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
                 Spacer(Modifier.height(10.dp))
                 for (r in model.removed) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().then(if (r.tappable && onRemovedTap != null) Modifier.clickable { onRemovedTap(r) } else Modifier).padding(vertical = 6.dp),
+                    ) {
                         Column(Modifier.weight(1f)) {
                             Text(r.name, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.TextHint)
                             Text(r.phone, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextHint)
+                            if (r.lateEntries > 0) Text("Late entries not counted: ${r.lateEntries}", style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
                         }
                         Text(r.how, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextHint)
                     }
