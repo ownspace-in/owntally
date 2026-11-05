@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D3 decided; D4 to D7 still open. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D4 decided; D5 to D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -46,11 +46,17 @@ So M4 is mostly the data-layer operations, a small local store for join requests
 
 - **D3 (5 Nov 2026): where a person edits their own name and phone.** **Both** places open the same screen, "Your name and phone in Goa Trip": tap the **"You" row on the Members screen**, or tap the **"You are the owner / an admin / a member" line under the group name on the Group screen**. It is per group (the first-run name and phone are only starting values; changing them in one group changes nothing in another). Saving writes `ProfileUpdated`; old entries then show the new name to everyone; a taken name gives "That name is already taken in this group" (changing only the capitals of your own name is fine); the phone follows the rule of 4 Nov (digits, `+`, spaces, `-`, `(`, `)`, `.`, at least 5 digits).
 
+- **D4 (5 Nov 2026): leaving a group.**
+  - **Where:** both a red **Leave group** row under the list on the Members screen and a red **Leave group** at the bottom of the profile screen (D3). It opens "Leave Goa Trip?" with the same before-and-after table as Remove member (the leave changes everyone's balances in the same way) and a confirm button.
+  - **Who can leave:** a plain member. An admin sees "Ask the owner to make you a member first, or to remove you"; the owner sees "Hand over ownership first".
+  - **What the leaver sees afterwards:** the group **disappears at once** from the Groups list, the Settle tab and the totals, and cannot be opened. **The phone keeps the stored, encrypted data hidden until the leave has reached at least one other member**, then deletes everything, keys included. Reason: the leave is one event that exists only on the leaver's phone until it syncs; deleting it at once would mean the others never learn the person left (they would stay a member, still counted in balances, and the owner's automatic key change in D2 would never happen). Delivery and the final delete are an **M5 task**; in M4 the group is only hidden. The hidden group is marked with a setting on this phone (no database change).
+  - **A decision that departs from DESIGN.md**, which said a departed or removed member keeps a read-only copy. It now applies to people **removed by the owner** only, and that case waits for M5 when sync can tell their phone.
+  - A person who left cannot rejoin with the same key (a new member with a new key; their old name stays reserved).
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D4. Where "Leave group" lives, and what the leaver sees afterwards** (their phone cannot be told it was removed until sync exists).
 - **D5. Removed members:** a "Removed" section on the Members screen, and a screen listing the late entries that were cancelled after a removal (decided 4 Nov: listed to the remover and the owner).
 - **D6. Join requests before M6.** Real requests arrive over a transport in M6. In M4 the screen and the store exist, a debug build can add a pretend request, and release builds show an empty list.
 - **D7. How many pretend members the debug tool may add** (M3 limited it to three in total until M4).
@@ -92,8 +98,8 @@ Do: waiting requests with Decline and Approve; Approve opens the name field (fil
 Done when: model tests; approving with a clashing name is blocked; compared with mockup 11.
 
 ### T4.10 Profile and leave (D3, D4)
-Do: edit my name and phone from both entry points (the "You" row on Members and the role line on the Group screen; the group's unique-name rule shown as a message); Leave group with a warning when the balance is not settled, then a read-only "You left" state on this phone.
-Done when: tests for the rename clash, a phone with the allowed characters, the warning text, and that a leaver cannot add entries.
+Do: **Leave group** from both places (D4) with the before-and-after table, the messages for an admin and the owner, and the group hidden at once afterwards; edit my name and phone from both entry points (the "You" row on Members and the role line on the Group screen; the group's unique-name rule shown as a message); Leave group with a warning when the balance is not settled, then a read-only "You left" state on this phone.
+Done when: tests for the rename clash, a phone with the allowed characters, the leave table equals `previewRemoval` for the leaver, an admin and the owner are told why they cannot leave, a leaver's group no longer appears in the summaries (list, settle tab, totals) but its stored data is kept, and a leaver cannot add entries.
 
 ### T4.11 The key after a leave (D2)
 Do: a step the owner's phone runs after each refresh (`Sessions`, only for groups where this phone is the owner): if a leave is not covered by the current epoch, write `KeyRotated` (T4.3 `rotateKey`), silently.
