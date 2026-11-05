@@ -172,6 +172,7 @@ fun GroupScreen(
     onSettle: (() -> Unit)? = null,
     onOpenExpense: (ExpenseRow) -> Unit = {},
     onMembers: (() -> Unit)? = null,
+    onProfile: (() -> Unit)? = null,
     banner: OwnershipBannerModel? = null,
     onAcceptOffer: () -> Unit = {},
     onDeclineOffer: () -> Unit = {},
@@ -187,7 +188,10 @@ fun GroupScreen(
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(model.name, style = MaterialTheme.typography.titleLarge, color = OwnTallyColors.Ink)
-                    Text(model.roleText, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                    Text(
+                        model.roleText, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary,
+                        modifier = if (onProfile != null) Modifier.clickable(onClick = onProfile) else Modifier,
+                    )
                 }
                 if (onMembers != null) {
                     Box(Modifier.size(44.dp).clickable(onClick = onMembers).semantics { contentDescription = "Members"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {

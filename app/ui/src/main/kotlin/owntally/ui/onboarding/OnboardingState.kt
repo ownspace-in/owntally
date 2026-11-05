@@ -5,7 +5,7 @@ import owntally.crypto.RecoveryPhrase
 
 enum class Step { WELCOME, PHRASE, CONFIRM, DONE }
 enum class NameProblem { EMPTY, TOO_LONG }
-enum class PhoneProblem { EMPTY, BAD_CHARACTERS, BAD_LENGTH }
+enum class PhoneProblem { EMPTY, BAD_CHARACTERS, BAD_LENGTH, TOO_FEW_DIGITS }
 enum class SaveProblem { COULD_NOT_SAVE }
 
 /** A word the person typed to confirm their phrase. It prints as redacted, so the state can be logged without leaking words. */
@@ -59,8 +59,9 @@ object OnboardingRules {
         val t = text.trim()
         return when {
             t.isEmpty() -> PhoneProblem.EMPTY
-            t.any { it !in '0'..'9' && it != '+' && it != ' ' } -> PhoneProblem.BAD_CHARACTERS
+            t.any { it !in '0'..'9' && it !in "+ -()." } -> PhoneProblem.BAD_CHARACTERS
             t.length !in 5..20 -> PhoneProblem.BAD_LENGTH
+            t.count { it in '0'..'9' } < 5 -> PhoneProblem.TOO_FEW_DIGITS
             else -> null
         }
     }

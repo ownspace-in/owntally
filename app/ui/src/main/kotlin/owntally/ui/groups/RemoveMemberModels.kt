@@ -24,26 +24,7 @@ object RemoveMemberModels {
         if (target == view.me || !Permissions.removeOthers(Permissions.roleOf(state, view.me))) return null
         val member = state.currentMembers[target] ?: return null
         val name = member.name.ifBlank { "Someone" }
-        fun label(k: PublicKey) = if (k == view.me) "You" else state.members[k]?.name?.takeIf { it.isNotBlank() } ?: "Someone"
-
-        val preview = previewRemoval(state, target)
-        val rows = preview.changes.sortedWith(compareBy({ it.member != view.me }, { label(it.member).lowercase() })).map {
-            RemoveRow(it.member, label(it.member), MoneyFormat.signed(it.before), kind(it.before), MoneyFormat.signed(it.after), kind(it.after))
-        } + balances(state).getValue(target).let { RemoveRow(target, name, MoneyFormat.signed(it), kind(it), "Removed", null) }
-
-        val paidByThem = preview.excludedExpenses.count { state.expenses.getValue(it).paidBy == target }
-        val onlyThem = preview.excludedExpenses.size - paidByThem
-        val parts = buildList {
-            if (paidByThem > 0) add("${plural(paidByThem, "expense")} $name paid")
-            if (onlyThem > 0) add("${plural(onlyThem, "expense")} only $name took part in")
-            if (preview.resplitExpenses.isNotEmpty()) add("$name's share of ${preview.resplitExpenses.size} other${if (preview.resplitExpenses.size == 1) "" else "s"}")
-        }
-        val payments = preview.excludedSettlements.map { id ->
-            val p = state.settlements.getValue(id)
-            val line = "${label(p.from)} paid ${label(p.to)} ${MoneyFormat.format(p.amount)}."
-            if (p.from == target) "$line It no longer counts." else "$line ${label(p.from)} will owe that amount again."
-        }
-        val box = if (parts.isEmpty() && payments.isEmpty()) null else LeftOutBox(parts.joinToString(", "), payments)
+        val (rows, box) = table(view, target, selfSpeaking = false)
         return RemoveMemberModel(
             "Remove $name?",
             listOf(
@@ -52,6 +33,38 @@ object RemoveMemberModels {
             ),
             rows, box, "Remove $name",
         )
+    }
+
+    /**
+     * The before and after table and the "Also left out" box for [target] going (removed, or leaving). It comes from the core's
+     * [previewRemoval]. With [selfSpeaking] the box says "you" and "your" and the target's row reads "You" / "Left".
+     */
+    internal fun table(view: GroupView, target: PublicKey, selfSpeaking: Boolean): Pair<List<RemoveRow>, LeftOutBox?> {
+        val state = view.state
+        val name = state.members.getValue(target).name.ifBlank { "Someone" }
+        fun label(k: PublicKey) = if (k == view.me) "You" else state.members[k]?.name?.takeIf { it.isNotBlank() } ?: "Someone"
+        val who = if (selfSpeaking) "you" else name
+        val whose = if (selfSpeaking) "your" else "$name's"
+        val preview = previewRemoval(state, target)
+        val others = preview.changes.sortedWith(compareBy({ it.member != view.me }, { label(it.member).lowercase() })).map {
+            RemoveRow(it.member, label(it.member), MoneyFormat.signed(it.before), kind(it.before), MoneyFormat.signed(it.after), kind(it.after))
+        }
+        val gone = balances(state).getValue(target).let {
+            RemoveRow(target, if (selfSpeaking) "You" else name, MoneyFormat.signed(it), kind(it), if (selfSpeaking) "Left" else "Removed", null)
+        }
+        val paidByThem = preview.excludedExpenses.count { state.expenses.getValue(it).paidBy == target }
+        val onlyThem = preview.excludedExpenses.size - paidByThem
+        val parts = buildList {
+            if (paidByThem > 0) add("${plural(paidByThem, "expense")} $who paid")
+            if (onlyThem > 0) add("${plural(onlyThem, "expense")} only $who took part in")
+            if (preview.resplitExpenses.isNotEmpty()) add("$whose share of ${preview.resplitExpenses.size} other${if (preview.resplitExpenses.size == 1) "" else "s"}")
+        }
+        val payments = preview.excludedSettlements.map { id ->
+            val p = state.settlements.getValue(id)
+            val line = "${label(p.from)} paid ${label(p.to)} ${MoneyFormat.format(p.amount)}."
+            if (p.from == target) "$line It no longer counts." else "$line ${label(p.from)} will owe that amount again."
+        }
+        return (others + gone) to (if (parts.isEmpty() && payments.isEmpty()) null else LeftOutBox(parts.joinToString(", "), payments))
     }
 
     private fun plural(n: Int, word: String) = if (n == 1) "1 $word" else "$n ${word}s"

@@ -44,6 +44,8 @@ fun MembersScreen(
     onInvite: (() -> Unit)? = null,
     onJoinRequests: (() -> Unit)? = null,
     onMenu: ((MemberRowModel) -> Unit)? = null,
+    onMyProfile: (() -> Unit)? = null,
+    onLeave: (() -> Unit)? = null,
 ) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
@@ -85,7 +87,7 @@ fun MembersScreen(
             Column(Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp))) {
                 model.rows.forEachIndexed { i, row ->
                     if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = OwnTallyColors.CardBorder)
-                    MemberRow(row, onMenu)
+                    MemberRow(row, onMenu, if (row.isMe) onMyProfile else null)
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -98,6 +100,14 @@ fun MembersScreen(
                     style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary,
                 )
                 Spacer(Modifier.height(8.dp))
+            }
+            if (onLeave != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Leave group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Red,
+                    modifier = Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(20.dp))
+                        .clickable(onClick = onLeave).padding(horizontal = 20.dp, vertical = 16.dp).semantics { role = SemanticsRole.Button },
+                )
             }
             if (model.removed.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -118,8 +128,8 @@ fun MembersScreen(
 }
 
 @Composable
-private fun MemberRow(row: MemberRowModel, onMenu: ((MemberRowModel) -> Unit)?) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun MemberRow(row: MemberRowModel, onMenu: ((MemberRowModel) -> Unit)?, onTap: (() -> Unit)?) {
+    Row(Modifier.fillMaxWidth().then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).background(OwnTallyColors.GroupPastels[row.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
             Text(row.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
         }

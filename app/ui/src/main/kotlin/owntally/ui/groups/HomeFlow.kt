@@ -72,7 +72,9 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
             Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
-            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) })
+            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) })
+            is Screen.Profile -> ProfileRoute(sessions, screen.id, onBack = back, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) })
+            is Screen.Leave -> LeaveRoute(sessions, screen.id, onCancel = back, onLeft = { ui.nav = ui.nav.home() })
             is Screen.JoinRequests -> JoinRequestsRoute(sessions, joinRequests, screen.id, onBack = back)
             is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) }, onMakeOwner = { ui.nav = ui.nav.push(Screen.OwnerOffer(screen.id, screen.member)) })
             is Screen.OwnerOffer -> OwnerOfferRoute(sessions, screen.id, screen.member, onClose = back, onChoose = { ui.nav = ui.nav.pop() })
@@ -83,6 +85,7 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
                 onAdd = { ui.nav = ui.nav.push(Screen.AddExpense(screen.id)) },
                 onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(screen.id)) },
                 onMembers = { ui.nav = ui.nav.push(Screen.Members(screen.id)) },
+                onProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) },
             )
         }
     }
@@ -186,7 +189,7 @@ private fun CreateGroupRoute(sessions: Sessions, onDone: () -> Unit) {
 }
 
 @Composable
-private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?, onBack: () -> Unit, onAdd: () -> Unit, onSettle: () -> Unit, onMembers: () -> Unit) {
+private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?, onBack: () -> Unit, onAdd: () -> Unit, onSettle: () -> Unit, onMembers: () -> Unit, onProfile: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -202,7 +205,7 @@ private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?,
     var confirmAccept by remember { mutableStateOf(false) }
     val banner = remember(view) { OwnershipBanners.build(view) }
     GroupScreen(
-        model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }, onMembers = onMembers, banner = banner,
+        model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }, onMembers = onMembers, onProfile = onProfile, banner = banner,
         onAcceptOffer = { confirmAccept = true },
         onDeclineOffer = { scope.launch { withContext(Dispatchers.IO) { s.declineOwnership() } } },
     ) {
@@ -341,7 +344,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit) {
+private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit, onMyProfile: () -> Unit, onLeave: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -352,7 +355,7 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
     }
     val view by s.view.collectAsStateWithLifecycle()
     val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
-    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null)
+    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null, onMyProfile = onMyProfile, onLeave = onLeave)
 }
 
 @Composable
@@ -517,4 +520,93 @@ private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.se
             },
         )
     }
+}
+
+@Composable
+private fun ProfileRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit, onLeave: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val mine = view.state.members[view.me]
+    var name by remember(id) { mutableStateOf(mine?.name.orEmpty()) }
+    var phone by remember(id) { mutableStateOf(mine?.phone.orEmpty()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var cannotLeave by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val check = remember(view, name, phone) { ProfileCheck.of(view, name, phone) }
+    ProfileScreen(
+        ProfileModels.title(view), name, phone, check, error, onName = { name = it.take(60) }, onPhone = { phone = it.take(30) }, onBack = onBack,
+        onSave = {
+            scope.launch {
+                when (val r = withContext(Dispatchers.IO) { s.updateProfile(check.name, check.phone) }) {
+                    is owntally.data.session.AddResult.Added -> onBack()
+                    is owntally.data.session.AddResult.Refused -> error = "That can't be saved now (${r.reason.name.lowercase().replace('_', ' ')})."
+                    is owntally.data.session.AddResult.Invalid -> error = r.problem
+                    owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
+                }
+            }
+        },
+        onLeave = {
+            when (val o = LeaveModels.build(view)) {
+                is LeaveOutcome.Blocked -> cannotLeave = o.message
+                is LeaveOutcome.Allowed -> onLeave()
+                null -> Unit
+            }
+        },
+    )
+    cannotLeave?.let { message ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { cannotLeave = null },
+            title = { androidx.compose.material3.Text("You can't leave yet") },
+            text = { androidx.compose.material3.Text(message) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { cannotLeave = null }) { androidx.compose.material3.Text("OK") } },
+        )
+    }
+}
+
+@Composable
+private fun LeaveRoute(sessions: Sessions, id: GroupId, onCancel: () -> Unit, onLeft: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val outcome = remember(view) { LeaveModels.build(view) }
+    val scope = rememberCoroutineScope()
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val model = (outcome as? LeaveOutcome.Allowed)?.model
+    if (model == null) {
+        if (!busy) LaunchedEffect(Unit) { onCancel() }
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    RemoveMemberScreen(
+        RemoveMemberModel(model.title, model.intro + listOfNotNull(model.warning), model.rows, model.alsoLeftOut, model.button),
+        onCancel, busy = busy, error = error,
+        onConfirm = {
+            if (busy) return@RemoveMemberScreen
+            busy = true
+            scope.launch {
+                val r = withContext(Dispatchers.IO) { sessions.leave(id) }
+                when (r) {
+                    is owntally.data.session.AddResult.Added -> onLeft()
+                    is owntally.data.session.AddResult.Refused -> error = "You can't leave now (${r.reason.name.lowercase().replace('_', ' ')})."
+                    is owntally.data.session.AddResult.Invalid -> error = r.problem
+                    owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
+                }
+                if (r !is owntally.data.session.AddResult.Added) busy = false
+            }
+        },
+    )
 }
