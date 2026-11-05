@@ -192,4 +192,17 @@ class SecretStoreTest {
         store.saveGroupKey(groupA, 1, key(4))
         assertContentEquals(key(4).bytes(), store.loadKeyring(groupA).keyring[1]!!.bytes())
     }
+
+    @Test
+    fun oneEpochsKeyCanBeForgottenWithoutTouchingTheOthers() {
+        val g = GroupId(ByteArray(16) { 3 })
+        store.saveGroupKey(g, 1, key(1))
+        store.saveGroupKey(g, 2, key(2))
+        store.deleteGroupKey(g, 2)
+        assertEquals(setOf(1L), store.loadKeyring(g).keyring.epochs())
+        assertEquals(key(1), store.loadKeyring(g).keyring[1])
+        store.deleteGroupKey(g, 2) // already gone: fine
+        store.deleteGroupKey(GroupId(ByteArray(16) { 4 }), 1) // never there: fine
+        assertEquals(setOf(1L), store.loadKeyring(g).keyring.epochs())
+    }
 }

@@ -291,6 +291,7 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
                         }
                         is owntally.data.session.AddResult.Refused -> error = "This expense can't be added (${r.reason.name.lowercase().replace('_', ' ')}). Someone may have left the group."
                         owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
+                        is owntally.data.session.AddResult.Invalid -> error = r.problem
                     }
                 } catch (e: Exception) {
                     error = "The expense could not be saved on this phone."

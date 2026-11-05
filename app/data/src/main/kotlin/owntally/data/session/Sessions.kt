@@ -30,6 +30,8 @@ data class GroupSummary(
     /** Positive: the group owes this person. Negative: they owe the group. */
     val myBalance: Money,
     val readable: Boolean,
+    /** Someone offered this person the ownership of the group and they have not answered yet (shown as a tag on the card). */
+    val ownershipOfferForMe: Boolean = false,
 )
 
 /**
@@ -51,6 +53,23 @@ class Sessions(
     val summaries: StateFlow<List<GroupSummary>> get() = mutableSummaries
 
     private fun colourKey(id: GroupId) = "group_colour_${id.toHex()}"
+
+    private fun leftKey(id: GroupId) = "group_left_${id.toHex()}"
+
+    /** Hides a group this person has left. Its stored events stay; only the list skips it. */
+    @Synchronized
+    fun markLeft(id: GroupId) {
+        settings.put(leftKey(id), "1")
+        refresh()
+    }
+
+    /** This person leaves the group. If the rules accept it, the group disappears from the list; otherwise nothing changes. */
+    @Synchronized
+    fun leave(id: GroupId): AddResult {
+        val result = session(id).leave()
+        if (result is AddResult.Added) markLeft(id)
+        return result
+    }
 
     fun colourOf(id: GroupId): Int = settings.get(colourKey(id))?.toIntOrNull()?.takeIf { it in 0 until GroupLooks.PALETTE_SIZE } ?: GroupLooks.defaultFor(id)
 
@@ -100,6 +119,7 @@ class Sessions(
     fun deleteGroup(id: GroupId) {
         groups.deleteGroup(id)
         settings.remove(colourKey(id))
+        settings.remove(leftKey(id))
         sessions.remove(id)
         refresh()
     }
@@ -107,7 +127,7 @@ class Sessions(
     @Synchronized
     private fun recompute() {
         if (batching) return
-        mutableSummaries.value = groups.listGroups().map { row ->
+        mutableSummaries.value = groups.listGroups().filter { settings.get(leftKey(it.groupId)) == null }.map { row ->
             val session = sessions[row.groupId]
             val view = session?.view?.value
             val state = view?.state
@@ -119,6 +139,7 @@ class Sessions(
                 expenseCount = state?.expenses?.values?.count { !it.deleted } ?: 0,
                 myBalance = view?.balances?.get(view.me) ?: Money.ZERO,
                 readable = state?.groupId != null,
+                ownershipOfferForMe = view != null && state?.pendingOffer == view.me,
             )
         }
     }

@@ -217,4 +217,47 @@ class SessionsTest {
         assertTrue(groups.listGroups().first { it.groupId == fresh }.keySlot > oldSlot, "a slot is never reused")
         assertEquals(true, restored.summaries.value.first { it.groupId == fresh }.readable)
     }
+
+    private fun withBen(): Pair<owntally.model.GroupId, owntally.crypto.GroupIdentity> {
+        val id = sessions.createGroup("Goa Trip", "INR", 0)
+        val ben = friend(2_000_010)
+        sessions.session(id).append(EventBody.MemberJoined(ben.publicKey, ben.encryptionKey, "Ben", "98765 00002"))
+        return id to ben
+    }
+
+    @Test
+    fun leavingHidesTheGroupFromTheListButKeepsItsData() {
+        val (id, _) = withBen()
+        // The owner may not leave, so make a second phone's view: here the plain member's session is simulated by transferring nothing;
+        // the rule is the core's. What is tested is the list: a group this person has left is not listed, its data stays.
+        sessions.markLeft(id)
+        assertEquals(emptyList(), sessions.summaries.value)
+        assertTrue(env.groups.envelopes(id).envelopes.isNotEmpty(), "the stored events stay")
+        assertEquals(emptyList(), sessions().also { it.refresh() }.summaries.value, "still hidden after a restart")
+    }
+
+    @Test
+    fun aRefusedLeaveHidesNothing() {
+        val (id, _) = withBen()
+        assertTrue(sessions.leave(id) is AddResult.Refused, "the owner cannot leave")
+        assertEquals(listOf(id), sessions.summaries.value.map { it.groupId })
+    }
+
+    @Test
+    fun theSummaryTellsWhenOwnershipIsOfferedToThisPerson() {
+        val id = sessions.createGroup("Goa Trip", "INR", 0)
+        assertEquals(false, sessions.summaries.value.single().ownershipOfferForMe)
+        val ben = friend(2_000_011)
+        sessions.session(id).append(EventBody.MemberJoined(ben.publicKey, ben.encryptionKey, "Ben", "98765 00002"))
+        sessions.session(id).offerOwnership(ben.publicKey)
+        assertEquals(false, sessions.summaries.value.single().ownershipOfferForMe, "offered to Ben, not to this person")
+    }
+
+    @Test
+    fun deletingAGroupAlsoForgetsThatItWasLeft() {
+        val (id, _) = withBen()
+        sessions.markLeft(id)
+        sessions.deleteGroup(id)
+        assertEquals(null, env.settings.get("group_left_${id.toHex()}"))
+    }
 }

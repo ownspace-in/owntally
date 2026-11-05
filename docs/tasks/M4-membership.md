@@ -12,7 +12,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 |---|---|
 | T4.1 plan and decisions | Done (5 Nov 2026): every decision D1 to D7 is made (below). Waiting for the owner's go-ahead to build T4.2. |
 | T4.2 core helpers | Done (5 Nov 2026), see below. |
-| T4.3 to T4.14 | Not started. |
+| T4.3 group operations | Done (5 Nov 2026), see below. |
+| T4.4 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -83,6 +84,9 @@ Done when: `OwnershipDeclined` is accepted from the offered person only, refused
 ### T4.3 Group operations in the data layer
 Do: on `GroupSession`: `approveJoin(request, name)`, `removeMember(member)` (new key made, sealed to the members who stay, **saved on the phone before the event is written and deleted again if the rules refuse the event**), `leave()`, `rotateKey()`, `makeAdmin`/`removeAdmin`, `offerOwnership(to)`, `cancelOffer()`, `acceptOwnership()`, `updateProfile(name, phone)`. Each returns what the core said (`Added` or the refusal reason) so the screen can say why.
 Done when: tests with several identities (owner, admin, member, outsider): each operation works for who may and is refused for who may not, a refused removal leaves no key behind, the new key opens only for the members who stay, a leave carries no key, the owner can offer, cancel and (as the target) accept ownership, and a name clash is refused with the reason.
+
+
+**T4.3 result (5 Nov 2026).** `GroupSession` gained `approveJoin`, `updateProfile`, `makeAdmin`, `removeAdmin`, `offerOwnership`, `cancelOffer`, `acceptOwnership`, `declineOwnership`, `leave`, `removeMember` and `rotateKey`; each returns `Added`, `Refused(reason)` or the new `Invalid(problem)` (a blank name or bad phone number, caught before any rule runs). `removeMember` and `rotateKey` make the new key, seal it to the members who stay, save it on the phone **before** the event is written, and delete it again if the rules refuse the event or anything throws. A phone also takes the key of every epoch from the event the rules accepted as its start, replacing a different key stored earlier (a stale or lost one), and then tries the envelopes that failed to open or were waiting. `leave` carries no key (D2). `SecretStore.deleteGroupKey` is new. `Sessions.leave(id)` hides the group on success (stored events stay; deleting the group also forgets the mark) and `GroupSummary.ownershipOfferForMe` drives the tag on the Groups card (D1). Tests: `GroupOperationsTest` runs several phones with separate storage (17 cases: who may approve, name clashes, removal gives the new key only to those who stay, a stale key is replaced, leave rules, offer/decline/accept, refused events are never stored). Three rules were checked by putting the old behaviour back (no key deletion on refusal, no key adoption, key sealed to everyone): each made tests fail. One old test changed: a lost key of the current epoch is now recovered from the owner's own rotation event, so it no longer ends in "no key". Not covered by a test yet: `ownershipOfferForMe` being true (needs the offer to come from another phone); T4.8 will add it.
 
 ### T4.4 Join requests (local store)
 Do: a `join_requests` table in the database (new schema version with a migration and a migration test): group, the requester's member key and encryption key, name, phone, time received, state (waiting, approved, declined). A repository. Decline marks it declined on this phone (nothing is sent). Approve writes `MemberJoined` (T4.3) and marks it approved.

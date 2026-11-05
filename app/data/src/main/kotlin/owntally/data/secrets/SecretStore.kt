@@ -24,6 +24,9 @@ interface SecretStore {
     /** Throws [SecretStoreException] if it cannot be sealed. */
     fun saveGroupKey(groupId: GroupId, epoch: Long, key: GroupKey)
     fun loadKeyring(groupId: GroupId): KeyringLoad
+
+    /** Forgets one epoch's key (for example one saved for a key change that was then refused). Deleting what is not there is fine. */
+    fun deleteGroupKey(groupId: GroupId, epoch: Long)
     fun deleteGroup(groupId: GroupId)
     fun wipeAll()
 }
@@ -108,6 +111,10 @@ class BoxedSecretStore(private val box: SecretBox, private val blobs: BlobStore)
             }
         }
         return KeyringLoad(keyring, unreadable)
+    }
+
+    override fun deleteGroupKey(groupId: GroupId, epoch: Long) {
+        blobs.delete(keyName(groupId, epoch))
     }
 
     override fun deleteGroup(groupId: GroupId) {
