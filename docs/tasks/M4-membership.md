@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 decided; D2 to D7 still open. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 and D2 decided; D3 to D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -38,11 +38,16 @@ So M4 is mostly the data-layer operations, a small local store for join requests
   - **Groups list:** the summary gets "an ownership offer is waiting for me" so the card shows the tag.
   - Owner's side as in mockups 14b and 14c; after a decline the waiting screen says "Rohan declined" with a way to offer it to someone else.
 
+- **D2 (5 Nov 2026): the group key after a member leaves.** **Automatic and silent.** When the owner's phone sees a leave that the current key does not yet cover, it writes `KeyRotated` by itself (new key sealed to the members who stay; the leaver gets none). No prompt, no notice. Details:
+  - "Covered" means the event that started the current epoch was written after the leave was seen (its `after` includes the leave). A removal already changes the key, so it needs nothing more.
+  - Only the owner's phone does it; nobody else is asked. If the owner's phone is not running, it happens at its next start. If a later leave reaches the owner after a rotation, another rotation follows.
+  - It must not loop: after the rotation the leave is covered, so a further refresh does nothing.
+  - Cost the owner accepted: while the owner is away the leaver can still read new entries; every leave costs one small event.
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D2. The group key after a member leaves.** A leave does not change the key (decided 3 Nov), so the leaver can still read new entries until the owner changes it. The owner's phone could do it by itself when it sees a leave, or show a button.
 - **D3. Where a person edits their own name and phone.**
 - **D4. Where "Leave group" lives, and what the leaver sees afterwards** (their phone cannot be told it was removed until sync exists).
 - **D5. Removed members:** a "Removed" section on the Members screen, and a screen listing the late entries that were cancelled after a removal (decided 4 Nov: listed to the remover and the owner).
@@ -90,8 +95,8 @@ Do: edit my name and phone (the group's unique-name rule shown as a message); Le
 Done when: tests for the rename clash, a phone with the allowed characters, the warning text, and that a leaver cannot add entries.
 
 ### T4.11 The key after a leave (D2)
-Do: as decided in D2.
-Done when: after a leave the owner's phone either changes the key by itself or shows the button; tests for the new epoch and that the leaver cannot open entries written after it.
+Do: a step the owner's phone runs after each refresh (`Sessions`, only for groups where this phone is the owner): if a leave is not covered by the current epoch, write `KeyRotated` (T4.3 `rotateKey`), silently.
+Done when: tests: after a leave the owner's session writes the rotation once and a further refresh writes nothing; the new epoch's key is sealed to exactly the members who stay and the leaver cannot open entries written after it; a non-owner never rotates; a removal needs no extra rotation; two leaves seen together give one rotation, a leave arriving later gives another; a new owner's phone takes over the duty after a transfer.
 
 ### T4.12 Cancelled late entries (D5)
 Do: a screen for the owner (and the remover) listing the removed member's late entries that were cancelled, so someone can re-enter them.
