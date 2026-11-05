@@ -156,6 +156,8 @@ Acceptance: from a fresh VM, the runbook produces a working relay. Tapping an in
 
 Recovery restore test end to end, dark theme, accessibility pass (touch targets, labels, contrast), release signing, Play Store listing, privacy text that states who runs the relay and what it can see, final review of every security-relevant file.
 
+Also in M10 (from CRYPTO.md clarification C8): turn on code shrinking for the release build (with keep rules for Tink, Room and Compose, and a test run), and measure the APK again; it was about 26 MB unsigned without shrinking.
+
 Acceptance: a release build installs, runs on a 2 GB phone, and passes the full test suite and a manual checklist.
 
 ## Definition of done (every milestone)
