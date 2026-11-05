@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D4 and D5a decided; D5b, D6 and D7 still open. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D4, D5a and D5b (where) decided; D5c, D6 and D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -57,11 +57,13 @@ So M4 is mostly the data-layer operations, a small local store for join requests
 
 - **D5a (5 Nov 2026): the Members screen lists people who were removed or left.** A greyed **"Removed or left"** section below the current members, with "Removed" or "Left" beside each name (their names stay reserved). Tapping a name does nothing yet beyond what D5b decides.
 
+- **D5b (5 Nov 2026): where the owner finds the cancelled late entries.** **Only from the "Removed or left" section** on the Members screen (D5a): tap the removed person and see "Late entries not counted: 2" and the list (description, amount and payer for expenses; other cancelled events as counts). **No note on the Group screen.** Owner only. The list can grow later, as late events sync in after the removal.
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D5b. The list of late entries that were cancelled after a removal** (decided 4 Nov: listed to the remover, who is always the owner): where it is reached from, and whether each entry can be re-entered in one tap.
+- **D5c. Whether each cancelled expense has an "Add again" button** that opens the Add expense form already filled in.
 - **D6. Join requests before M6.** Real requests arrive over a transport in M6. In M4 the screen and the store exist, a debug build can add a pretend request, and release builds show an empty list.
 - **D7. How many pretend members the debug tool may add** (M3 limited it to three in total until M4).
 
@@ -110,8 +112,8 @@ Done when: tests for the rename clash, a phone with the allowed characters, the 
 Do: a step the owner's phone runs after each refresh (`Sessions`, only for groups where this phone is the owner): if a leave is not covered by the current epoch, write `KeyRotated` (T4.3 `rotateKey`), silently.
 Done when: tests: after a leave the owner's session writes the rotation once and a further refresh writes nothing; the new epoch's key is sealed to exactly the members who stay and the leaver cannot open entries written after it; a non-owner never rotates; a removal needs no extra rotation; two leaves seen together give one rotation, a leave arriving later gives another; a new owner's phone takes over the duty after a transfer.
 
-### T4.12 Cancelled late entries (D5)
-Do: a screen for the owner (and the remover) listing the removed member's late entries that were cancelled, so someone can re-enter them.
+### T4.12 Cancelled late entries (D5b, D5c)
+Do: a screen for the owner listing the removed member's late entries that were cancelled, reached only by tapping the person in the "Removed or left" section (no note on the Group screen), so someone can re-enter them; "Add again" as decided in D5c.
 Done when: model tests; the list grows when a late event syncs after the removal (tested with the session).
 
 ### T4.13 Debug tools (D6, D7)
