@@ -102,6 +102,20 @@ class GroupSession(
     fun refresh() {
         sync()
         publish()
+        if (leaveNotCoveredByTheKey()) rotateKey()
+    }
+
+    /**
+     * Owner only (D2): a member left and the key now in use was started before that leave was seen, so the leaver still holds it.
+     * The key then has to change. A removal or a rotation written after the leave was seen covers it, so this cannot repeat.
+     */
+    private fun leaveNotCoveredByTheKey(): Boolean {
+        val st = replay(log)
+        if (st.groupId == null || st.owner != me.publicKey) return false
+        val leaves = st.removals.values.filter { it.by == it.member }
+        if (leaves.isEmpty()) return false
+        val start = st.epochStarts[st.epoch]?.let { id -> log.allEvents().firstOrNull { it.id == id } }
+        return leaves.any { start == null || (start.after[it.member] ?: 0L) < it.event.counter }
     }
 
     /** The counter the next event written by this phone will get. The Add expense screen needs it to show the rounding exactly. */

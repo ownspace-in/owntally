@@ -168,9 +168,9 @@ class GroupOperationsTest {
         val chitra = joined("Chitra")
         everyoneSyncs(owner, chitra)
         assertTrue(added(chitra.session.leave()))
+        assertEquals(1L, chitra.state.epoch, "the leave itself starts no epoch")
+        assertEquals(setOf(1L), chitra.epochsHeld())
         owner.receiveFrom(chitra)
-        assertEquals(1L, owner.state.epoch)
-        assertEquals(setOf(1L), owner.epochsHeld())
         assertTrue(chitra.key !in owner.state.currentMembers)
         assertTrue(chitra.key in owner.state.members, "still listed, as left")
     }
@@ -181,6 +181,90 @@ class GroupOperationsTest {
         chitra.session.leave()
         val r = chitra.session.addExpense("Late", rupees(5), chitra.key, 20_000, Split.Equal(setOf(chitra.key)))
         assertTrue(r is AddResult.Refused, "after leaving: $r")
+    }
+
+    // ---- the key after a leave (D2) --------------------------------------------------------------------------------
+
+    @Test fun afterALeaveTheOwnersPhoneChangesTheKeyOnceAndFurtherRefreshesDoNothing() {
+        val ben = joined("Ben")
+        val chitra = joined("Chitra")
+        everyoneSyncs(owner, ben, chitra)
+        assertTrue(added(chitra.session.leave()))
+        owner.receiveFrom(chitra)
+        assertEquals(2L, owner.state.epoch, "the owner's phone wrote KeyRotated by itself")
+        val count = owner.env.groups.envelopes(group).envelopes.size
+        repeat(3) { owner.session.refresh() }
+        assertEquals(count, owner.env.groups.envelopes(group).envelopes.size, "no loop")
+        assertEquals(2L, owner.state.epoch)
+    }
+
+    @Test fun theNewKeyReachesExactlyTheMembersWhoStayAndNotTheLeaver() {
+        val ben = joined("Ben")
+        val chitra = joined("Chitra")
+        everyoneSyncs(owner, ben, chitra)
+        chitra.session.leave()
+        owner.receiveFrom(chitra)
+        owner.session.addExpense("After", rupees(10), owner.key, 20_000, Split.Equal(setOf(owner.key, ben.key)))
+        everyoneSyncs(owner, ben, chitra)
+        assertEquals(setOf(1L, 2L), ben.epochsHeld())
+        assertEquals(setOf(1L, 2L), owner.epochsHeld())
+        assertEquals(setOf(1L), chitra.epochsHeld(), "the leaver gets none")
+        assertTrue(ben.state.expenses.values.any { it.description == "After" })
+        assertTrue(chitra.state.expenses.values.none { it.description == "After" })
+    }
+
+    @Test fun onlyTheOwnersPhoneEverDoesIt() {
+        val ben = joined("Ben")
+        val chitra = joined("Chitra")
+        owner.session.makeAdmin(ben.key)
+        everyoneSyncs(owner, ben, chitra)
+        chitra.session.leave()
+        val before = ben.env.groups.envelopes(group).envelopes.size
+        ben.receiveFrom(chitra)
+        repeat(2) { ben.session.refresh() }
+        assertEquals(before + 1, ben.env.groups.envelopes(group).envelopes.size, "an admin only stores the leave it received")
+        assertEquals(1L, ben.state.epoch)
+    }
+
+    @Test fun aRemovalAlreadyChangesTheKeySoItNeedsNoExtraRotation() {
+        val chitra = joined("Chitra")
+        everyoneSyncs(owner, chitra)
+        assertTrue(added(owner.session.removeMember(chitra.key)))
+        assertEquals(2L, owner.state.epoch)
+        repeat(2) { owner.session.refresh() }
+        assertEquals(2L, owner.state.epoch)
+    }
+
+    @Test fun twoLeavesSeenTogetherGiveOneRotationAndALaterLeaveGivesAnother() {
+        val ben = joined("Ben")
+        val chitra = joined("Chitra")
+        val dev = joined("Dev")
+        everyoneSyncs(owner, ben, chitra, dev)
+        chitra.session.leave()
+        ben.session.leave()
+        // both reach the owner in one batch
+        owner.env.groups.let { g -> listOf(chitra, ben).forEach { p -> p.env.groups.envelopes(group).envelopes.forEach { g.appendEnvelope(group, it) } } }
+        owner.session.refresh()
+        assertEquals(2L, owner.state.epoch, "one rotation covers both")
+        everyoneSyncs(owner, dev)
+        assertTrue(added(dev.session.leave()))
+        owner.receiveFrom(dev)
+        assertEquals(3L, owner.state.epoch, "a leave that arrives later gets its own")
+    }
+
+    @Test fun aNewOwnersPhoneTakesOverTheDuty() {
+        val ben = joined("Ben")
+        val chitra = joined("Chitra")
+        everyoneSyncs(owner, ben, chitra)
+        owner.session.offerOwnership(ben.key)
+        everyoneSyncs(owner, ben, chitra)
+        assertTrue(added(ben.session.acceptOwnership()))
+        everyoneSyncs(owner, ben, chitra)
+        chitra.session.leave()
+        owner.receiveFrom(chitra)
+        assertEquals(1L, owner.state.epoch, "the old owner is an admin now and does not")
+        ben.receiveFrom(chitra)
+        assertEquals(2L, ben.state.epoch, "the new owner does")
     }
 
     // ---- changing the key -----------------------------------------------------------------------------------------

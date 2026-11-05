@@ -20,7 +20,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.8 ownership | Done (5 Nov 2026), see below. |
 | T4.9 join requests screen | Done (5 Nov 2026), see below. |
 | T4.10 profile and leave | Done (5 Nov 2026), see below. |
-| T4.11 to T4.14 | Not started. |
+| T4.11 key after a leave | Done (5 Nov 2026), see below. |
+| T4.12 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -148,6 +149,9 @@ Done when: tests for the rename clash, a phone with the allowed characters, the 
 ### T4.11 The key after a leave (D2)
 Do: a step the owner's phone runs after each refresh (`Sessions`, only for groups where this phone is the owner): if a leave is not covered by the current epoch, write `KeyRotated` (T4.3 `rotateKey`), silently.
 Done when: tests: after a leave the owner's session writes the rotation once and a further refresh writes nothing; the new epoch's key is sealed to exactly the members who stay and the leaver cannot open entries written after it; a non-owner never rotates; a removal needs no extra rotation; two leaves seen together give one rotation, a leave arriving later gives another; a new owner's phone takes over the duty after a transfer.
+
+
+**T4.11 result (5 Nov 2026).** `GroupSession.refresh()` now ends with a step only the owner's phone runs: if a member left and the event that started the current key (`epochStarts[epoch]`, or none in epoch 1) was written before that leave was seen (its `after` does not include the leave's counter), the session calls `rotateKey()` by itself, silently. A rotation or removal written after the leave covers it, so a further refresh writes nothing. Six two-phone tests: one rotation after a leave and none on later refreshes; the new key reaches exactly the members who stay (the leaver holds epoch 1 only and cannot read later entries); an admin never rotates; a removal needs no extra rotation; two leaves arriving together give one rotation and a later leave gives another (epoch 3); after an ownership transfer the new owner's phone does it and the old owner's does not. One older test changed (the owner's epoch is no longer 1 after a leave arrives; it now checks the leave itself starts no epoch). Mutations: no automatic rotation, no owner check, "never covered" (the owner rotates forever: the test run hangs, which is how it is caught) and "covered by any later key" (a later leave is missed): all caught. **Limit:** the step runs when the session refreshes, which includes opening the group; it does not yet run in the background (that comes with sync, M5).
 
 ### T4.12 Cancelled late entries (D5b, D5c)
 Do: a screen for the owner listing the removed member's late entries that were cancelled, reached only by tapping the person in the "Removed or left" section (no note on the Group screen), so someone can re-enter them; "Add again" as decided in D5c.
