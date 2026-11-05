@@ -13,7 +13,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.1 plan and decisions | Done (5 Nov 2026): every decision D1 to D7 is made (below). Waiting for the owner's go-ahead to build T4.2. |
 | T4.2 core helpers | Done (5 Nov 2026), see below. |
 | T4.3 group operations | Done (5 Nov 2026), see below. |
-| T4.4 to T4.14 | Not started. |
+| T4.4 join requests | Done (5 Nov 2026), see below. |
+| T4.5 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -91,6 +92,9 @@ Done when: tests with several identities (owner, admin, member, outsider): each 
 ### T4.4 Join requests (local store)
 Do: a `join_requests` table in the database (new schema version with a migration and a migration test): group, the requester's member key and encryption key, name, phone, time received, state (waiting, approved, declined). A repository. Decline marks it declined on this phone (nothing is sent). Approve writes `MemberJoined` (T4.3) and marks it approved.
 Done when: tests: create, list waiting, approve (event written, name set by the admin, request marked), decline, the same requester twice, 20-member limit refused with a clear reason, the migration keeps the existing groups and events (checked on the emulator against a database made by the M3 build).
+
+
+**T4.4 result (5 Nov 2026).** New table `join_requests` (database version 2, migration `OwnTallyDatabase.MIGRATION_1_2`, schema `2.json` exported; one row per group and member key, deleted with the group), `JoinRequestStore` (in-memory and Room) and `JoinRequests` on top of `Sessions`: `receive` (new, updated when the same person asks again with newer details, ignored when already a member; a declined person can ask again), `waiting`, `approve(group, member, name)` (the admin's name is used, the phone is what the person typed; the request is marked approved only if the event was written; refused or invalid keeps it waiting; a full group gives `GroupFull`, not a bare "not allowed"), `decline` (this phone only, nothing sent, cannot undo an approval). `MAX_MEMBERS` in core-model is now public so the screens and the rule share it. 11 JVM tests. On the emulator (30 tests pass): a file built from `1.json` (what the M3 build creates) with a group, an event and a setting is migrated to version 2, Room validates it against `2.json`, the data is still there and a request can be stored; the Room store behaves like the in-memory one. Three rules checked by putting the old behaviour back (no limit check, approved even if refused, decline in any state): each failed tests. Note: the database was made from the exported schema, not from an installed M3 app; the schema is the same thing Room created.
 
 ### T4.5 Members screen (mockup 12) and models
 Do: list with role badges, phone as entered, "You" first, the "Join requests" row with a count, the corrected role text; the "…" menu for the owner only; a "Removed" section (D5). Pure models with JVM tests for what each role sees.

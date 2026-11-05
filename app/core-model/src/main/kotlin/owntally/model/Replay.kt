@@ -1,6 +1,7 @@
 package owntally.model
 
-private const val MAX_MEMBERS = 20
+/** The most people a group can have at once (removed members do not count). */
+const val MAX_MEMBERS = 20
 
 /** Applies the log in its deterministic order and the rules of PROTOCOL.md section 4. */
 fun replay(log: EventLog): GroupState {

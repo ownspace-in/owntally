@@ -13,6 +13,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /** A group on this phone. Its name and members are inside the encrypted events, never in a column. */
 @Entity(tableName = "groups", indices = [Index(value = ["key_slot"], unique = true)])
@@ -41,6 +43,23 @@ class EventEntity(
     @ColumnInfo(name = "received_at") val receivedAt: Long,
 )
 
+/** A request to join, received by this phone. Local only; the approval is the event. */
+@Entity(
+    tableName = "join_requests",
+    primaryKeys = ["group_id", "member_key"],
+    foreignKeys = [ForeignKey(entity = GroupEntity::class, parentColumns = ["group_id"], childColumns = ["group_id"], onDelete = ForeignKey.CASCADE)],
+)
+class JoinRequestEntity(
+    @ColumnInfo(name = "group_id", typeAffinity = ColumnInfo.BLOB) val groupId: ByteArray,
+    @ColumnInfo(name = "member_key", typeAffinity = ColumnInfo.BLOB) val memberKey: ByteArray,
+    @ColumnInfo(name = "encryption_key", typeAffinity = ColumnInfo.BLOB) val encryptionKey: ByteArray,
+    val name: String,
+    val phone: String,
+    @ColumnInfo(name = "received_at") val receivedAt: Long,
+    /** 0 waiting, 1 approved, 2 declined. */
+    val state: Int,
+)
+
 @Entity(tableName = "settings")
 class SettingEntity(@PrimaryKey @ColumnInfo(name = "key") val key: String, @ColumnInfo(name = "value") val value: String)
 
@@ -67,6 +86,18 @@ interface OwnTallyDao {
     fun deleteGroup(id: ByteArray)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun putJoinRequest(request: JoinRequestEntity)
+
+    @Query("SELECT * FROM join_requests WHERE group_id = :group AND member_key = :member")
+    fun joinRequest(group: ByteArray, member: ByteArray): JoinRequestEntity?
+
+    @Query("SELECT * FROM join_requests WHERE group_id = :group ORDER BY received_at, member_key")
+    fun joinRequests(group: ByteArray): List<JoinRequestEntity>
+
+    @Query("UPDATE join_requests SET state = :state WHERE group_id = :group AND member_key = :member")
+    fun setJoinRequestState(group: ByteArray, member: ByteArray, state: Int)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun putSetting(setting: SettingEntity)
 
     @Query("SELECT value FROM settings WHERE `key` = :key")
@@ -76,18 +107,29 @@ interface OwnTallyDao {
     fun deleteSetting(key: String)
 }
 
-@Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class], version = 1, exportSchema = true)
+@Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class, JoinRequestEntity::class], version = 2, exportSchema = true)
 abstract class OwnTallyDatabase : RoomDatabase() {
     abstract fun dao(): OwnTallyDao
 
     companion object {
         const val FILE_NAME = "owntally.db"
 
+        /** Version 2 adds the table of join requests; nothing else changes (M4, T4.4). */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `join_requests` (`group_id` BLOB NOT NULL, `member_key` BLOB NOT NULL, `encryption_key` BLOB NOT NULL, " +
+                        "`name` TEXT NOT NULL, `phone` TEXT NOT NULL, `received_at` INTEGER NOT NULL, `state` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`group_id`, `member_key`), FOREIGN KEY(`group_id`) REFERENCES `groups`(`group_id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+            }
+        }
+
         /**
          * The database in the app's private storage (never backed up, see the manifest rules). There is deliberately no
          * `fallbackToDestructiveMigration`: a missing migration must be an error, never a silent loss of the person's events.
          */
-        fun open(context: Context): OwnTallyDatabase = Room.databaseBuilder(context.applicationContext, OwnTallyDatabase::class.java, FILE_NAME).build()
+        fun open(context: Context): OwnTallyDatabase = Room.databaseBuilder(context.applicationContext, OwnTallyDatabase::class.java, FILE_NAME).addMigrations(MIGRATION_1_2).build()
 
         fun inMemory(context: Context): OwnTallyDatabase = Room.inMemoryDatabaseBuilder(context.applicationContext, OwnTallyDatabase::class.java).build()
     }

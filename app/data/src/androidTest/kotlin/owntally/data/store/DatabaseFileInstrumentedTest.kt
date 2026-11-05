@@ -14,6 +14,7 @@ import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.runner.RunWith
 import owntally.data.db.OwnTallyDatabase
+import owntally.model.EncryptionKey
 import owntally.model.GroupId
 import owntally.model.PublicKey
 
@@ -32,7 +33,7 @@ class DatabaseFileInstrumentedTest {
         context.deleteDatabase("$name-migration")
     }
 
-    private fun open() = Room.databaseBuilder(context, OwnTallyDatabase::class.java, name).build()
+    private fun open() = Room.databaseBuilder(context, OwnTallyDatabase::class.java, name).addMigrations(OwnTallyDatabase.MIGRATION_1_2).build()
 
     @Test
     fun aDatabaseIsMadeFromNothingAndTheDataIsStillThereAfterClosingAndOpeningAgain() {
@@ -54,12 +55,27 @@ class DatabaseFileInstrumentedTest {
     }
 
     @Test
-    fun theVersionOneFileMadeFromTheExportedSchemaOpensWithTheCurrentCode() {
-        // Builds the file from schemas/.../1.json (not from the code) and lets Room check the code agrees with it.
-        helper.createDatabase("$name-migration", 1).close()
-        helper.runMigrationsAndValidate("$name-migration", 1, true)
-        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").build().also { db ->
-            assertEquals(emptyList(), RoomEventStore(db).groups())
+    fun aVersionOneFileMadeFromTheExportedSchemaKeepsItsGroupsAndEventsWhenMigratedToTheCurrentVersion() {
+        // Builds the file from schemas/.../1.json (what the M3 build created), puts data in it, migrates, and lets Room check the code agrees with 2.json.
+        val group = ByteArray(16) { 6 }
+        helper.createDatabase("$name-migration", 1).also { old ->
+            old.execSQL("INSERT INTO groups (group_id, key_slot, created_at) VALUES (?, 3, 77)", arrayOf<Any>(group))
+            old.execSQL(
+                "INSERT INTO events (group_id, author, counter, envelope_hash, envelope, received_at) VALUES (?, ?, 1, ?, ?, 78)",
+                arrayOf<Any>(group, ByteArray(32) { 1 }, ByteArray(32) { 2 }, ByteArray(40) { 3 }),
+            )
+            old.execSQL("INSERT INTO settings (`key`, `value`) VALUES ('next_slot', '4')")
+            old.close()
+        }
+        helper.runMigrationsAndValidate("$name-migration", 2, true, OwnTallyDatabase.MIGRATION_1_2).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_1_2).build().also { db ->
+            assertEquals(listOf(GroupRow(GroupId(group), 3, 77)), RoomEventStore(db).groups())
+            assertEquals(1, RoomEventStore(db).envelopes(GroupId(group)).size)
+            assertEquals("4", RoomSettingsStore(db).get("next_slot"))
+            val requests = RoomJoinRequestStore(db)
+            assertEquals(emptyList(), requests.list(GroupId(group)))
+            requests.put(JoinRequest(GroupId(group), PublicKey(ByteArray(32) { 9 }), EncryptionKey(ByteArray(32) { 8 }), "Ben", "98765 00001", 100, JoinState.WAITING))
+            assertEquals(1, requests.list(GroupId(group)).size)
             db.close()
         }
     }
