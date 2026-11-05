@@ -92,7 +92,9 @@ class RemoveMemberModelTest {
 
     @Test fun onlyTheOwnerGetsTheScreenAndNeverForThemselves() {
         assertNull(RemoveMemberModels.build(s.view.value, me))
-        assertNull(RemoveMemberModels.build(s.view.value.copy(me = rohan), kabir))
+        assertNull(RemoveMemberModels.build(s.view.value.copy(me = rohan), kabir), "a member")
+        s.makeAdmin(rohan)
+        assertNull(RemoveMemberModels.build(s.view.value.copy(me = rohan), kabir), "an admin")
     }
 
     @Test fun afterRemovingTheBalancesAreWhatTheTableSaid() {
