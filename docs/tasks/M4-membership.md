@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 to D6 decided; D7 still open. |
+| T4.1 plan and decisions | Done (5 Nov 2026): every decision D1 to D7 is made (below). Waiting for the owner's go-ahead to build T4.2. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -63,11 +63,11 @@ So M4 is mostly the data-layer operations, a small local store for join requests
 
 - **D6 (5 Nov 2026): join requests before M6.** The "Join requests" row and screen are shown **in all builds**. With nothing waiting the screen says **"No one is waiting to join. Invites arrive in a later update."** (the mockup's "Open invites" section is left out until M6). Debug builds can add a pretend request. The row is shown to the owner and admins only.
 
+- **D7 (5 Nov 2026): pretend members in debug builds.** Up to **five people in total** (the mockups show five): the debug button adds four pretend friends in turn, "Ben (test)", "Meera (test)", "Kabir (test)" and "Isha (test)", each with its own phone number and a unique name. The "group is full" message (20 members) is covered by tests, not by hand on a phone. Release builds contain none of it.
+
 ## Decisions needed
 
-Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
-
-- **D7. How many pretend members the debug tool may add** (M3 limited it to three in total until M4).
+None open. (All of D1 to D7 are decided above.)
 
 ## Tasks
 
@@ -119,7 +119,7 @@ Do: a screen for the owner listing the removed member's late entries that were c
 Done when: model tests; the list grows when a late event syncs after the removal (tested with the session); "Add again" fills the form from the cancelled expense, drops a removed person from an equal split, leaves their share blank in an exact split so Save stays off until the amounts add up, and saves as an expense written by the owner.
 
 ### T4.13 Debug tools (D6, D7)
-Do: debug builds only: add a pretend join request, and act as a pretend member (accept an ownership offer, write an event), so every screen above can be tried before M6. Release builds contain none of it.
+Do: debug builds only: add a pretend join request (D6), add up to four pretend friends for five people in total (D7), and act as a pretend member (accept an ownership offer, write an event), so every screen above can be tried before M6. Release builds contain none of it.
 Done when: the release build has no trace of them (the existing manifest and class checks), and each screen was exercised on the emulator through them.
 
 ### T4.14 Hand back
