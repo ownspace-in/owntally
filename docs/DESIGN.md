@@ -225,7 +225,7 @@ Name, optional icon colour, currency (default INR). The creator becomes owner an
    Before confirming, the admin sees a before-and-after balance for every remaining member (for example "Rohan: owed ₹3,200, becomes owed ₹2,400"). They must confirm.
 3. Confirm. Creates `MemberRemoved` (with the member's last seen entry counter) and starts a new group key (epoch) sent to remaining members. Remaining members who are offline get it on next sync.
 4. The removed member's phone, when it next syncs, shows "You were removed from Goa Trip". They keep a read-only copy of history up to removal.
-5. A member can also leave on their own. The same event is used, and a leave with an unsettled balance shows a warning.
+5. A member can also leave on their own. The same event is used, and a leave shows the same before-and-after balances as a removal. **After a leave the group disappears from the leaver's phone at once (owner decision, 5 Nov 2026); the phone keeps the encrypted data hidden only until the leave has reached another member, then deletes it, keys included.** The leaver does not keep a read-only copy.
 6. The owner cannot be removed or leave until ownership is transferred.
 
 ### Transfer ownership and admins

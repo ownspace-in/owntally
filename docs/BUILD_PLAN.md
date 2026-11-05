@@ -124,6 +124,8 @@ Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the crea
 
 ### M5. Sync protocol over a fake transport
 
+Also in M5 (from the M4 plan, D4): a group the person has left is hidden from the screens but kept until the leave has been delivered to at least one other member; M5 adds that delivery step and then deletes the hidden group, keys included.
+
 Define a `Transport` interface. Build the protocol on top: exchange version summaries, send only missing events, verify and apply, idempotent, resumable. Test with an in-memory transport and 3 to 5 simulated devices with random delays, drops and reordering.
 
 Acceptance: simulated devices always converge to identical logs and balances. Interrupted syncs resume. Events with bad signatures are dropped and reported.
