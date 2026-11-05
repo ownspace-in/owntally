@@ -13,8 +13,8 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("io.kotest:kotest-property:5.9.1")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
 }
 
 tasks.test {
