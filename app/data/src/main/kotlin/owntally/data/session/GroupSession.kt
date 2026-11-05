@@ -29,10 +29,11 @@ import owntally.model.settlementPlan
 
 /**
  * What could and could not be read. [waitingForKey] are epochs whose key is not on this phone yet; their envelopes are kept and
- * opened when the key arrives. [unreadable] envelopes had the right epoch but did not open with the key held. [damaged] stored
+ * opened when the key arrives. [waitingForMember] are envelopes with a good signature from an author who is not a known member (yet): kept and
+ * tried again when more members are known. [unreadable] envelopes had the right epoch but did not open with the key held. [damaged] stored
  * entries could not even be decoded. None of these are shown as events; all stay stored.
  */
-data class Counts(val opened: Int, val waitingForKey: Set<Long>, val unreadable: Int, val damaged: Int)
+data class Counts(val opened: Int, val waitingForKey: Set<Long>, val unreadable: Int, val damaged: Int, val waitingForMember: Int = 0)
 
 /** Everything a screen needs about one group, derived from the stored events. */
 data class GroupView(
@@ -77,6 +78,7 @@ class GroupSession(
     private val log = EventLog()
     private val seen = HashSet<String>()
     private val waiting = ArrayList<Envelope>()
+    private val deferred = ArrayList<Envelope>()
     private var ring = GroupKeyring(groupId)
     private var unreadableKeyEpochs = emptySet<Long>()
     private var opened = 0
@@ -149,14 +151,36 @@ class GroupSession(
 
     private fun fingerprint(e: Envelope): String = MessageDigest.getInstance("SHA-256").digest(e.encode()).joinToString("") { "%02x".format(it) }
 
-    private fun handle(envelope: Envelope) {
-        when (val r = EventSealing.open(envelope, ring)) {
-            is OpenResult.Opened -> {
-                log.append(r.event)
-                opened++
+    /** The members to check authors against, removed ones included (their earlier events stay valid); null until the group's creation is in the log. */
+    private fun knownAuthors(): Collection<PublicKey>? = replay(log).takeIf { it.groupId != null }?.members?.keys
+
+    /**
+     * Opens what can be opened. An envelope whose author is not a known member is kept and tried again after the others have been read
+     * (the admission may be in the same batch), until a pass opens nothing new.
+     */
+    private fun process(first: List<Envelope>) {
+        var queue = first
+        while (queue.isNotEmpty()) {
+            val members = knownAuthors()
+            val next = ArrayList<Envelope>()
+            var progress = false
+            for (e in queue) {
+                when (val r = EventSealing.open(e, ring, members)) {
+                    is OpenResult.Opened -> {
+                        log.append(r.event)
+                        opened++
+                        progress = true
+                    }
+                    is OpenResult.NeedKey -> waiting += e
+                    OpenResult.UnknownAuthor -> next += e
+                    is OpenResult.Rejected -> unreadable++
+                }
             }
-            is OpenResult.NeedKey -> waiting += envelope
-            is OpenResult.Rejected -> unreadable++
+            if (!progress) {
+                deferred += next
+                return
+            }
+            queue = next
         }
     }
 
@@ -166,10 +190,13 @@ class GroupSession(
         unreadableKeyEpochs = load.unreadableEpochs
         val stored = repo.envelopes(groupId)
         damaged = stored.damaged
-        val retry = waiting.toList()
+        val pending = ArrayList<Envelope>()
+        pending += waiting
         waiting.clear()
-        retry.forEach(::handle)
-        for (e in stored.envelopes) if (seen.add(fingerprint(e))) handle(e)
+        pending += deferred
+        deferred.clear()
+        for (e in stored.envelopes) if (seen.add(fingerprint(e))) pending += e
+        process(pending)
     }
 
     private fun compute(): GroupView {
@@ -180,7 +207,7 @@ class GroupSession(
             me = me.publicKey,
             balances = b,
             plan = settlementPlan(b),
-            counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), unreadable, damaged),
+            counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), unreadable, damaged, deferred.size),
             unreadableKeyEpochs = unreadableKeyEpochs,
         )
     }

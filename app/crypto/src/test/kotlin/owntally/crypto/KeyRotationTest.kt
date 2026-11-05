@@ -201,16 +201,18 @@ class KeyRotationTest {
     }
 
     @Test
-    fun sealedKeysCopiedIntoAnotherAdminsEventDoNotOpen() {
-        // Owner decision, 4 Nov 2026 (clarification C1): the sender's key is part of the HPKE context. Admin b copies the sealed keys
-        // that owner a made into b's own rotation event: replay accepts the event (b is an admin) but nobody can open the keys from it.
+    fun sealedKeysCopiedIntoAnotherOwnersEventDoNotOpen() {
+        // Owner decision, 4 Nov 2026 (clarification C1): the sender's key is part of the HPKE context. Ownership moves from a to b;
+        // b copies the sealed keys that a made into b's own rotation event. Replay accepts the event (b is the owner now), but nobody
+        // can open the keys from it, because they were sealed by a.
         val chain = newGroup()
-        chain.emit(a, EventBody.AdminAdded(b.publicKey))
+        chain.emit(a, EventBody.OwnershipOffered(b.publicKey))
+        chain.emit(b, EventBody.OwnershipAccepted)
         val k2 = GroupKey.generate()
         val byA = KeyRotation.seal(a.publicKey, group, 2, k2, KeyRotation.recipients(chain.state()))
         val copiedByB = chain.emit(b, EventBody.KeyRotated(2, byA))
         val state = chain.state()
-        assertEquals(copiedByB.id, state.epochStarts.getValue(2), "replay accepts it: b is an admin")
+        assertEquals(copiedByB.id, state.epochStarts.getValue(2), "replay accepts it: b is the owner")
         val keyring = ring(1L to GroupKey.generate())
         assertFalse(KeyRotation.receive(state, copiedByB, c, keyring))
         assertNull(keyring[2L])

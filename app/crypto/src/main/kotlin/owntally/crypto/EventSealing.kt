@@ -55,6 +55,12 @@ sealed class OpenResult {
 
     /** The envelope is fine so far but is written under an epoch whose key this phone does not have yet. */
     data class NeedKey(val epoch: Long) : OpenResult()
+
+    /**
+     * The signature is good but the author is not among the members the caller knows (yet). Nothing was decrypted. The caller keeps
+     * the envelope and tries again when it learns of more members: the admission may simply not have arrived yet.
+     */
+    data object UnknownAuthor : OpenResult()
 }
 
 /**
@@ -93,10 +99,15 @@ object EventSealing {
         )
     }
 
-    /** Checks the group and the signature first (cheap), then decrypts and decodes. Never throws on bad input. */
-    fun open(envelope: Envelope, keyring: GroupKeyring): OpenResult {
+    /**
+     * Checks the group and the signature first (cheap), then, when [members] is given, that the author is one of them (owner
+     * decision, 4 Nov 2026, clarification C7), and only then decrypts and decodes. Pass null when no member is known yet (before the
+     * group's creating event has been read). Never throws on bad input.
+     */
+    fun open(envelope: Envelope, keyring: GroupKeyring, members: Collection<PublicKey>? = null): OpenResult {
         if (envelope.groupId != keyring.groupId) return OpenResult.Rejected(RejectReason.WRONG_GROUP)
         if (!EnvelopeSigning.verify(envelope)) return OpenResult.Rejected(RejectReason.BAD_SIGNATURE)
+        if (members != null && envelope.author !in members) return OpenResult.UnknownAuthor
         val key = keyring[envelope.epoch] ?: return OpenResult.NeedKey(envelope.epoch)
         val keyBytes = key.bytes()
         val plaintext = try {

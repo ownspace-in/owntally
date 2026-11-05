@@ -120,7 +120,7 @@ Acceptance: a user can create a group, add and delete expenses, and see correct 
 
 Members, owner, admins, join requests, approve (the admin sets the member's name, which must be unique in the group) or decline, remove with the before and after screen (and a list, for the remover and the owner, of the removed member's late entries that were cancelled so they can be re-entered), ownership transfer with acceptance, profile updates (name and phone number only). Rules enforced in the core, not the UI.
 
-Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only owner changes admins, any admin can remove, owner cannot be removed until ownership moves.
+Acceptance: every rule in DESIGN.md "Flows" has a test, including: only the creator or the owner can delete (not admins), only the owner changes admins, only the owner removes members and changes the key (admins and members cannot, and an admin cannot leave), admins can approve joins, owner cannot be removed until ownership moves.
 
 ### M5. Sync protocol over a fake transport
 
@@ -132,7 +132,7 @@ Acceptance: simulated devices always converge to identical logs and balances. In
 
 Nearby transport with fallback to same Wi-Fi, invite screen (QR, share link, copy code, expiry, revoke), QR scan, Join flow, host approval, join requests screen, sync status screen.
 
-Acceptance (two real phones): invite by QR, scan, approve, history arrives, add an expense on each side and both converge, airplane mode with Wi-Fi only still works if fallback is in.
+Acceptance (two real phones, and a test): issued invite tickets survive an app restart on the host and are still single use (CRYPTO.md clarification C4). Two real phones: invite by QR, scan, approve, history arrives, add an expense on each side and both converge, airplane mode with Wi-Fi only still works if fallback is in.
 
 ### M7. Internet sync and relay setting
 
@@ -156,6 +156,8 @@ Acceptance: from a fresh VM, the runbook produces a working relay. Tapping an in
 
 Recovery restore test end to end, dark theme, accessibility pass (touch targets, labels, contrast), release signing, Play Store listing, privacy text that states who runs the relay and what it can see, final review of every security-relevant file.
 
+Also in M10 (from CRYPTO.md clarification C8): turn on code shrinking for the release build (with keep rules for Tink, Room and Compose, and a test run), and measure the APK again; it was about 26 MB unsigned without shrinking.
+
 Acceptance: a release build installs, runs on a 2 GB phone, and passes the full test suite and a manual checklist.
 
 ## Definition of done (every milestone)
@@ -163,6 +165,7 @@ Acceptance: a release build installs, runs on a 2 GB phone, and passes the full 
 - All acceptance items have an automated test, or a written manual test where hardware is needed.
 - `./gradlew test lint` passes locally and in CI.
 - No new network calls other than sync, no analytics, no secrets in the repo.
+- The vulnerability check (`tools/check_vulnerabilities.py`) finds nothing, or every finding is listed with a reason in `tools/vulnerability-ignores.txt`.
 - `DESIGN.md` and the mockups still match behaviour. If they changed, they were updated in the same pull request.
 
 ## What the owner decides, not the builder

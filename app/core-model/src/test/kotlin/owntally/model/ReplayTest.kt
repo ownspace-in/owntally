@@ -359,18 +359,39 @@ class ReplayTest {
     }
 
     @Test
-    fun adminsRemoveMembersButNotOtherAdminsOrTheOwner() {
+    fun anAdminCannotRemoveAnyoneNotEvenThemselves() {
+        // Owner decision, 4 Nov 2026: admins approve joins and invite; only the owner removes members and changes the key.
         val s = standardGroup()
         s.emit(a, EventBody.AdminAdded(b))
         s.emit(a, EventBody.AdminAdded(c))
         val removeMember = s.remove(b, d)
         val removeAdmin = s.remove(b, c)
         val removeOwner = s.remove(b, a)
+        val leave = s.remove(b, b)
         val state = s.state()
-        assertNull(removeMember.reason(state))
-        assertEquals(IgnoreReason.NOT_ALLOWED, removeAdmin.reason(state))
-        assertEquals(IgnoreReason.NOT_ALLOWED, removeOwner.reason(state))
-        assertEquals(setOf(a, b, c), state.currentMembers.keys)
+        for (e in listOf(removeMember, removeAdmin, removeOwner, leave)) assertEquals(IgnoreReason.NOT_ALLOWED, e.reason(state))
+        assertEquals(setOf(a, b, c, d), state.currentMembers.keys)
+        assertEquals(1L, state.epoch)
+    }
+
+    @Test
+    fun anAdminCanStillAdmitMembers() {
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        val join = s.join(b, key(20), "Eve")
+        assertNull(join.reason(s.state()))
+        assertEquals(1L, s.state().epoch, "adding a member does not change the key")
+    }
+
+    @Test
+    fun anAdminCanLeaveOnceTheOwnerHasMadeThemAPlainMember() {
+        val s = standardGroup()
+        s.emit(a, EventBody.AdminAdded(b))
+        assertEquals(IgnoreReason.NOT_ALLOWED, s.remove(b, b).reason(s.state()))
+        s.emit(a, EventBody.AdminRemoved(b))
+        val leave = s.remove(b, b)
+        assertNull(leave.reason(s.state()))
+        assertTrue(b !in s.state().currentMembers)
     }
 
     @Test
@@ -411,10 +432,12 @@ class ReplayTest {
     @Test
     fun eventsTheRemoverHadSeenStayAndNewerOnesAreIgnoredEvenIfOrderedBeforeTheRemoval() {
         val s = standardGroup()
-        s.emit(a, EventBody.AdminAdded(d))
+        // d becomes the owner (only the owner removes members) and d's key sorts after c's.
+        s.emit(a, EventBody.OwnershipOffered(d))
+        s.emit(d, EventBody.OwnershipAccepted)
         val kept = s.expense(c, rupees(100), c, all)
         val newer = s.expense(c, rupees(500), c, all)
-        // d removes c having seen only c's first expense. d's key sorts after c's, so c's newer event is
+        // d (the owner) removes c having seen only c's first expense. d's key sorts after c's, so c's newer event is
         // applied first and must be cancelled afterwards.
         val removal = s.remove(d, c, seen = s.snapshot().toMutableMap().also { it[c] = kept.counter })
         val order = s.log().applicationOrder().map { it.id }
@@ -500,7 +523,7 @@ class ReplayTest {
     }
 
     @Test
-    fun anAdminRotatesTheKeyAfterALeave() {
+    fun theOwnerRotatesTheKeyAfterALeave() {
         val s = standardGroup()
         s.remove(c, c)
         val rotate = s.rotate(a)
@@ -511,17 +534,19 @@ class ReplayTest {
     }
 
     @Test
-    fun onlyAnAdminCanRotateAndOnlyToTheNextEpochForExactlyTheCurrentMembers() {
+    fun onlyTheOwnerCanRotateAndOnlyToTheNextEpochForExactlyTheCurrentMembers() {
         val s = standardGroup()
         s.emit(a, EventBody.AdminAdded(b))
         val byMember = s.emit(c, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
         val byAdmin = s.emit(b, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
-        val repeated = s.emit(b, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
+        val byOwner = s.emit(a, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
+        val repeated = s.emit(a, EventBody.KeyRotated(2, keysFor(a, b, c, d)))
         val missing = s.emit(a, EventBody.KeyRotated(3, keysFor(a, b, c)))
         val stranger = s.emit(a, EventBody.KeyRotated(3, keysFor(a, b, c, d, e)))
         val state = s.state()
         assertEquals(IgnoreReason.NOT_ALLOWED, byMember.reason(state))
-        assertNull(byAdmin.reason(state))
+        assertEquals(IgnoreReason.NOT_ALLOWED, byAdmin.reason(state), "owner decision, 4 Nov 2026: admins cannot change the key")
+        assertNull(byOwner.reason(state))
         assertEquals(IgnoreReason.INVALID, repeated.reason(state))
         assertEquals(IgnoreReason.INVALID, missing.reason(state))
         assertEquals(IgnoreReason.INVALID, stranger.reason(state))
@@ -553,16 +578,16 @@ class ReplayTest {
     }
 
     @Test
-    fun twoRemovalsWrittenAtTheSameTimeLeaveOnlyTheFirstInOrderAndTheOtherMustBeReissued() {
+    fun anAdminsRemovalIsRefusedSoTwoRemovalsCanNeverClash() {
+        // Only the owner removes and rotates, so two people cannot start the same epoch at once (clarification C2).
         val s = standardGroup()
         s.emit(a, EventBody.AdminAdded(b))
         val seen = s.snapshot()
-        // Both admins prepare their removal from the same state: epoch 2, keys for everyone left.
         val first = s.emit(a, EventBody.MemberRemoved(c, 2, keysFor(a, b, d)), seen)
         val second = s.emit(b, EventBody.MemberRemoved(d, 2, keysFor(a, b, c)), seen)
         val state = s.state()
         assertNull(first.reason(state))
-        assertEquals(IgnoreReason.INVALID, second.reason(state))
+        assertEquals(IgnoreReason.NOT_ALLOWED, second.reason(state))
         assertEquals(setOf(a, b, d), state.currentMembers.keys)
         assertEquals(2L, state.epoch)
     }

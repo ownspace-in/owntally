@@ -86,8 +86,8 @@ General: an event's author must be a current member, except `GroupCreated`. Reas
 | `OwnershipOffered` | Owner only. `to` is a current member other than the owner. Replaces any pending offer. |
 | `OwnershipOfferCancelled` | Owner only. There is a pending offer. |
 | `OwnershipAccepted` | Author must be the `to` of the pending offer. Author becomes owner, and the previous owner becomes admin. The offer is cleared. |
-| `MemberRemoved` | Owner may remove any current member except themselves. An admin may remove a current `MEMBER` only. A `MEMBER` may remove themselves (leave). The owner cannot be removed and cannot leave while owner. After this, the member is removed and can never rejoin with the same key. Key epoch: when someone else is removed, `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the members who stay, else `INVALID`; the removal starts that epoch. A leave must carry the current epoch and no keys, else `INVALID`, and starts no epoch. |
-| `KeyRotated` | Owner or admin only (`NOT_ALLOWED` otherwise). `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the current members, else `INVALID`. Starts that epoch. This is how an admin rotates the key after a leave. |
+| `MemberRemoved` | **Only the owner** removes someone else (any current member except themselves; owner decision, 4 Nov 2026). A plain `MEMBER` may remove themselves (leave). **An admin cannot remove anyone, themselves included**: the owner makes them a plain member first, or removes them. The owner cannot be removed and cannot leave while owner. After this, the member is removed and can never rejoin with the same key. Key epoch: when someone else is removed, `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the members who stay, else `INVALID`; the removal starts that epoch. A leave must carry the current epoch and no keys, else `INVALID`, and starts no epoch. |
+| `KeyRotated` | **Owner only** (`NOT_ALLOWED` otherwise; owner decision, 4 Nov 2026, so two people can never start the same epoch at once). `newEpoch` must be the current epoch plus 1 and `sealedKeys` must hold a key for exactly the current members, else `INVALID`. Starts that epoch. This is how the owner rotates the key after a leave. |
 
 **After removal.** An event by a removed member is ignored with `AFTER_REMOVAL` if its counter is greater than `after[member]` in the `MemberRemoved` event (that is, they wrote it without having seen the removal).
 
@@ -138,7 +138,7 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 3. **`OwnershipOfferCancelled` is added.** The ownership screen has a "Cancel request" button, which needs an event.
 4. **`SettlementRecorded` can be written by either side.** The Settle screen lets the receiver tap "Mark received" without the payer marking first. `PaymentDisputed`, `SettlementConfirmed` and the statuses are as above.
 5. **A removed key can never rejoin.** A person who wants back in must join with a new key and is a new member.
-6. **Admins cannot remove other admins.** Only the owner can. DESIGN.md says "owner or any admin removes members"; this draft reads that as members, not admins.
+6. **Admins cannot remove other admins.** Only the owner can. DESIGN.md says "owner or any admin removes members"; this draft reads that as members, not admins. **Superseded on 4 Nov 2026: admins cannot remove anyone; only the owner removes members and changes the key. Admins approve joins and invite.**
 7. **Group size is limited to 20**, matching the relay spike's room limit.
 8. **`PaymentDisputed` has fixed reasons** (matching the three choices in the mockup). Free text is not stored.
 9. **Admin takeover when the owner is unreachable is not included** (owner decision).

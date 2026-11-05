@@ -87,6 +87,42 @@ class TicketTest {
     }
 
     @Test
+    fun aSharedTextThatAChatAppWrappedOrSpacedStillGivesTheSameTicket() {
+        // Owner decision, 4 Nov 2026 (clarification C5, option B): spaces and line breaks inside a shared text are ignored before decoding.
+        val ticket = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "relay")
+        val text = ticket.encode()
+        val wrapped = text.chunked(40).joinToString("\n")
+        val spaced = text.chunked(8).joinToString(" ")
+        val link = "https://joinowntally.ownspace.in/j#"
+        assertEquals(ticket, Ticket.fromShared(wrapped))
+        assertEquals(ticket, Ticket.fromShared(spaced))
+        assertEquals(ticket, Ticket.fromShared(link + wrapped))
+        assertEquals(ticket, Ticket.fromShared(link.chunked(10).joinToString("\r\n") + text.chunked(30).joinToString("\r\n")))
+        assertEquals(ticket, Ticket.fromShared("\t$text\u00A0")) // tab, non-breaking space
+        assertEquals(ticket, Ticket.fromShared(text.take(60) + "\u200B" + text.drop(60))) // an invisible zero-width space
+    }
+
+    @Test
+    fun theStrictDecoderStillRefusesAnythingButTheOneExactText() {
+        val ticket = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "")
+        val text = ticket.encode()
+        assertNull(Ticket.decode(text.chunked(40).joinToString("\n")), "decode itself is not forgiving")
+        assertNull(Ticket.decode(" $text"))
+        assertNull(Ticket.decode(text + "="))
+    }
+
+    @Test
+    fun forgivingAboutSpacesIsNotForgivingAboutAnythingElse() {
+        val text = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "").encode()
+        assertNull(Ticket.fromShared(text + "="), "padding")
+        assertNull(Ticket.fromShared(text.replaceRange(10, 11, "+")), "a character outside the alphabet")
+        assertNull(Ticket.fromShared(text.replaceRange(10, 11, " ")), "a missing character")
+        assertNull(Ticket.fromShared(text.dropLast(1)), "cut short")
+        assertNull(Ticket.fromShared(text + "AA"), "extra characters")
+        assertNull(Ticket.fromShared("   \n  "))
+    }
+
+    @Test
     fun aLinkOrPastedTextWithSpacesGivesTheSameTicket() {
         val ticket = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_800_000_000, "")
         val text = ticket.encode()
@@ -226,5 +262,33 @@ class TicketTest {
         val ticket = registry.issue(group, 2, key)
         assertFalse(ticket.ticketId().joinToString("") { "%02x".format(it) } in registry.toString())
         assertTrue("redacted" in registry.toString())
+    }
+
+    @Test
+    fun theHostIsExactAndTheJoinerAllowsSixtySecondsOfClockDifference() {
+        // Owner decision, 4 Nov 2026 (clarification C6, option B). The expiry is the first second the ticket no longer works.
+        val t = Ticket(ByteArray(16) { 1 }, host, group, 2, key, 1_000_000, "")
+        val e = t.expiresAtSeconds
+        assertEquals(60L, Ticket.CLOCK_ALLOWANCE_SECONDS)
+        // the host (isExpired): exact
+        assertFalse(t.isExpired(e - 1))
+        assertTrue(t.isExpired(e))
+        assertTrue(t.isExpired(e + 1))
+        // the joiner (isExpiredForJoiner): forgives a slow clock of up to 59 seconds, so the host decides at the edge
+        assertFalse(t.isExpiredForJoiner(e - 1))
+        assertFalse(t.isExpiredForJoiner(e))
+        assertFalse(t.isExpiredForJoiner(e + 59))
+        assertTrue(t.isExpiredForJoiner(e + 60))
+        assertTrue(t.isExpiredForJoiner(e + 3600))
+    }
+
+    @Test
+    fun theHostStaysExactEvenThoughTheJoinerForgives() {
+        val clock = object : Clock { var now = 1_000_000L; override fun nowSeconds() = now }
+        val registry = TicketRegistry(host, clock)
+        val t = registry.issue(group, 2, key)
+        clock.now = t.expiresAtSeconds + 30 // inside the joiner's allowance, but the host's own clock says expired
+        assertFalse(t.isExpiredForJoiner(clock.now))
+        assertFalse(registry.accept(t), "the host refuses it: its own clock decides")
     }
 }

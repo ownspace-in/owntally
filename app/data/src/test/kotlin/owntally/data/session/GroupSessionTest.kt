@@ -333,4 +333,56 @@ class GroupSessionTest {
             pool.shutdown()
         }
     }
+
+    // --- authors who are not (yet) known members (clarification C7, option B) -------------------
+
+    @Test
+    fun anEventWrittenAfterAnAdmissionButReceivedBeforeItWaitsAndIsAppliedWhenTheAdmissionArrives() {
+        // Ben's event says it saw the owner's event number 3 (his admission), but this phone gets Ben's event first.
+        val ring = env.secrets.loadKeyring(group).keyring
+        val tea = Event(1, ben.publicKey, 1, mapOf(owner to 3L), 9, EventBody.ExpenseAdded("Ben's tea", rupees(10), ben.publicKey, 1, Split.Equal(setOf(ben.publicKey))))
+        assertEquals(AppendResult.Added, env.groups.appendEnvelope(group, EventSealing.seal(ben, group, 1, ring[1]!!, tea)))
+        session.refresh()
+        assertEquals(1, session.view.value.counts.waitingForMember)
+        assertTrue(session.view.value.state.expenses.isEmpty())
+        assertEquals(3L, (join(ben, "Ben")).counter, "the admission is the owner's event number 3")
+        session.refresh()
+        val v = session.view.value
+        assertEquals(0, v.counts.waitingForMember)
+        assertEquals(1, v.state.expenses.size, "applied now that Ben is a member")
+    }
+
+    @Test
+    fun theResultIsTheSameWhicheverOrderTheAdmissionAndTheEventArrive() {
+        join(ben, "Ben")
+        receiveFrom(ben, EventBody.ExpenseAdded("Ben's tea", rupees(10), ben.publicKey, 1, Split.Equal(setOf(ben.publicKey))))
+        val inOrder = session.view.value
+        assertEquals(0, inOrder.counts.waitingForMember)
+        assertEquals(1, inOrder.state.expenses.size)
+    }
+
+    @Test
+    fun someoneWhoIsNeverAdmittedStaysWaitingAndTheirEnvelopeStaysStored() {
+        val before = env.groups.envelopes(group).envelopes.size
+        receiveFrom(outsider, EventBody.ExpenseAdded("Sneaky", rupees(10), outsider.publicKey, 1, Split.Equal(setOf(outsider.publicKey))))
+        session.refresh()
+        assertEquals(1, session.view.value.counts.waitingForMember)
+        assertEquals(before + 1, env.groups.envelopes(group).envelopes.size, "nothing is thrown away")
+        assertTrue(session.view.value.state.expenses.isEmpty())
+        assertTrue(outsider.publicKey !in session.view.value.state.members)
+    }
+
+    @Test
+    fun aRemovedMembersLateEventIsStillOpenedAndJudgedByReplayNotDeferred() {
+        join(ben, "Ben")
+        receiveFrom(ben, EventBody.ExpenseAdded("First", rupees(10), ben.publicKey, 1, Split.Equal(setOf(ben.publicKey))))
+        val next = owntally.crypto.GroupKey.generate()
+        env.secrets.saveGroupKey(group, 2, next)
+        val sealed = owntally.crypto.KeyRotation.seal(owner, group, 2, next, owntally.crypto.KeyRotation.recipients(session.view.value.state, excluding = setOf(ben.publicKey)))
+        assertAdded(session.append(EventBody.MemberRemoved(ben.publicKey, 2, sealed)))
+        receiveFrom(ben, EventBody.ExpenseAdded("Late", rupees(5), ben.publicKey, 1, Split.Equal(setOf(ben.publicKey))))
+        val v = session.view.value
+        assertEquals(0, v.counts.waitingForMember, "a removed member is still a known member")
+        assertTrue(v.state.ignored.any { it.reason == IgnoreReason.AFTER_REMOVAL })
+    }
 }

@@ -1,0 +1,17 @@
+# Opens a pull request when a library or a GitHub Action has a new version (CRYPTO.md, clarification C9). Nothing is merged
+# automatically: the owner decides. Tink's version lives in gradle/libs.versions.toml, which Dependabot reads.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: "/relay/ws-relay"
+    schedule:
+      interval: weekly
