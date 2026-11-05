@@ -53,6 +53,8 @@ So M4 is mostly the data-layer operations, a small local store for join requests
   - **A decision that departs from DESIGN.md**, which said a departed or removed member keeps a read-only copy. It now applies to people **removed by the owner** only, and that case waits for M5 when sync can tell their phone.
   - A person who left cannot rejoin with the same key (a new member with a new key; their old name stays reserved).
 
+- **Entries of removed or departed people (5 Nov 2026): kept in the list.** Expenses they paid, and payments involving them, stay visible on the Group screen, greyed and not counted, with the reason: **"Excluded: Kabir was removed"** or **"Excluded: Kabir left"**. They are never erased (the log is signed and append-only). Expenses that others paid and that include them are not "their entries": those still count, re-split. **This also fixes a fault in the M3 Group screen**, which shows any uncounted expense as "Deleted · not counted", struck through; an expense excluded because its payer left or was removed is not deleted.
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
@@ -79,7 +81,8 @@ Done when: tests: create, list waiting, approve (event written, name set by the 
 
 ### T4.5 Members screen (mockup 12) and models
 Do: list with role badges, phone as entered, "You" first, the "Join requests" row with a count, the corrected role text; the "…" menu for the owner only; a "Removed" section (D5). Pure models with JVM tests for what each role sees.
-Done when: model tests for owner, admin, member views; the screen compared with mockup 12 on the emulator; reachable from the Group screen's members icon.
+Also here: the Group screen's expense rows say "Excluded: Kabir was removed" or "Excluded: Kabir left" (greyed, not struck through) for expenses that stop counting because of a removal or leave, and keep "Deleted by Rohan · not counted" for real deletes; payments are not listed on this screen today, so their reason is shown where payments are shown (Settle up, M8).
+Done when: model tests for owner, admin, member views; model tests for the three kinds of uncounted expense (deleted, payer removed, payer left); the screen compared with mockup 12 on the emulator; reachable from the Group screen's members icon.
 
 ### T4.6 Member actions (mockup 14)
 Do: the screen for one member: Make owner, Make admin or Remove admin role, Remove from group, by who is looking and who is looked at (the owner cannot act on themselves).
