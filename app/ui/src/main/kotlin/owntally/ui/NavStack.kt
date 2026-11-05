@@ -10,6 +10,7 @@ sealed interface Screen {
     data class AddExpense(val id: GroupId) : Screen
     data class SettleUp(val id: GroupId) : Screen
     data class Members(val id: GroupId) : Screen
+    data class OwnerOffer(val id: GroupId, val member: owntally.model.PublicKey) : Screen
     data class RemoveMember(val id: GroupId, val member: owntally.model.PublicKey) : Screen
     data class MemberActions(val id: GroupId, val member: owntally.model.PublicKey) : Screen
     data object HowItWorks : Screen
@@ -38,6 +39,7 @@ data class NavStack(val screens: List<Screen> = listOf(Screen.Home)) {
                 is Screen.Members -> it.id == id
                 is Screen.MemberActions -> it.id == id
                 is Screen.RemoveMember -> it.id == id
+                is Screen.OwnerOffer -> it.id == id
                 else -> false
             }
         }

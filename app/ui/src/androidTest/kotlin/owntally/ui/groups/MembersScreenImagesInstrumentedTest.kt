@@ -98,4 +98,47 @@ class MembersScreenImagesInstrumentedTest {
         rule.onNodeWithText("Remove Kabir?").assertIsDisplayed()
         save("remove-member")
     }
+
+    @Test
+    fun saveTheOwnershipScreens() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        fun model(stage: OfferStage) = when (stage) {
+            OfferStage.CONFIRM -> OwnerOfferModel(
+                "Rohan", "R", 1, "+91 98765 43210 · Admin", stage, "Make Rohan the owner?",
+                listOf(
+                    "Rohan will be able to remove members, change the group key, and add and remove admins. You will become an admin and keep every expense and balance.",
+                    "Nothing changes until Rohan accepts, which they can do the next time their phone syncs.",
+                ),
+                null, "Send request", null,
+            )
+            OfferStage.WAITING -> OwnerOfferModel(
+                "Rohan", "R", 1, "+91 98765 43210 · Admin", stage, "Waiting for Rohan to accept",
+                listOf("You stay the owner until they accept. If they don't, you can cancel this request at any time."), null, "Cancel request", null,
+            )
+            OfferStage.DECLINED -> OwnerOfferModel(
+                "Rohan", "R", 1, "+91 98765 43210 · Admin", stage, "Rohan declined",
+                listOf("You are still the owner. You can ask Rohan again or choose someone else."), null, "Ask Rohan again", "Choose someone else",
+            )
+        }
+        val stage = androidx.compose.runtime.mutableStateOf(OfferStage.CONFIRM)
+        rule.setContent { OwnTallyTheme { Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) { OwnerOfferScreen(model(stage.value), onClose = {}, onPrimary = {}, onSecondary = {}) } } }
+        rule.onNodeWithText("Make Rohan the owner?").assertIsDisplayed()
+        save("ownership-confirm")
+        stage.value = OfferStage.WAITING
+        rule.onNodeWithText("Waiting for Rohan to accept").assertIsDisplayed()
+        save("ownership-waiting")
+        stage.value = OfferStage.DECLINED
+        rule.onNodeWithText("Rohan declined").assertIsDisplayed()
+        save("ownership-declined")
+    }
+
+    @Test
+    fun saveTheOwnershipBanner() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        val banner = OwnershipBannerModel("Asha wants to make you the owner of Goa Trip", "Become the owner of Goa Trip?", "x")
+        rule.setContent { OwnTallyTheme { Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) { OwnershipBanner(banner, {}, {}) } } }
+        rule.onNodeWithText("Accept").assertIsDisplayed()
+        rule.onNodeWithText("Decline").assertIsDisplayed()
+        save("ownership-banner")
+    }
 }

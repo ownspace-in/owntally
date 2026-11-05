@@ -73,7 +73,8 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
             is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) })
-            is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) })
+            is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) }, onMakeOwner = { ui.nav = ui.nav.push(Screen.OwnerOffer(screen.id, screen.member)) })
+            is Screen.OwnerOffer -> OwnerOfferRoute(sessions, screen.id, screen.member, onClose = back, onChoose = { ui.nav = ui.nav.pop() })
             is Screen.RemoveMember -> RemoveMemberRoute(sessions, screen.id, screen.member, onCancel = back, onRemoved = { ui.nav = ui.nav.pop().pop() })
             is Screen.AddExpense -> AddExpenseRoute(sessions, screen.id, onDone = back)
             is Screen.Group -> GroupRoute(
@@ -197,11 +198,31 @@ private fun GroupRoute(sessions: Sessions, id: GroupId, debugTools: DebugTools?,
     val model = remember(view) { GroupScreenModels.build(view) }
     val scope = rememberCoroutineScope()
     var opened by remember { mutableStateOf<owntally.model.EventId?>(null) }
-    GroupScreen(model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }, onMembers = onMembers) {
+    var confirmAccept by remember { mutableStateOf(false) }
+    val banner = remember(view) { OwnershipBanners.build(view) }
+    GroupScreen(
+        model, onBack, onAdd, onSettle, onOpenExpense = { opened = it.id }, onMembers = onMembers, banner = banner,
+        onAcceptOffer = { confirmAccept = true },
+        onDeclineOffer = { scope.launch { withContext(Dispatchers.IO) { s.declineOwnership() } } },
+    ) {
         if (debugTools != null) {
             androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
             owntally.ui.components.TextAction("Add test friends and expenses (debug build)", { scope.launch { withContext(Dispatchers.IO) { debugTools.addTestData(s) } } })
         }
+    }
+    if (confirmAccept && banner != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmAccept = false },
+            title = { androidx.compose.material3.Text(banner.confirmTitle) },
+            text = { androidx.compose.material3.Text(banner.confirmBody) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    confirmAccept = false
+                    scope.launch { withContext(Dispatchers.IO) { s.acceptOwnership() } }
+                }) { androidx.compose.material3.Text("Become owner") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmAccept = false }) { androidx.compose.material3.Text("Not now") } },
+        )
     }
     val target = opened?.let { view.state.expenses[it] }
     if (target != null) {
@@ -334,7 +355,7 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
 }
 
 @Composable
-private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onClose: () -> Unit, onRemove: () -> Unit) {
+private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onClose: () -> Unit, onRemove: () -> Unit, onMakeOwner: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -355,12 +376,13 @@ private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally
     }
     MemberActionsScreen(model, onClose, error = error, onAction = { kind ->
         if (kind == ActionKind.REMOVE) return@MemberActionsScreen onRemove()
+        if (kind == ActionKind.MAKE_OWNER) return@MemberActionsScreen onMakeOwner()
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 when (kind) {
                     ActionKind.MAKE_ADMIN -> s.makeAdmin(member)
                     ActionKind.REMOVE_ADMIN -> s.removeAdmin(member)
-                    // Make owner has its own screen (T4.8); Remove from group is handled above.
+                    // Make owner and Remove from group are handled above, before this block.
                     ActionKind.MAKE_OWNER, ActionKind.REMOVE -> null
                 }
             }
@@ -410,4 +432,46 @@ private fun RemoveMemberRoute(sessions: Sessions, id: GroupId, member: owntally.
             if (r !is owntally.data.session.AddResult.Added) busy = false
         }
     })
+}
+
+@Composable
+private fun OwnerOfferRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onClose: () -> Unit, onChoose: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val model = remember(view) { OwnerOfferModels.build(view, member) }
+    val scope = rememberCoroutineScope()
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    if (model == null) {
+        // This phone is no longer the owner (they accepted), or the person is gone.
+        LaunchedEffect(Unit) { onClose() }
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    OwnerOfferScreen(
+        model, onClose, busy = busy, error = error, onSecondary = onChoose,
+        onPrimary = {
+            if (busy) return@OwnerOfferScreen
+            busy = true
+            scope.launch {
+                val r = withContext(Dispatchers.IO) {
+                    if (model.stage == OfferStage.WAITING) s.cancelOffer() else s.offerOwnership(member)
+                }
+                busy = false
+                error = when (r) {
+                    is owntally.data.session.AddResult.Added -> null
+                    is owntally.data.session.AddResult.Refused -> "That can't be done now (${r.reason.name.lowercase().replace('_', ' ')})."
+                    is owntally.data.session.AddResult.Invalid -> r.problem
+                    owntally.data.session.AddResult.NoKey -> "This phone doesn't have the group's key yet."
+                }
+            }
+        },
+    )
 }

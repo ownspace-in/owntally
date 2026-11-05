@@ -21,7 +21,7 @@ object MemberActionsModels {
         if (target == view.me || !Permissions.removeOthers(viewer)) return null
         val name = member.name.ifBlank { "Someone" }
         val actions = buildList {
-            if (Permissions.offerOwnership(viewer)) add(MemberAction(ActionKind.MAKE_OWNER, "Make owner", "You become an admin. $name must accept."))
+            if (Permissions.offerOwnership(viewer)) add(MemberAction(ActionKind.MAKE_OWNER, "Make owner", if (state.pendingOffer == target) "Waiting for $name to accept." else "You become an admin. $name must accept."))
             if (Permissions.changeAdmins(viewer)) {
                 if (member.role == Role.ADMIN) add(MemberAction(ActionKind.REMOVE_ADMIN, "Remove admin role", "$name stays in the group as a member."))
                 else add(MemberAction(ActionKind.MAKE_ADMIN, "Make admin", "$name can approve joins and invite people."))

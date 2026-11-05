@@ -29,6 +29,7 @@ private class Run(private val forced: Set<EventId>) {
     val members = LinkedHashMap<PublicKey, Member>()
     var owner: PublicKey? = null
     var pendingOffer: PublicKey? = null
+    var declinedOffer: PublicKey? = null
     var epoch = 0L
     val epochStarts = LinkedHashMap<Long, EventId>()
     val expenses = LinkedHashMap<EventId, Expense>()
@@ -38,7 +39,7 @@ private class Run(private val forced: Set<EventId>) {
     val applied = HashSet<EventId>()
 
     fun state(held: List<EventId>) =
-        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
+        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, declinedOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
 
     /** Names are unique in a group (owner decision, 4 Nov 2026): the rule lives in [isNameTaken], shared with the screens. */
     private fun nameTaken(name: String, except: PublicKey?): Boolean = isNameTaken(members.values, name, except)
@@ -136,18 +137,21 @@ private class Run(private val forced: Set<EventId>) {
                 if (role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 if (body.to == author || current(body.to) == null) return IgnoreReason.INVALID
                 pendingOffer = body.to
+                declinedOffer = null
                 null
             }
             is EventBody.OwnershipOfferCancelled -> {
                 if (role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 if (pendingOffer == null) return IgnoreReason.ALREADY_DONE
                 pendingOffer = null
+                declinedOffer = null
                 null
             }
             is EventBody.OwnershipDeclined -> {
                 // Only the member the pending offer is for can decline it (owner decision, 5 Nov 2026, M4 D1).
                 if (pendingOffer != author) return IgnoreReason.NOT_ALLOWED
                 pendingOffer = null
+                declinedOffer = author
                 null
             }
             is EventBody.OwnershipAccepted -> {
@@ -157,6 +161,7 @@ private class Run(private val forced: Set<EventId>) {
                 members[author] = members.getValue(author).copy(role = Role.OWNER)
                 owner = author
                 pendingOffer = null
+                declinedOffer = null
                 null
             }
             is EventBody.KeyRotated -> {
@@ -189,6 +194,7 @@ private class Run(private val forced: Set<EventId>) {
                 members[target.key] = target.copy(removed = true)
                 removals[target.key] = Removal(target.key, author, event.id, event.after[target.key] ?: 0L)
                 if (pendingOffer == target.key) pendingOffer = null
+                if (declinedOffer == target.key) declinedOffer = null
                 null
             }
         }

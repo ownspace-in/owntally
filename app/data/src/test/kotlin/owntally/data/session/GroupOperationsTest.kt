@@ -240,6 +240,19 @@ class GroupOperationsTest {
         }
     }
 
+    @Test fun theGroupsListTagsTheOfferOnlyOnTheOfferedPersonsPhone() {
+        val ben = joined("Ben")
+        assertTrue(added(owner.session.offerOwnership(ben.key)))
+        everyoneSyncs(owner, ben)
+        fun tag(p: Phone) = Sessions(p.env.groups, p.env.secrets, p.env.identity, p.env.clock, p.env.settings).also { it.refresh() }.summaries.value.single().ownershipOfferForMe
+        assertTrue(tag(ben), "the offered person sees the tag")
+        assertFalse(tag(owner), "the owner does not")
+        assertTrue(added(ben.session.declineOwnership()))
+        everyoneSyncs(owner, ben)
+        assertFalse(tag(ben), "it goes away when answered")
+        assertEquals(ben.key, owner.state.declinedOffer, "and the owner can see who declined")
+    }
+
     @Test fun anOfferCanBeCancelledByTheOwnerOnly() {
         val ben = joined("Ben")
         everyoneSyncs(owner, ben)

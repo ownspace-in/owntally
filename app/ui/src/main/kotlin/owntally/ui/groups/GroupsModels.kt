@@ -24,6 +24,8 @@ data class GroupCardModel(
     val subtitle: String,
     val balance: BalanceView,
     val readable: Boolean,
+    /** Someone offered this person the ownership and they have not answered (the tag on the card). */
+    val ownershipOffer: Boolean = false,
 )
 
 data class GroupsListModel(val owed: BalanceView, val owe: BalanceView, val cards: List<GroupCardModel>)
@@ -65,6 +67,7 @@ object GroupsModels {
                     },
                     balance = MoneyFormat.describe(it.myBalance),
                     readable = it.readable,
+                    ownershipOffer = it.ownershipOfferForMe,
                 )
             },
         )

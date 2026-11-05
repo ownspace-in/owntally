@@ -331,6 +331,37 @@ class ReplayTest {
     }
 
     @Test
+    fun theStateRemembersWhoDeclinedUntilTheOwnerActsAgain() {
+        val s = standardGroup()
+        assertNull(s.state().declinedOffer)
+        s.emit(a, EventBody.OwnershipOffered(b))
+        assertNull(s.state().declinedOffer, "an offer waiting is not a decline")
+        s.emit(b, EventBody.OwnershipDeclined)
+        assertEquals(b, s.state().declinedOffer)
+        assertNull(s.state().pendingOffer)
+        s.emit(a, EventBody.OwnershipOffered(c))
+        assertNull(s.state().declinedOffer, "a new offer clears it")
+        s.emit(c, EventBody.OwnershipDeclined)
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(a, EventBody.OwnershipOfferCancelled)
+        assertNull(s.state().declinedOffer, "so does a cancel")
+        s.emit(a, EventBody.OwnershipOffered(b))
+        s.emit(b, EventBody.OwnershipDeclined)
+        s.emit(a, EventBody.OwnershipOffered(c))
+        s.emit(c, EventBody.OwnershipAccepted)
+        assertNull(s.state().declinedOffer, "and a new owner")
+    }
+
+    @Test
+    fun aDeclinedPersonWhoLeavesIsNoLongerShownAsHavingDeclined() {
+        val s = standardGroup()
+        s.emit(a, EventBody.OwnershipOffered(c))
+        s.emit(c, EventBody.OwnershipDeclined)
+        s.remove(a, c)
+        assertNull(s.state().declinedOffer)
+    }
+
+    @Test
     fun aDeclineWithNoOfferIsRefusedAndAnAcceptAfterADeclineIsToo() {
         val s = standardGroup()
         val early = s.emit(b, EventBody.OwnershipDeclined)

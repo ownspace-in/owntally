@@ -143,6 +143,13 @@ fun GroupCard(card: GroupCardModel, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(card.name, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Text(card.subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+            if (card.ownershipOffer) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Ownership request", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.WarningText,
+                    modifier = Modifier.background(OwnTallyColors.WarningBackground, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
         }
         if (card.readable) {
             Column(horizontalAlignment = Alignment.End) {
@@ -165,6 +172,9 @@ fun GroupScreen(
     onSettle: (() -> Unit)? = null,
     onOpenExpense: (ExpenseRow) -> Unit = {},
     onMembers: (() -> Unit)? = null,
+    banner: OwnershipBannerModel? = null,
+    onAcceptOffer: () -> Unit = {},
+    onDeclineOffer: () -> Unit = {},
     extra: @Composable () -> Unit = {},
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -186,6 +196,10 @@ fun GroupScreen(
                 }
             }
             Spacer(Modifier.height(14.dp))
+            if (banner != null) {
+                OwnershipBanner(banner, onAcceptOffer, onDeclineOffer)
+                Spacer(Modifier.height(14.dp))
+            }
             BalanceCard(model, onSettle)
             extra()
             Spacer(Modifier.height(24.dp))
@@ -323,5 +337,24 @@ fun MessageTab(title: String, body: String) {
         Text(title, style = MaterialTheme.typography.headlineMedium, color = OwnTallyColors.Ink)
         Spacer(Modifier.height(14.dp))
         Text(body, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary, textAlign = TextAlign.Start)
+    }
+}
+
+/** "Asha wants to make you the owner of Goa Trip", with Accept and Decline (D1). */
+@Composable
+fun OwnershipBanner(banner: OwnershipBannerModel, onAccept: () -> Unit, onDecline: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, RoundedCornerShape(20.dp)).padding(16.dp)) {
+        Text(banner.text, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.WarningText)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                Modifier.background(OwnTallyColors.Green, RoundedCornerShape(50)).clickable(onClick = onAccept).padding(horizontal = 20.dp, vertical = 10.dp)
+                    .semantics { role = SemanticsRole.Button },
+            ) { Text("Accept", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnDark) }
+            Box(
+                Modifier.border(1.dp, OwnTallyColors.WarningText, RoundedCornerShape(50)).clickable(onClick = onDecline).padding(horizontal = 20.dp, vertical = 10.dp)
+                    .semantics { role = SemanticsRole.Button },
+            ) { Text("Decline", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.WarningText) }
+        }
     }
 }
