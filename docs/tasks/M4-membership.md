@@ -10,7 +10,7 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 
 | Task | Status |
 |---|---|
-| T4.1 plan and decisions | Drafted (5 Nov 2026), waiting for the owner. |
+| T4.1 plan and decisions | Drafted (5 Nov 2026). D1 decided; D2 to D7 still open. |
 | T4.2 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -31,11 +31,17 @@ So M4 is mostly the data-layer operations, a small local store for join requests
 5. **Mockup 14 for a plain member** offers "Make admin" in place of "Remove admin role". The owner sees "Make owner", "Make admin" or "Remove admin role", and "Remove from group".
 6. **Names:** the admin sets the member's name when approving a join (decided 4 Nov); the name field is on the approval, with a live "name already taken" check.
 
+## Decisions made
+
+- **D1 (5 Nov 2026): how the person offered ownership answers.** A **banner at the top of that group's screen** ("Asha wants to make you the owner of Goa Trip") with **Accept** and **Decline**; a small **tag on the group's card in the Groups list** so it is seen without opening the group; and a **real Decline**: a new event, `OwnershipDeclined`, so the owner sees "Rohan declined". Accepting asks for a confirmation ("Become the owner of Goa Trip? You will be able to remove members, change the group key, and add and remove admins. Asha will become an admin."). Consequences:
+  - **Protocol change:** `OwnershipDeclined` takes the next free tag, **16**, with empty content. Only the offered person may write it (`NOT_ALLOWED` otherwise); it clears the pending offer. An old app that does not know tag 16 keeps it as an unknown event with no effect, so it never breaks. Needs PROTOCOL.md (rules and events table), WIRE_FORMAT.md (tag table, and "tags 1 to 16 are known"), the codec, replay, new wire vectors from the separate Python generator, and tests. Tests and vectors that used tag 16 as their example of an unknown tag use 17 instead.
+  - **Groups list:** the summary gets "an ownership offer is waiting for me" so the card shows the tag.
+  - Owner's side as in mockups 14b and 14c; after a decline the waiting screen says "Rohan declined" with a way to offer it to someone else.
+
 ## Decisions needed
 
 Each needs an answer from the owner before building (none has a mockup, or the mockup is silent).
 
-- **D1. How the person offered ownership accepts.** The mockups show only the owner's side ("Waiting for Rohan to accept"). The offered person needs a way to say yes.
 - **D2. The group key after a member leaves.** A leave does not change the key (decided 3 Nov), so the leaver can still read new entries until the owner changes it. The owner's phone could do it by itself when it sees a leave, or show a button.
 - **D3. Where a person edits their own name and phone.**
 - **D4. Where "Leave group" lives, and what the leaver sees afterwards** (their phone cannot be told it was removed until sync exists).
@@ -48,8 +54,8 @@ Each needs an answer from the owner before building (none has a mockup, or the m
 Every task is tests first, with the mutation check used in M3 (put the old behaviour back, a test must fail). Core and data tasks run on the JVM; screens are also checked on the emulator against the mockups.
 
 ### T4.2 Core helpers (pure Kotlin)
-Do: (a) `isNameTaken(state, name, except)`: one public function that replay and the screens both use, so the "name already taken" message can never disagree with the rule; (b) `cancelledEntries(log, state)`: the removed members' late events that replay cancelled (expense description, amount, payer; payments and other events as counts), per removed member; (c) `GroupState` helpers the screens need (who can do what: `canApproveJoins`, `canRemove`, `canTransfer`, derived from the role, never copied into the UI).
-Done when: tests for each, including the same name with capitals, spaces and a removed member's name; cancelled entries listed after a removal with a late event; permissions table tested for owner, admin and member.
+Do: (0) **the new event `OwnershipDeclined`** (tag 16, empty; offered person only; clears the offer; D1) in `EventBody`, the codec, replay, vectors and tests; (a) `isNameTaken(state, name, except)`: one public function that replay and the screens both use, so the "name already taken" message can never disagree with the rule; (b) `cancelledEntries(log, state)`: the removed members' late events that replay cancelled (expense description, amount, payer; payments and other events as counts), per removed member; (c) `GroupState` helpers the screens need (who can do what: `canApproveJoins`, `canRemove`, `canTransfer`, derived from the role, never copied into the UI).
+Done when: `OwnershipDeclined` is accepted from the offered person only, refused from anyone else or with no offer, clears the offer, survives encode and decode byte for byte, and an old decoder keeps it as an unknown event; tests for each helper, including the same name with capitals, spaces and a removed member's name; cancelled entries listed after a removal with a late event; permissions table tested for owner, admin and member.
 
 ### T4.3 Group operations in the data layer
 Do: on `GroupSession`: `approveJoin(request, name)`, `removeMember(member)` (new key made, sealed to the members who stay, **saved on the phone before the event is written and deleted again if the rules refuse the event**), `leave()`, `rotateKey()`, `makeAdmin`/`removeAdmin`, `offerOwnership(to)`, `cancelOffer()`, `acceptOwnership()`, `updateProfile(name, phone)`. Each returns what the core said (`Added` or the refusal reason) so the screen can say why.
@@ -72,8 +78,8 @@ Do: the before and after table from `previewRemoval`, the "Also left out of the 
 Done when: the table equals `previewRemoval` row for row; the payment line names who will owe again; removal writes the event and the new key; compared with mockup 13.
 
 ### T4.8 Ownership (mockups 14b and 14c, and D1)
-Do: "Make Rohan the owner?" with the corrected text and **Send request**; the waiting screen with **Cancel request**; the screen for the person offered, as decided in D1.
-Done when: offer, cancel, accept and the role change (the old owner becomes an admin) on two identities; the screens follow the mockups.
+Do: "Make Rohan the owner?" with the corrected text and **Send request**; the waiting screen with **Cancel request** (and "Rohan declined" after a decline); for the person offered, the banner with **Accept** and **Decline** on the group screen and the tag on the group's card in the Groups list (D1).
+Done when: offer, cancel, decline, accept and the role change (the old owner becomes an admin) on two identities; the banner and the tag appear only for the offered person and go away when the offer ends; the screens follow the mockups.
 
 ### T4.9 Join requests screen (mockup 11)
 Do: waiting requests with Decline and Approve; Approve opens the name field (filled with the requested name, live "already taken" check, 20-member message); the "Open invites" section is left out until M6.
