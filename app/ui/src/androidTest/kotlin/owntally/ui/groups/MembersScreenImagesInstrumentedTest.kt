@@ -57,4 +57,20 @@ class MembersScreenImagesInstrumentedTest {
         rule.onNodeWithText("Join requests").assertIsDisplayed()
         save("members-owner")
     }
+
+    @Test
+    fun saveTheMemberActionsScreen() {
+        rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        val model = MemberActionsModel(
+            "Rohan", "R", 1, "+91 98765 43210 · Admin",
+            listOf(
+                MemberAction(ActionKind.MAKE_OWNER, "Make owner", "You become an admin. Rohan must accept."),
+                MemberAction(ActionKind.REMOVE_ADMIN, "Remove admin role", "Rohan stays in the group as a member."),
+                MemberAction(ActionKind.REMOVE, "Remove from group", "See how balances change first.", destructive = true),
+            ),
+        )
+        rule.setContent { OwnTallyTheme { Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) { MemberActionsScreen(model, onClose = {}, onAction = {}) } } }
+        rule.onNodeWithText("Make owner").assertIsDisplayed()
+        save("member-actions")
+    }
 }

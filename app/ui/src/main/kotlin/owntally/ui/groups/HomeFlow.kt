@@ -72,7 +72,8 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
             Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
-            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back)
+            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) })
+            is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back)
             is Screen.AddExpense -> AddExpenseRoute(sessions, screen.id, onDone = back)
             is Screen.Group -> GroupRoute(
                 sessions, screen.id, debugTools, onBack = back,
@@ -317,7 +318,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit) {
+private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -328,5 +329,46 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
     }
     val view by s.view.collectAsStateWithLifecycle()
     val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
-    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack)
+    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) })
+}
+
+@Composable
+private fun MemberActionsRoute(sessions: Sessions, id: GroupId, member: owntally.model.PublicKey, onClose: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val model = remember(view) { MemberActionsModels.build(view, member) }
+    val scope = rememberCoroutineScope()
+    var error by remember { mutableStateOf<String?>(null) }
+    if (model == null) {
+        // The person is gone, or this phone may not act on them any more.
+        LaunchedEffect(Unit) { onClose() }
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    MemberActionsScreen(model, onClose, error = error, onAction = { kind ->
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                when (kind) {
+                    ActionKind.MAKE_ADMIN -> s.makeAdmin(member)
+                    ActionKind.REMOVE_ADMIN -> s.removeAdmin(member)
+                    // Make owner and Remove from group have their own screens (T4.8, T4.7).
+                    ActionKind.MAKE_OWNER, ActionKind.REMOVE -> null
+                }
+            }
+            when (r) {
+                is owntally.data.session.AddResult.Added -> onClose()
+                is owntally.data.session.AddResult.Refused -> error = "That can't be done now (${r.reason.name.lowercase().replace('_', ' ')})."
+                is owntally.data.session.AddResult.Invalid -> error = r.problem
+                owntally.data.session.AddResult.NoKey -> error = "This phone doesn't have the group's key yet."
+                null -> Unit
+            }
+        }
+    })
 }

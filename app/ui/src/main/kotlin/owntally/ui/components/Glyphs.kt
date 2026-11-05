@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** The small line icons of the mockups, drawn here so the app needs no icon library. */
-enum class Glyph { GROUPS, SETTLE, SYNC, ABOUT, BACK, PLUS, PHONE, PERSON_ADD, MORE, CHEVRON }
+enum class Glyph { GROUPS, SETTLE, SYNC, ABOUT, BACK, PLUS, PHONE, PERSON_ADD, MORE, CHEVRON, CLOSE }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 24.dp, modifier: Modifier = Modifier) {
@@ -65,6 +65,10 @@ fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 24.dp, modifier: Modifier =
                 drawLine(color, p(0.66f, 0.32f), p(0.9f, 0.32f), s.width, StrokeCap.Round)
             }
             Glyph.MORE -> for (y in listOf(0.24f, 0.5f, 0.76f)) drawCircle(color, w * 0.07f, p(0.5f, y))
+            Glyph.CLOSE -> {
+                drawLine(color, p(0.24f, 0.24f), p(0.76f, 0.76f), s.width, StrokeCap.Round)
+                drawLine(color, p(0.76f, 0.24f), p(0.24f, 0.76f), s.width, StrokeCap.Round)
+            }
             Glyph.CHEVRON -> {
                 drawLine(color, p(0.38f, 0.2f), p(0.66f, 0.5f), s.width, StrokeCap.Round)
                 drawLine(color, p(0.66f, 0.5f), p(0.38f, 0.8f), s.width, StrokeCap.Round)

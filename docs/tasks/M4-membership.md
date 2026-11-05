@@ -15,7 +15,8 @@ Goal (BUILD_PLAN): members, owner, admins, join requests, approve or decline, re
 | T4.3 group operations | Done (5 Nov 2026), see below. |
 | T4.4 join requests | Done (5 Nov 2026), see below. |
 | T4.5 members screen | Done (5 Nov 2026), see below. |
-| T4.6 to T4.14 | Not started. |
+| T4.6 member actions | Done (5 Nov 2026), see below. |
+| T4.7 to T4.14 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -108,6 +109,9 @@ Done when: model tests for owner, admin, member views; model tests for the three
 ### T4.6 Member actions (mockup 14)
 Do: the screen for one member: Make owner, Make admin or Remove admin role, Remove from group, by who is looking and who is looked at (the owner cannot act on themselves).
 Done when: model tests for every combination of viewer and target; compared with mockup 14.
+
+
+**T4.6 result (5 Nov 2026).** `MemberActionsModels.build(view, target)` (pure, 8 JVM tests): for the owner looking at an admin: Make owner, Remove admin role, Remove from group; at a member: Make owner, Make admin, Remove from group; nothing (null) for the owner on themselves, for an admin or a member on anyone (every viewer and target combination is tested), and for a person who is not in the group. The words follow design/14 ("You become an admin. Rohan must accept."; "Rohan stays in the group as a member."; "See how balances change first."). The screen (`MemberActionsScreen`, route `Screen.MemberActions`, opened from the "…" menu, which is now drawn for the owner) was compared with design/14 on the emulator (picture from `MembersScreenImagesInstrumentedTest`) and matches. Make admin and Remove admin role work (they call `makeAdmin`/`removeAdmin`, close the screen, and show the core's reason if refused). **Not wired yet, on purpose:** Make owner (T4.8) and Remove from group (T4.7) do nothing until their screens exist. Three rules checked by putting the old behaviour back (an admin may act, the owner may act on themselves, a removed person may be acted on): each failed tests.
 
 ### T4.7 Remove member (mockup 13)
 Do: the before and after table from `previewRemoval`, the "Also left out of the group" box (counts of expenses, shares and payments, with the payments listed by who paid whom), the confirmation, and the result. Uses T4.3 `removeMember`.
