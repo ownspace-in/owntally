@@ -209,4 +209,17 @@ class GroupScreenModelsTest {
         assertEquals(listOf(true, true, false, true), Tab.entries.map { it.enabled })
         assertTrue(SyncPlaceholder.TEXT.contains("stored only on this phone"))
     }
+
+    @Test fun aGroupTheOwnerRemovedYouFromSaysSoOnItsCardAndStopsShowingNumbers() {
+        val g = owntally.data.session.GroupSummary(owntally.model.GroupId(ByteArray(16) { 3 }), "Goa Trip", 0, 4, 6, owntally.model.Money(12_300), true, youWereRemoved = true)
+        val card = GroupsModels.list(listOf(g)).cards.single()
+        assertEquals(true, card.removed)
+        assertEquals("You were removed from this group", card.subtitle)
+        val normal = GroupsModels.list(listOf(g.copy(youWereRemoved = false))).cards.single()
+        assertEquals(false, normal.removed)
+        assertEquals("4 members · 6 expenses", normal.subtitle)
+        // what a removed person is owed no longer counts in the totals on the Groups screen
+        val totals = GroupsModels.list(listOf(g, g.copy(groupId = owntally.model.GroupId(ByteArray(16) { 4 }), youWereRemoved = false)))
+        assertEquals(owntally.model.format.MoneyFormat.describe(owntally.model.Money(12_300)), totals.owed, "only the group that has not removed you")
+    }
 }

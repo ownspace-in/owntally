@@ -416,4 +416,84 @@ class SyncEngineTest {
             assertEquals(2, versions(a, 1, 4).size, "limit $limit")
         }
     }
+
+    // ---- who may connect, and what a limited peer gets (S2, T5.7) --------------------------------------------------------------
+
+    @Test fun aPeerThatIsRefusedGetsOnlyAnErrorAndLearnsNothingAboutTheGroup() = runTest {
+        val b = store(1 to 1L..5L)
+        val before = all(b)
+        val raw = connect()
+        val seen = ArrayList<SyncMessage>()
+        val r = coroutineScope {
+            val answer = async { SyncEngine(room, b, access = { Admission.Refuse }).run(raw.b, SyncRole.RESPONDER) }
+            launch {
+                raw.a.send(SyncCodec.encode(SyncMessage.Hello(room, InMemorySyncStore(group).summary())))
+                raw.a.send(batch(envelope(9, 1)))
+            }
+            launch { raw.a.received.collect { seen += (SyncCodec.decode(it) as Decoded.Ok).message } }
+            answer.await().also { raw.b.close() }
+        }
+        assertEquals(SyncOutcome.REFUSED, r.outcome)
+        assertEquals(ErrorCode.NOT_ALLOWED, r.error)
+        assertEquals(listOf<SyncMessage>(SyncMessage.Error(ErrorCode.NOT_ALLOWED, "not allowed")), seen.map { if (it is SyncMessage.Error) SyncMessage.Error(it.code, "not allowed") else it }, "one Error, no Hello, no summary, no envelopes")
+        assertEquals(before, all(b), "nothing the refused peer sent was stored")
+    }
+
+    @Test fun aPhoneThatIsAskedToSyncWithSomeoneItRefusesSendsNothingAtAll() = runTest {
+        val a = store(1 to 1L..5L)
+        val raw = connect()
+        val received = ArrayList<ByteArray>()
+        val r = coroutineScope {
+            launch { raw.b.received.collect { received += it } }
+            val x = SyncEngine(room, a, access = { Admission.Refuse }).run(raw.a, SyncRole.INITIATOR)
+            raw.a.close()
+            x
+        }
+        assertEquals(SyncOutcome.REFUSED, r.outcome)
+        assertEquals(ErrorCode.NOT_ALLOWED, r.error)
+        assertEquals(0, received.size)
+    }
+
+    @Test fun aLimitedPeerIsSentOnlyWhatItMayHaveSeesOnlyTheSummaryItMayAndTheEventsItHandsOverAreStored() = runTest {
+        val given = envelope(2, 3) // stands in for the removal event: the one envelope the limited peer may be given
+        val full = store(1 to 1L..5L, 2 to 1L..3L)
+        val limited = store(2 to 1L..2L, 3 to 1L..2L) // the limited peer also has two events by an author the full phone lacks
+        val limitedBefore = all(limited)
+        val visible = { InMemorySyncStore(group).also { it.offer(envelope(2, 1)) }.summary() } // all the limited peer may be told
+        val access = PeerAccess { Admission.Limited(visible, listOf(given)) }
+        val (rLimited, rFull) = sync(limited, full, engineB = SyncEngine(room, full, access = access))
+        assertEquals(SyncOutcome.COMPLETED, rLimited.outcome)
+        assertEquals(SyncOutcome.COMPLETED, rFull.outcome)
+        assertEquals(1, rLimited.stored, "the limited peer received one envelope")
+        assertEquals(setOf(given.toList()), all(limited) - limitedBefore, "and it is the one it may have")
+        assertEquals(visible(), rLimited.peerSummary, "it was shown only the summary it may see")
+        assertEquals(2, rFull.stored, "what the limited peer handed over (author 3) is stored")
+        assertEquals(3L, full.summary().entries.getValue(who(2).publicKey).counter)
+        assertEquals(2L, full.summary().entries.getValue(who(3).publicKey).counter)
+        assertEquals(emptySet(), rLimited.reconciled + rFull.reconciled)
+    }
+
+    @Test fun aLimitedPeerWhoMayReceiveNothingGetsNothingButItsEventsAreStoredAndTheAnswerShowsWhatWasStored() = runTest {
+        val full = store(1 to 1L..5L)
+        val leaver = store(2 to 1L..4L)
+        val ownEntry = { full.summary().entries.filterKeys { it == who(2).publicKey }.let { SyncSummary(it) } }
+        val access = PeerAccess { Admission.Limited(ownEntry, emptyList()) }
+        val (rLeaver, rFull) = sync(leaver, full, engineB = SyncEngine(room, full, access = access))
+        assertEquals(0, rLeaver.stored, "nothing sent to it")
+        assertEquals(4, rFull.stored)
+        assertEquals(setOf(who(2).publicKey), rLeaver.peerFinal!!.entries.keys, "the answer names only the leaver's own author")
+        assertEquals(4L, rLeaver.peerFinal!!.entries.getValue(who(2).publicKey).counter, "and proves the four events arrived")
+        assertEquals(emptySet(), rLeaver.peerSummary!!.entries.keys, "the opening summary showed nothing of the group: the leaver had written nothing the phone held yet")
+    }
+
+    @Test fun aLimitedPhoneThatConnectsToAFullOneWhichFindsADifferenceInVersionsDoesNotLeaveItWaiting() = runTest {
+        // The limited phone holds a different version of X#1 than the full one: the full phone sends a Reconcile and waits for an answer.
+        val limited = InMemorySyncStore(group).also { it.offer(envelope(1, 1, tag = 0)) }
+        val full = InMemorySyncStore(group).also { it.offer(envelope(1, 1, tag = 5)) }
+        val access = PeerAccess { Admission.Limited({ limited.summary() }, emptyList()) }
+        val (rLimited, rFull) = sync(limited, full, engineA = SyncEngine(room, limited, access = access))
+        assertEquals(SyncOutcome.COMPLETED, rLimited.outcome, "the limited initiator answers the request")
+        assertEquals(SyncOutcome.COMPLETED, rFull.outcome, "and the full phone is not left to time out")
+        assertEquals(1, versions(full, 1, 1).size, "the limited phone sent no versions of its own: the full phone still has only its own")
+    }
 }

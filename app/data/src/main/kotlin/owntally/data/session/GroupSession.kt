@@ -50,6 +50,11 @@ data class GroupView(
     val unreadableKeyEpochs: Set<Long>,
     /** Late entries of removed or departed members that the rules cancelled, in event order (M4, D5b). */
     val cancelled: List<owntally.model.CancelledEntry> = emptyList(),
+    /**
+     * The owner removed this person (S2): a removal event naming this phone's key, written by the owner as this phone knows them, has
+     * arrived. It may not be applied (it depends on events this phone never had), so the state can still list the person as a member.
+     */
+    val youWereRemoved: Boolean = false,
 )
 
 sealed class AddResult {
@@ -105,8 +110,29 @@ class GroupSession(
     fun refresh() {
         sync()
         publish()
-        if (leaveNotCoveredByTheKey()) rotateKey()
+        if (seen.size != dutyBlockedAt && leaveNotCoveredByTheKey()) {
+            val result = rotateKey()
+            lastDutyResult = result
+            // A refused change is not tried again until something new has arrived: the same log would be refused the same way.
+            if (result is AddResult.Added) dutyRotations++
+            dutyBlockedAt = if (result is AddResult.Added) -1 else seen.size
+        }
     }
+
+    /** How many envelopes had been read when the owner's key change was last refused (-1: not blocked). */
+    private var dutyBlockedAt = -1
+
+    /** How many key changes the owner's phone made by itself (for tests: it should be a few, never one per refresh). */
+    internal var dutyRotations = 0
+        private set
+
+    /** Whether the owner's duty would still change the key now (for tests: after everything has settled this must be false). */
+    @Synchronized
+    internal fun keyChangeStillNeeded(): Boolean = leaveNotCoveredByTheKey()
+
+    /** The outcome of the owner's last automatic key change, for tests. */
+    internal var lastDutyResult: AddResult? = null
+        private set
 
     /**
      * Owner only (D2, and S7 in M5): the key in use no longer fits the group (someone left whom the key change had not seen, or a member
@@ -191,7 +217,10 @@ class GroupSession(
             throw e
         }
         if (result !is AddResult.Added) secrets.deleteGroupKey(groupId, epoch)
-        refresh()
+        // Take in the new key and publish, but do not run the owner's duty again from here: refresh() calls this, and a rotation the
+        // rules keep refusing would otherwise call itself without end.
+        sync()
+        publish()
         return result
     }
 
@@ -338,8 +367,21 @@ class GroupSession(
             counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), rejected.size, damaged, deferred.size),
             unreadableKeyEpochs = unreadableKeyEpochs,
             cancelled = owntally.model.cancelledEntries(log, s),
+            youWereRemoved = wasRemovedByOwner(s),
         )
     }
+
+    /** A removal of this phone's key by the owner, applied or only received (S2). A removal by anyone else, or a forged one, does not count. */
+    private fun wasRemovedByOwner(s: GroupState): Boolean {
+        val applied = s.removals[me.publicKey]
+        if (applied != null) return applied.by != me.publicKey
+        val owner = s.owner ?: return false
+        return log.allEvents().any { e -> e.author == owner && (e.body as? EventBody.MemberRemoved)?.member == me.publicKey }
+    }
+
+    /** The event with this id as read by this phone, or null (used to know what a removed person may be told). */
+    @Synchronized
+    fun eventOf(id: EventId): Event? = log.allEvents().firstOrNull { it.id == id }
 
     private fun publish() {
         state.value = compute()

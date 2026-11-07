@@ -31,6 +31,10 @@ class SimReport(
     val envelopes: Int,
     /** How many times a cheating phone handed a different version of one of its events to another phone. */
     val forks: Int,
+    /** How often the owner's automatic key change was refused by the rules, by reason. */
+    val dutyRefusals: Map<String, Int>,
+    /** The most automatic key changes any one phone made in this scenario. */
+    val maxRotations: Int,
     val log: List<String>,
 )
 
@@ -45,12 +49,15 @@ class SimFailure(message: String, val report: SimReport?) : AssertionError(messa
  */
 class Simulation(private val seed: Long, private val steps: Int = 70) {
     private val random = Random(seed)
+    private val startedAt = System.nanoTime()
     private val log = ArrayList<String>()
     private val outcomes = java.util.EnumMap<SyncOutcome, Int>(SyncOutcome::class.java)
     private var syncs = 0
     private var operations = 0
     private var nameCounter = 0
     private var forks = 0
+    private var maxRotations = 0
+    private val dutyRefusals = java.util.TreeMap<String, Int>()
     private lateinit var devices: List<SimDevice>
     private lateinit var network: SimNetwork
 
@@ -97,7 +104,7 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
 
     private fun report(faults: SimFaults, rounds: Int) = SimReport(
         seed, devices.size, faults, operations, syncs, outcomes.toMap(), network.messagesLost, network.linksBroken, rounds,
-        devices[0].syncStore().summary().entries.values.sumOf { it.counter.toInt() }, forks, log.toList(),
+        devices[0].syncStore().summary().entries.values.sumOf { it.counter.toInt() }, forks, dutyRefusals.toMap(), maxRotations, log.toList(),
     )
 
     // ---- what the phones do ---------------------------------------------------------------------------------------------
@@ -164,19 +171,25 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
 
     private suspend fun oneSync(a: SimDevice, b: SimDevice): Pair<SyncResult, SyncResult> {
         syncs++
+        val seconds = (System.nanoTime() - startedAt) / 1_000_000_000
+        if (seconds > 90) {
+            val events = devices.maxOf { it.env.groups.rawEnvelopes(it.group).size }
+            fail("this scenario is taking more than 90 seconds (after $syncs syncs and $operations operations); the largest log has $events envelopes")
+        }
         val (la, lb) = network.link(a.key, b.key)
         val room = GroupRoom.fromGroupId(a.group.bytes())
         val sa = a.syncStore()
         val sb = b.syncStore()
         val (ra, rb) = coroutineScope {
-            val x = async { SyncEngine(room, sa).run(la, SyncRole.INITIATOR).also { endIfNotDone(it, la) } }
-            val y = async { SyncEngine(room, sb).run(lb, SyncRole.RESPONDER).also { endIfNotDone(it, lb) } }
+            val x = async { SyncEngine(room, sa, access = owntally.data.session.MembershipAccess(a.session, sa)).run(la, SyncRole.INITIATOR).also { endIfNotDone(it, la) } }
+            val y = async { SyncEngine(room, sb, access = owntally.data.session.MembershipAccess(b.session, sb)).run(lb, SyncRole.RESPONDER).also { endIfNotDone(it, lb) } }
             x.await() to y.await()
         }
         outcomes.merge(ra.outcome, 1, Int::plus)
         outcomes.merge(rb.outcome, 1, Int::plus)
         a.session.refresh()
         b.session.refresh()
+        for (d in listOf(a, b)) d.session.lastDutyResult?.let { if (it !is owntally.data.session.AddResult.Added) { note("${d.name}: the owner's automatic key change was refused: $it"); dutyRefusals.merge(it.toString().take(60), 1, Int::plus) } }
         note("sync ${a.name}->${b.name}: ${ra.outcome}/${rb.outcome} stored ${ra.stored}/${rb.stored}")
         return ra to rb
     }
@@ -204,47 +217,61 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
     private fun fail(what: String): Nothing = throw SimFailure("seed $seed: $what\n--- last operations ---\n${log.takeLast(400).joinToString("\n")}", null)
 
     private fun check(devices: List<SimDevice>) {
-        // 1. Every phone holds the same envelopes.
         fun content(d: SimDevice): Set<String> = d.syncStore().let { s ->
             s.summary().entries.keys.flatMap { s.versionsOf(it) }.map { b -> b.joinToString("") { "%02x".format(it) } }.toSet()
         }
-        val reference = content(devices[0])
-        for (d in devices.drop(1)) {
-            val c = content(d)
-            if (c != reference) fail("${d.name} holds ${c.size} envelopes and ${devices[0].name} holds ${reference.size}: ${(c - reference).size} only here, ${(reference - c).size} only there")
-            if (d.syncStore().summary() != devices[0].syncStore().summary()) fail("the summaries of ${d.name} and ${devices[0].name} differ")
+        // 0. Once everything has settled, no owner's phone still wants to change the key, and none changed it again and again.
+        for (d in devices) {
+            if (d.session.keyChangeStillNeeded()) fail("${d.name} is the owner and still wants to change the key after everything settled")
+            if (d.session.dutyRotations > 25) fail("${d.name} changed the key by itself ${d.session.dutyRotations} times in one scenario")
+            maxRotations = maxOf(maxRotations, d.session.dutyRotations)
         }
-        // 2. Nothing was lost or damaged on any phone.
+        // 1. Nothing was damaged on any phone.
         for (d in devices) {
             val v = d.session.view.value
             if (v.counts.damaged != 0) fail("${d.name} has ${v.counts.damaged} damaged envelopes")
         }
-        // 3. Every phone that can read the whole log computes the same state, balances and plan.
+        // 2. Find the members at the end from a phone that can read the whole log.
         val readers = devices.filter { d -> d.session.view.value.let { it.counts.waitingForKey.isEmpty() && it.counts.unreadable == 0 } }
-        if (readers.isEmpty()) fail("no phone can read the whole log")
-        val ref = readers[0].session.view.value
-        for (d in readers.drop(1)) {
+        val ref = readers.firstOrNull { d -> d.key in d.session.view.value.state.currentMembers }?.session?.view?.value ?: fail("no member can read the whole log")
+        val memberKeys = ref.state.currentMembers.keys
+        val members = devices.filter { it.key in memberKeys }
+        val others = devices - members.toSet()
+        // 3. Every member holds the same envelopes, and has the same state, balances and plan. Someone who left or was removed holds only
+        //    part of the log (they are sent little or nothing), and nothing that the members lack (what they wrote was handed over).
+        val reference = content(members[0])
+        for (d in members.drop(1)) {
+            val c = content(d)
+            if (c != reference) fail("member ${d.name} holds ${c.size} envelopes and ${members[0].name} holds ${reference.size}: ${(c - reference).size} only here, ${(reference - c).size} only there")
+            if (d.syncStore().summary() != members[0].syncStore().summary()) fail("the summaries of ${d.name} and ${members[0].name} differ")
+        }
+        // (Another version of an event the members already hold is allowed: someone who is no longer a member takes no part in comparing
+        // fingerprints, so a forged second version handed only to them never reaches the members, and does not need to.)
+        val memberIds = reference.map { hex -> Envelope.decode(ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }).let { it.author to it.counter } }.toSet()
+        for (d in others) {
+            val extra = (content(d) - reference).filter { hex ->
+                Envelope.decode(ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }).let { it.author to it.counter } !in memberIds
+            }
+            if (extra.isNotEmpty()) fail("${d.name} is no longer a member but holds ${extra.size} envelopes the members lack")
+        }
+        for (d in members) {
             val v = d.session.view.value
+            if (d !in readers) fail(
+                "${d.name} is a member but cannot read all of the log: waiting for epochs ${v.counts.waitingForKey}, unreadable ${v.counts.unreadable}\n" +
+                    dump(d) + "\n" + devices.joinToString("\n") { x -> "${x.name} (${x.key.toHex().take(6)}): epoch ${x.session.view.value.state.epoch}, waiting ${x.session.view.value.counts.waitingForKey}" },
+            )
             if (v.state != ref.state) {
                 val odd = (ref.state.ignored.toSet() xor v.state.ignored.toSet()).map { it.id }
                 val detail = odd.joinToString("\n") { id ->
                     devices.joinToString(" ") { x ->
                         val stored = x.env.groups.rawEnvelopes(x.group).map { Envelope.decode(it) }.filter { it.author == id.author && it.counter == id.counter }
-                        "${x.name}: stored ${stored.size} (epochs ${stored.map { it.epoch }}), reason ${x.session.view.value.state.ignored.firstOrNull { it.id == id }?.reason}, applied ${id in x.session.view.value.state.expenses || x.session.view.value.state.members.containsKey(id.author)}, counts ${x.session.view.value.counts}"
+                        "${x.name}: stored ${stored.size}, reason ${x.session.view.value.state.ignored.firstOrNull { it.id == id }?.reason}"
                     }
                 }
-                fail("the state on ${d.name} differs from ${readers[0].name}: ${diff(ref.state, v.state)}\n$detail")
+                fail("the state on ${d.name} differs from a reference member: ${diff(ref.state, v.state)}\n$detail")
             }
-            if (v.balances != ref.balances) fail("the balances on ${d.name} differ from ${readers[0].name}")
-            if (v.plan != ref.plan) fail("the settlement plan on ${d.name} differs from ${readers[0].name}")
-        }
-        // 4. Everyone who is a member at the end can read the whole log (they got every key that was sent to them).
-        for (m in ref.state.currentMembers.keys) {
-            val d = devices.first { it.key == m }
-            if (d !in readers) fail(
-                "${d.name} is a member but cannot read all of the log: waiting for epochs ${d.session.view.value.counts.waitingForKey}, unreadable ${d.session.view.value.counts.unreadable}\n" +
-                    dump(d) + "\n" + devices.joinToString("\n") { x -> "${x.name} (${x.key.toHex().take(6)}): epoch ${x.session.view.value.state.epoch}, ignored ${x.session.view.value.state.ignored.filter { it.reason != owntally.model.IgnoreReason.AFTER_REMOVAL }}, waiting ${x.session.view.value.counts.waitingForKey}" },
-            )
+            if (v.balances != ref.balances) fail("the balances on ${d.name} differ")
+            if (v.plan != ref.plan) fail("the settlement plan on ${d.name} differs")
         }
     }
 

@@ -130,6 +130,15 @@ The entries are in ascending author order with no duplicates. `counter` is the h
 
 **Strict decoding**, as in section 4: wrong magic, a version other than 1, an unknown type, a short or long message, trailing bytes, unsorted or duplicate summary entries, a counter of 0, a count or length over its limit, an empty `Envelopes`, an unknown error code, or text that is not valid UTF-8 are all refusals. A newer `version` is refused with code 1, an envelope or a batch over its size limit with code 4, and every other fault (including an unknown `type`) with code 5, so the other side can be told.
 
+### Who may have what (S2, T5.7)
+
+Before anything is sent, the phone decides by the key of the link what the peer may have (`PeerAccess`, `Admission`):
+- **A key that was never a member of the group: refused.** A phone that was connected to answers with one `Error` (code 3) and nothing else, not even a `Hello`; one that connected says nothing. The peer learns no summary and receives no envelope, and whatever it sent is not read.
+- **A member: everything**, as above.
+- **Someone the owner removed: limited.** Their `Hello` is answered with a summary clipped to what the removal event had seen (its `after` clock, with the fingerprints at those counters) plus their own entry, they are sent exactly one envelope, the removal event (written under the key they hold, so they can read it), no fingerprints are compared with them, and no `Reconcile` from them is answered. What they hand over is stored as usual.
+- **Someone who left on their own: sent nothing.** The summary they see holds only their own entry; the responder's closing `Done` carries that entry after storing what they sent, which proves their leave arrived.
+- A phone decides again after it has read what the peer sent, before it sends its own part: a leaver's first connection arrives as a member's, and the leave is in what they send.
+
 ### Fingerprint (S1)
 
 Counters alone cannot show that two phones hold different versions of the same event (same author and counter). The fingerprint of an author's events changes if any version differs:
@@ -146,4 +155,3 @@ fp(c) = first 16 bytes of SHA-256( 'OTFP1' | fp(c-1) | c u64 | n u8 | h(1) ... h
 ### Test vectors
 
 `app/sync/src/test/resources/fixtures/sync-vectors.json` holds valid messages, invalid byte sequences (with the refusal), and fingerprint chains, with exact hex, made by an independent encoder written from this section (`app/sync/src/test/tools/sync_vectors.py`) before the Kotlin codec.
-

@@ -26,6 +26,8 @@ data class GroupCardModel(
     val readable: Boolean,
     /** Someone offered this person the ownership and they have not answered (the tag on the card). */
     val ownershipOffer: Boolean = false,
+    /** The owner removed this person: the card says so, whatever the balance was. */
+    val removed: Boolean = false,
 )
 
 data class GroupsListModel(val owed: BalanceView, val owe: BalanceView, val cards: List<GroupCardModel>)
@@ -45,10 +47,10 @@ object GroupsModels {
     }
 
     /** The Settle tab: every group that can be opened, settled or not. */
-    fun settleTabCards(cards: List<GroupCardModel>): List<GroupCardModel> = cards.filter { it.readable }
+    fun settleTabCards(cards: List<GroupCardModel>): List<GroupCardModel> = cards.filter { it.readable && !it.removed }
 
     fun list(summaries: List<GroupSummary>): GroupsListModel {
-        val readable = summaries.filter { it.readable }
+        val readable = summaries.filter { it.readable && !it.youWereRemoved }
         val owed = readable.map { it.myBalance }.filter { it.isPositive() }.fold(Money.ZERO) { a, b -> a + b }
         val owe = readable.map { it.myBalance }.filter { it.isNegative() }.fold(Money.ZERO) { a, b -> a + -b }
         return GroupsListModel(
@@ -60,7 +62,7 @@ object GroupsModels {
                     name = it.name,
                     initials = initials(it.name),
                     colourIndex = it.colourIndex,
-                    subtitle = if (it.readable) {
+                    subtitle = if (it.youWereRemoved) "You were removed from this group" else if (it.readable) {
                         "${plural(it.memberCount, "member", "members")} · ${plural(it.expenseCount, "expense", "expenses")}"
                     } else {
                         "Waiting for the group key"
@@ -68,6 +70,7 @@ object GroupsModels {
                     balance = MoneyFormat.describe(it.myBalance),
                     readable = it.readable,
                     ownershipOffer = it.ownershipOfferForMe,
+                    removed = it.youWereRemoved,
                 )
             },
         )

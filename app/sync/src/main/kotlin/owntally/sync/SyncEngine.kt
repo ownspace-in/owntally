@@ -47,6 +47,30 @@ data class SyncResult(
     val detail: String,
 )
 
+/** What this phone does for a peer that connects or is connected to (decision S2, T5.7). */
+sealed class Admission {
+    /** A member: everything is exchanged. */
+    data object Full : Admission()
+
+    /** Someone who was never a member: nothing is sent and nothing they send is read. They get an `Error` and nothing else. */
+    data object Refuse : Admission()
+
+    /**
+     * Someone who is no longer a member: they are shown only [summary] (computed again when it is sent, so it can show what was just
+     * stored), are sent only [send], and no fingerprints are compared with them. What they hand over is stored as usual.
+     */
+    class Limited(val summary: () -> SyncSummary, val send: List<ByteArray>) : Admission()
+}
+
+/** Decides, by the key the link was opened with, what a peer may have. The engine asks before it sends anything. */
+fun interface PeerAccess {
+    fun admit(peer: PublicKey): Admission
+
+    companion object {
+        val EVERYONE = PeerAccess { Admission.Full }
+    }
+}
+
 /**
  * One sync of one group over one [Link] (docs/WIRE_FORMAT.md section 6). Both sides send a `Hello`; the initiator then sends what the
  * responder lacks and a `Done`; the responder, having stored it, sends what the initiator lacks and a `Done` with its summary after
@@ -60,6 +84,8 @@ class SyncEngine(
     private val stallTimeoutMs: Long = 30_000,
     /** A peer that sends more bad envelopes than this in one sync is cut off. */
     private val maxBadEnvelopes: Int = 20,
+    /** Who may have what (S2). The default is everyone, for a store whose caller has already decided. */
+    private val access: PeerAccess = PeerAccess.EVERYONE,
 ) {
     suspend fun run(link: Link, role: SyncRole): SyncResult = coroutineScope {
         val inbox = Channel<ByteArray>(Channel.UNLIMITED)
@@ -91,32 +117,51 @@ class SyncEngine(
         val reconciled = LinkedHashSet<PublicKey>()
 
         suspend fun execute(): SyncResult = try {
-            send(SyncMessage.Hello(room, store.summary()))
+            val admission = access.admit(link.peer)
+            if (admission is Admission.Refuse) {
+                // Before a single summary or envelope is sent. A phone that was connected to tells the peer; one that connected says nothing.
+                throw if (role == SyncRole.RESPONDER) refuse(ErrorCode.NOT_ALLOWED, "not allowed") else Stop(SyncOutcome.REFUSED, ErrorCode.NOT_ALLOWED, "not allowed")
+            }
+            var limited = admission as? Admission.Limited
+            fun mySummary() = limited?.summary?.invoke() ?: store.summary()
+            send(SyncMessage.Hello(room, mySummary()))
             val hello = next() as? SyncMessage.Hello ?: throw refuse(ErrorCode.INVALID, "the first message must be a Hello")
             if (hello.room != room) throw refuse(ErrorCode.WRONG_GROUP, "this is another group")
             peerSummary = hello.summary
-            val owed = owedTo(hello.summary) // worked out before anything arrives, so what the peer sends is not sent back
-            val mismatched = mismatches(hello.summary) // authors whose versions differ from the peer's (S1)
+            val owed = limited?.send ?: owedTo(hello.summary) // worked out before anything arrives, so what the peer sends is not sent back
+            val mismatched = if (limited != null) emptyList() else mismatches(hello.summary) // authors whose versions differ from the peer's (S1)
             when (role) {
                 SyncRole.INITIATOR -> {
                     for (author in mismatched) { send(SyncMessage.Reconcile(author)); reconciled += author }
                     sendEnvelopes(distinct(owed + mismatched.flatMap { store.versionsOf(it) }))
-                    send(SyncMessage.Done(store.summary()))
+                    send(SyncMessage.Done(mySummary()))
                     val asked = receiveRound()
                     // The responder found a difference we could not see (its history is longer): send it every version we hold of those.
+                    // It waits for our last Done whenever it asked, so a limited phone answers too, with no envelopes: it is not a member.
                     if (asked.isNotEmpty()) {
-                        reconciled += asked
-                        sendEnvelopes(distinct((asked - mismatched.toSet()).flatMap { store.versionsOf(it) }))
-                        send(SyncMessage.Done(store.summary()))
+                        if (limited == null) {
+                            reconciled += asked
+                            sendEnvelopes(distinct((asked - mismatched.toSet()).flatMap { store.versionsOf(it) }))
+                        }
+                        send(SyncMessage.Done(mySummary()))
                     }
                 }
                 SyncRole.RESPONDER -> {
-                    val asked = receiveRound()
+                    var asked = receiveRound().let { if (limited != null) emptySet() else it }
+                    // What the peer handed over may have changed who they are (their leave, for one): decide again before sending our part.
+                    if (limited == null) {
+                        when (val again = access.admit(link.peer)) {
+                            is Admission.Limited -> { limited = again; asked = emptySet() }
+                            Admission.Refuse -> { limited = Admission.Limited({ SyncSummary(emptyMap()) }, emptyList()); asked = emptySet() }
+                            Admission.Full -> Unit
+                        }
+                    }
                     reconciled += asked
-                    for (author in mismatched) { send(SyncMessage.Reconcile(author)); reconciled += author }
-                    sendEnvelopes(distinct(owed + (asked + mismatched).flatMap { store.versionsOf(it) }))
-                    send(SyncMessage.Done(store.summary()))
-                    if (mismatched.isNotEmpty()) receiveRound() // the initiator's answer to our Reconcile
+                    val send = limited?.let { it.send } ?: (owed + (asked + mismatched).flatMap { store.versionsOf(it) })
+                    for (author in if (limited != null) emptyList() else mismatched) { send(SyncMessage.Reconcile(author)); reconciled += author }
+                    sendEnvelopes(distinct(send))
+                    send(SyncMessage.Done(mySummary()))
+                    if (mismatched.isNotEmpty() && limited == null) receiveRound() // the initiator's answer to our Reconcile
                 }
             }
             result(SyncOutcome.COMPLETED, null, "")

@@ -32,6 +32,8 @@ data class GroupSummary(
     val readable: Boolean,
     /** Someone offered this person the ownership of the group and they have not answered yet (shown as a tag on the card). */
     val ownershipOfferForMe: Boolean = false,
+    /** The owner removed this person from the group (S2): the card says so and the group no longer counts in the totals. */
+    val youWereRemoved: Boolean = false,
 )
 
 /**
@@ -140,6 +142,7 @@ class Sessions(
                 myBalance = view?.balances?.get(view.me) ?: Money.ZERO,
                 readable = state?.groupId != null,
                 ownershipOfferForMe = view != null && state?.pendingOffer == view.me,
+                youWereRemoved = view?.youWereRemoved == true,
             )
         }
     }
