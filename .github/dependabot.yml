@@ -28,6 +28,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "org.jetbrains.kotlin*"
         update-types: ["version-update:semver-minor"]
+      # Dependabot names the plugins declared as kotlin("jvm") and kotlin("android") just "jvm" and "android" (PR #27 showed it).
+      - dependency-name: "jvm"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "android"
+        update-types: ["version-update:semver-minor"]
       - dependency-name: "com.android.application"
         update-types: ["version-update:semver-minor"]
       - dependency-name: "com.android.library"
