@@ -34,6 +34,17 @@ class AppContainer(private val context: Context) {
     val settings: RoomSettingsStore by lazy { RoomSettingsStore(database) }
     val sessions: Sessions by lazy { Sessions(groups, secrets, identity, Clock.SYSTEM, settings) }
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
+    /**
+     * Syncing with the other members (M5). No real way to reach other phones is built in yet (M6), so every member shows "Not reachable
+     * yet" and nothing is started here; the Sync screen and its "Sync now" read this.
+     */
+    val sync: owntally.data.session.SyncCoordinator by lazy {
+        owntally.data.session.SyncCoordinator(
+            sessions, groups, { _, _ -> owntally.sync.NoTransport },
+            owntally.data.session.SyncRecorder(owntally.data.store.RoomSyncProblemLog(database), Clock.SYSTEM), Clock.SYSTEM,
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO),
+        )
+    }
     val debugTools: DebugTools? by lazy { DebugToolsFactory.create(this) }
 
     val firstRun: FirstRun = object : FirstRun {

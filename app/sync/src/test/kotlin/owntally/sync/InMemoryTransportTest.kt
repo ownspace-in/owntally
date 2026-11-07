@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import owntally.model.PublicKey
 
 class InMemoryTransportTest {
     private val room = GroupRoom(ByteArray(16) { it.toByte() })

@@ -25,6 +25,10 @@ android {
         unitTests.all { test ->
             test.systemProperty("user.language", "en")
             test.systemProperty("user.country", "IN")
+            // The simulation (T5.4) reads how many seeds to run from the environment; Gradle must know, or it skips a rerun with other seeds.
+            for (name in listOf("OWNTALLY_SIM_SEEDS", "OWNTALLY_SIM_FIRST", "OWNTALLY_SIM_SEED")) {
+                test.inputs.property(name, providers.environmentVariable(name).orElse(""))
+            }
         }
     }
 }
@@ -47,12 +51,14 @@ configurations.configureEach {
 dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
+    implementation(project(":app:sync"))
     implementation(libs.tink.android)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("androidx.room:room-runtime:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation(kotlin("test"))
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 
     androidTestImplementation(kotlin("test"))
     androidTestImplementation("androidx.test:runner:1.7.0")

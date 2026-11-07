@@ -33,7 +33,7 @@ class DatabaseFileInstrumentedTest {
         context.deleteDatabase("$name-migration")
     }
 
-    private fun open() = Room.databaseBuilder(context, OwnTallyDatabase::class.java, name).addMigrations(OwnTallyDatabase.MIGRATION_1_2).build()
+    private fun open() = Room.databaseBuilder(context, OwnTallyDatabase::class.java, name).addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3).build()
 
     @Test
     fun aDatabaseIsMadeFromNothingAndTheDataIsStillThereAfterClosingAndOpeningAgain() {
@@ -67,8 +67,8 @@ class DatabaseFileInstrumentedTest {
             old.execSQL("INSERT INTO settings (`key`, `value`) VALUES ('next_slot', '4')")
             old.close()
         }
-        helper.runMigrationsAndValidate("$name-migration", 2, true, OwnTallyDatabase.MIGRATION_1_2).close()
-        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_1_2).build().also { db ->
+        helper.runMigrationsAndValidate("$name-migration", 3, true, OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3).build().also { db ->
             assertEquals(listOf(GroupRow(GroupId(group), 3, 77)), RoomEventStore(db).groups())
             assertEquals(1, RoomEventStore(db).envelopes(GroupId(group)).size)
             assertEquals("4", RoomSettingsStore(db).get("next_slot"))
@@ -89,6 +89,28 @@ class DatabaseFileInstrumentedTest {
             store.deleteGroup(group)
             val count = db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM events").use { it.moveToFirst(); it.getInt(0) }
             assertEquals(0, count)
+            db.close()
+        }
+    }
+
+    @Test
+    fun aVersionTwoFileKeepsItsDataAndGetsTheEmptyProblemLogWhenMigratedToThree() {
+        val group = ByteArray(16) { 5 }
+        helper.createDatabase("$name-migration", 2).also { old ->
+            old.execSQL("INSERT INTO groups (group_id, key_slot, created_at) VALUES (?, 1, 50)", arrayOf<Any>(group))
+            old.execSQL("INSERT INTO join_requests (group_id, member_key, encryption_key, name, phone, received_at, state) VALUES (?, ?, ?, 'Ben', '98765 00001', 60, 0)", arrayOf<Any>(group, ByteArray(32) { 1 }, ByteArray(32) { 2 }))
+            old.close()
+        }
+        helper.runMigrationsAndValidate("$name-migration", 3, true, OwnTallyDatabase.MIGRATION_2_3).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_2_3).build().also { db ->
+            assertEquals(listOf(GroupRow(GroupId(group), 1, 50)), RoomEventStore(db).groups())
+            assertEquals(1, RoomJoinRequestStore(db).list(GroupId(group)).size, "the join request survived")
+            val log = RoomSyncProblemLog(db)
+            assertEquals(emptyList(), log.recent(GroupId(group), 10))
+            log.add(SyncProblem(GroupId(group), PublicKey(ByteArray(32) { 7 }), ProblemKind.BAD_SIGNATURE, 2, 99))
+            assertEquals(1, log.recent(GroupId(group), 10).size)
+            RoomEventStore(db).deleteGroup(GroupId(group))
+            assertEquals(emptyList(), log.recent(GroupId(group), 10), "the log goes with the group")
             db.close()
         }
     }

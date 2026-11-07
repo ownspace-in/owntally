@@ -49,6 +49,7 @@ class FirstRunEndToEndInstrumentedTest {
         context.deleteDatabase(OwnTallyDatabase.FILE_NAME)
         File(context.noBackupFilesDir, "secrets").deleteRecursively()
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KeystoreSecretBox.DEFAULT_ALIAS)
+        (context as OwnTallyApplication).resetContainerForTests()
     }
 
     private fun appFiles(): List<File> = listOfNotNull(context.filesDir, context.noBackupFilesDir, context.cacheDir, context.codeCacheDir, File(context.applicationInfo.dataDir))
@@ -110,7 +111,8 @@ class FirstRunEndToEndInstrumentedTest {
             // The four tabs are there; Sync says it is not built yet and has nothing to press.
             for (label in listOf("Groups", "Settle", "Sync", "About")) rule.onNode(hasContentDescription(label)).assertExists()
             rule.onNode(hasContentDescription("Sync")).performClick()
-            rule.onNodeWithText("Syncing with friends arrives in a later update. For now your data is stored only on this phone.").assertExists()
+            rule.onNodeWithText("Choose a group to see who it has reached.").assertExists()
+            rule.onNodeWithText("No groups yet.").assertExists()
             rule.onNode(hasContentDescription("Groups")).performClick()
 
             // Make a group, see it listed, open it.

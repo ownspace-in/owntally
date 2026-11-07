@@ -4,6 +4,7 @@ import owntally.data.db.EventEntity
 import owntally.data.db.GroupEntity
 import owntally.data.db.JoinRequestEntity
 import owntally.data.db.OwnTallyDatabase
+import owntally.data.db.SyncProblemEntity
 import owntally.data.db.SettingEntity
 import owntally.model.EncryptionKey
 import owntally.model.GroupId
@@ -68,4 +69,19 @@ class RoomJoinRequestStore(db: OwnTallyDatabase) : JoinRequestStore {
     override fun get(groupId: GroupId, member: PublicKey): JoinRequest? = dao.joinRequest(groupId.bytes(), member.bytes())?.toModel()
     override fun list(groupId: GroupId): List<JoinRequest> = dao.joinRequests(groupId.bytes()).map { it.toModel() }
     override fun setState(groupId: GroupId, member: PublicKey, state: JoinState) = dao.setJoinRequestState(groupId.bytes(), member.bytes(), state.ordinal)
+}
+
+/** [SyncProblemLog] on the Room database: the latest [maxPerGroup] lines of each group are kept. */
+class RoomSyncProblemLog(db: OwnTallyDatabase, private val maxPerGroup: Int = InMemorySyncProblemLog.DEFAULT_MAX) : SyncProblemLog {
+    private val dao = db.dao()
+
+    override fun add(problem: SyncProblem) {
+        dao.insertSyncProblem(SyncProblemEntity(0, problem.group.bytes(), problem.peer.bytes(), problem.kind.ordinal, problem.count, problem.atSeconds))
+        dao.pruneSyncProblems(problem.group.bytes(), maxPerGroup)
+    }
+
+    override fun recent(group: GroupId, limit: Int): List<SyncProblem> =
+        dao.syncProblems(group.bytes(), limit).map { SyncProblem(GroupId(it.groupId), PublicKey(it.peer), ProblemKind.entries[it.kind], it.count, it.atSeconds) }
+
+    override fun clear(group: GroupId) = dao.clearSyncProblems(group.bytes())
 }

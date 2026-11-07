@@ -60,6 +60,22 @@ class JoinRequestEntity(
     val state: Int,
 )
 
+/** A line of the log of envelopes a peer sent that were dropped (S4). Counts and kinds only: there is no column for any envelope content. */
+@Entity(
+    tableName = "sync_problems",
+    foreignKeys = [ForeignKey(entity = GroupEntity::class, parentColumns = ["group_id"], childColumns = ["group_id"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index(value = ["group_id"])],
+)
+class SyncProblemEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "row_id") val rowId: Long,
+    @ColumnInfo(name = "group_id", typeAffinity = ColumnInfo.BLOB) val groupId: ByteArray,
+    @ColumnInfo(typeAffinity = ColumnInfo.BLOB) val peer: ByteArray,
+    /** The position of the kind in `ProblemKind`. */
+    val kind: Int,
+    val count: Int,
+    @ColumnInfo(name = "at_seconds") val atSeconds: Long,
+)
+
 @Entity(tableName = "settings")
 class SettingEntity(@PrimaryKey @ColumnInfo(name = "key") val key: String, @ColumnInfo(name = "value") val value: String)
 
@@ -97,6 +113,19 @@ interface OwnTallyDao {
     @Query("UPDATE join_requests SET state = :state WHERE group_id = :group AND member_key = :member")
     fun setJoinRequestState(group: ByteArray, member: ByteArray, state: Int)
 
+    @Insert
+    fun insertSyncProblem(problem: SyncProblemEntity)
+
+    @Query("SELECT * FROM sync_problems WHERE group_id = :group ORDER BY row_id DESC LIMIT :limit")
+    fun syncProblems(group: ByteArray, limit: Int): List<SyncProblemEntity>
+
+    /** Keeps the newest [keep] lines of the group. */
+    @Query("DELETE FROM sync_problems WHERE group_id = :group AND row_id NOT IN (SELECT row_id FROM sync_problems WHERE group_id = :group ORDER BY row_id DESC LIMIT :keep)")
+    fun pruneSyncProblems(group: ByteArray, keep: Int)
+
+    @Query("DELETE FROM sync_problems WHERE group_id = :group")
+    fun clearSyncProblems(group: ByteArray)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun putSetting(setting: SettingEntity)
 
@@ -107,12 +136,24 @@ interface OwnTallyDao {
     fun deleteSetting(key: String)
 }
 
-@Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class, JoinRequestEntity::class], version = 2, exportSchema = true)
+@Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class, JoinRequestEntity::class, SyncProblemEntity::class], version = 3, exportSchema = true)
 abstract class OwnTallyDatabase : RoomDatabase() {
     abstract fun dao(): OwnTallyDao
 
     companion object {
         const val FILE_NAME = "owntally.db"
+
+        /** Version 3 adds the log of dropped envelopes (M5, T5.6); nothing else changes. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sync_problems` (`row_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `group_id` BLOB NOT NULL, `peer` BLOB NOT NULL, " +
+                        "`kind` INTEGER NOT NULL, `count` INTEGER NOT NULL, `at_seconds` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`group_id`) REFERENCES `groups`(`group_id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_problems_group_id` ON `sync_problems` (`group_id`)")
+            }
+        }
 
         /** Version 2 adds the table of join requests; nothing else changes (M4, T4.4). */
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -129,7 +170,7 @@ abstract class OwnTallyDatabase : RoomDatabase() {
          * The database in the app's private storage (never backed up, see the manifest rules). There is deliberately no
          * `fallbackToDestructiveMigration`: a missing migration must be an error, never a silent loss of the person's events.
          */
-        fun open(context: Context): OwnTallyDatabase = Room.databaseBuilder(context.applicationContext, OwnTallyDatabase::class.java, FILE_NAME).addMigrations(MIGRATION_1_2).build()
+        fun open(context: Context): OwnTallyDatabase = Room.databaseBuilder(context.applicationContext, OwnTallyDatabase::class.java, FILE_NAME).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
         fun inMemory(context: Context): OwnTallyDatabase = Room.inMemoryDatabaseBuilder(context.applicationContext, OwnTallyDatabase::class.java).build()
     }

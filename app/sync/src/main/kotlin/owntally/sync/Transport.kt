@@ -1,23 +1,10 @@
 package owntally.sync
 
 import kotlinx.coroutines.flow.Flow
+import owntally.model.PublicKey
 
-class PublicKey(val bytes: ByteArray) {
-    init {
-        require(bytes.size == SIZE) { "a public key is $SIZE bytes" }
-    }
-
-    override fun equals(other: Any?) = other is PublicKey && bytes.contentEquals(other.bytes)
-    override fun hashCode() = bytes.contentHashCode()
-    override fun toString() = bytes.joinToString("") { "%02x".format(it) }
-
-    companion object {
-        const val SIZE = 32
-
-        fun fromHex(hex: String): PublicKey =
-            PublicKey(ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() })
-    }
-}
+/** Length of a member's public key in bytes. */
+const val KEY_SIZE = 32
 
 /** Opaque room name derived from the group id. The relay must never learn the real group id. */
 class GroupRoom(val id: ByteArray) {
@@ -41,6 +28,15 @@ interface Link {
     suspend fun send(bytes: ByteArray)
     val received: Flow<ByteArray>
     suspend fun close()
+}
+
+/** There is no way to reach other phones at all yet (no real transport is built in): not a failure to reach someone, so nothing is retried. */
+class TransportUnavailable : Exception("No way to reach other phones is available yet")
+
+/** The transport of a phone that has none yet (until M6): it cannot connect and nobody can connect to it. */
+object NoTransport : Transport {
+    override suspend fun connect(room: GroupRoom, peer: PublicKey): Link = throw TransportUnavailable()
+    override fun incoming(room: GroupRoom): Flow<Link> = kotlinx.coroutines.flow.emptyFlow()
 }
 
 interface Transport {

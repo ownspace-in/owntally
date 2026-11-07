@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import owntally.model.PublicKey
 
 /** A fake network for tests: every transport created from one network can reach the others. */
 class InMemoryNetwork {

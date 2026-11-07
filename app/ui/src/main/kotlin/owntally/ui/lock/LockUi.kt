@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -142,7 +143,7 @@ private fun LockScreen(controller: LockController, availability: PhoneLockAvaila
 }
 
 @Composable
-fun SettingsScreen(controller: LockController, onBack: () -> Unit) {
+fun SettingsScreen(controller: LockController, onBack: () -> Unit, leftGroups: List<LeftGroupRow> = emptyList(), onDeleteLeft: (owntally.model.GroupId) -> Unit = {}) {
     val model = SettingsModel(controller.state.mode, controller.authenticator.availability())
     var message by remember { mutableStateOf<String?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -157,7 +158,7 @@ fun SettingsScreen(controller: LockController, onBack: () -> Unit) {
             }
         }
     }
-    Column(Modifier.fillMaxSize().padding(20.dp, 8.dp, 20.dp, 20.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp, 8.dp, 20.dp, 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = Role.Button }, contentAlignment = Alignment.Center) {
                 GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
@@ -179,6 +180,7 @@ fun SettingsScreen(controller: LockController, onBack: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             Notice(note)
         }
+        LeftGroupsSection(leftGroups, onDeleteLeft)
     }
 }
 

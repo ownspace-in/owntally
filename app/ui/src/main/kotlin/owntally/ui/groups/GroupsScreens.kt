@@ -151,7 +151,7 @@ fun GroupCard(card: GroupCardModel, onClick: () -> Unit) {
                 )
             }
         }
-        if (card.readable) {
+        if (card.readable && !card.removed) {
             Column(horizontalAlignment = Alignment.End) {
                 if (card.balance.kind == BalanceKind.SETTLED) {
                     Text("settled up", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)

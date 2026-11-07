@@ -26,6 +26,7 @@ import owntally.model.Payment
 import owntally.model.PublicKey
 import owntally.model.Split
 import owntally.model.balances
+import owntally.model.keyChangeNeeded
 import owntally.model.replay
 import owntally.model.settlementPlan
 
@@ -49,6 +50,13 @@ data class GroupView(
     val unreadableKeyEpochs: Set<Long>,
     /** Late entries of removed or departed members that the rules cancelled, in event order (M4, D5b). */
     val cancelled: List<owntally.model.CancelledEntry> = emptyList(),
+    /**
+     * The owner removed this person (S2): a removal event naming this phone's key, written by the owner as this phone knows them, has
+     * arrived. It may not be applied (it depends on events this phone never had), so the state can still list the person as a member.
+     */
+    val youWereRemoved: Boolean = false,
+    /** How many events this phone's user has written in this group (the highest counter of their own): a rise is a local change to sync. */
+    val ownCounter: Long = 0,
 )
 
 sealed class AddResult {
@@ -82,7 +90,7 @@ class GroupSession(
         repo.group(groupId)?.let { identity.groupIdentity(it.keySlot) },
     ) { "no such group, or no usable seed" }
 
-    private val log = EventLog()
+    private var log = EventLog()
     private val seen = HashSet<String>()
     private val waiting = ArrayList<Envelope>()
     private val deferred = ArrayList<Envelope>()
@@ -104,20 +112,38 @@ class GroupSession(
     fun refresh() {
         sync()
         publish()
-        if (leaveNotCoveredByTheKey()) rotateKey()
+        if (seen.size != dutyBlockedAt && leaveNotCoveredByTheKey()) {
+            val result = rotateKey()
+            lastDutyResult = result
+            // A refused change is not tried again until something new has arrived: the same log would be refused the same way.
+            if (result is AddResult.Added) dutyRotations++
+            dutyBlockedAt = if (result is AddResult.Added) -1 else seen.size
+        }
     }
 
+    /** How many envelopes had been read when the owner's key change was last refused (-1: not blocked). */
+    private var dutyBlockedAt = -1
+
+    /** How many key changes the owner's phone made by itself (for tests: it should be a few, never one per refresh). */
+    internal var dutyRotations = 0
+        private set
+
+    /** Whether the owner's duty would still change the key now (for tests: after everything has settled this must be false). */
+    @Synchronized
+    internal fun keyChangeStillNeeded(): Boolean = leaveNotCoveredByTheKey()
+
+    /** The outcome of the owner's last automatic key change, for tests. */
+    internal var lastDutyResult: AddResult? = null
+        private set
+
     /**
-     * Owner only (D2): a member left and the key now in use was started before that leave was seen, so the leaver still holds it.
-     * The key then has to change. A removal or a rotation written after the leave was seen covers it, so this cannot repeat.
+     * Owner only (D2, and S7 in M5): the key in use no longer fits the group (someone left whom the key change had not seen, or a member
+     * was admitted at the same time as it), so the key has to change. Both are covered by the new key change, so this cannot repeat.
      */
     private fun leaveNotCoveredByTheKey(): Boolean {
         val st = replay(log)
         if (st.groupId == null || st.owner != me.publicKey) return false
-        val leaves = st.removals.values.filter { it.by == it.member }
-        if (leaves.isEmpty()) return false
-        val start = st.epochStarts[st.epoch]?.let { id -> log.allEvents().firstOrNull { it.id == id } }
-        return leaves.any { start == null || (start.after[it.member] ?: 0L) < it.event.counter }
+        return keyChangeNeeded(log, st)
     }
 
     /** The counter the next event written by this phone will get. The Add expense screen needs it to show the rounding exactly. */
@@ -193,7 +219,10 @@ class GroupSession(
             throw e
         }
         if (result !is AddResult.Added) secrets.deleteGroupKey(groupId, epoch)
-        refresh()
+        // Take in the new key and publish, but do not run the owner's duty again from here: refresh() calls this, and a rotation the
+        // rules keep refusing would otherwise call itself without end.
+        sync()
+        publish()
         return result
     }
 
@@ -276,6 +305,17 @@ class GroupSession(
         unreadableKeyEpochs = load.unreadableEpochs
         val stored = repo.envelopes(groupId)
         damaged = stored.damaged
+        // Only the two smallest versions of an id are read (S1). A newer arrival can push out one that was already taken in: start the
+        // log again from what is stored now, so the result is the same as if everything had arrived at once.
+        val current = stored.envelopes.map { fingerprint(it) }.toHashSet()
+        if (seen.any { it !in current }) {
+            log = EventLog()
+            seen.clear()
+            waiting.clear()
+            deferred.clear()
+            rejected.clear()
+            opened = 0
+        }
         val pending = ArrayList<Envelope>()
         pending += waiting
         waiting.clear()
@@ -329,8 +369,22 @@ class GroupSession(
             counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), rejected.size, damaged, deferred.size),
             unreadableKeyEpochs = unreadableKeyEpochs,
             cancelled = owntally.model.cancelledEntries(log, s),
+            youWereRemoved = wasRemovedByOwner(s),
+            ownCounter = log.summary()[me.publicKey] ?: 0L,
         )
     }
+
+    /** A removal of this phone's key by the owner, applied or only received (S2). A removal by anyone else, or a forged one, does not count. */
+    private fun wasRemovedByOwner(s: GroupState): Boolean {
+        val applied = s.removals[me.publicKey]
+        if (applied != null) return applied.by != me.publicKey
+        val owner = s.owner ?: return false
+        return log.allEvents().any { e -> e.author == owner && (e.body as? EventBody.MemberRemoved)?.member == me.publicKey }
+    }
+
+    /** The event with this id as read by this phone, or null (used to know what a removed person may be told). */
+    @Synchronized
+    fun eventOf(id: EventId): Event? = log.allEvents().firstOrNull { it.id == id }
 
     private fun publish() {
         state.value = compute()

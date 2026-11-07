@@ -10,6 +10,9 @@ import owntally.data.store.SettingsStore
 import owntally.model.GroupId
 import owntally.model.Money
 
+/** A group this person has left: hidden from every screen, its data kept until the leave has reached another member (D4) or they delete it (S6). */
+data class LeftGroup(val id: GroupId, val name: String, val leaveCounter: Long)
+
 /** The local choice of icon colour for a group (not shared with other members). */
 object GroupLooks {
     const val PALETTE_SIZE = 5
@@ -32,6 +35,8 @@ data class GroupSummary(
     val readable: Boolean,
     /** Someone offered this person the ownership of the group and they have not answered yet (shown as a tag on the card). */
     val ownershipOfferForMe: Boolean = false,
+    /** The owner removed this person from the group (S2): the card says so and the group no longer counts in the totals. */
+    val youWereRemoved: Boolean = false,
 )
 
 /**
@@ -52,7 +57,27 @@ class Sessions(
     /** Empty until [refresh] is called, which reads the database: call it off the main thread (the constructor does no I/O). */
     val summaries: StateFlow<List<GroupSummary>> get() = mutableSummaries
 
+    private val mutableLeft = MutableStateFlow<List<LeftGroup>>(emptyList())
+
+    /** The groups this person has left and that are still kept (see [LeftGroup]); shown under Settings. */
+    val left: StateFlow<List<LeftGroup>> get() = mutableLeft
+
     private fun colourKey(id: GroupId) = "group_colour_${id.toHex()}"
+
+    /** The groups this person has left and that have not yet been deleted. */
+    @Synchronized
+    fun leftGroups(): List<LeftGroup> = groups.listGroups().filter { settings.get(leftKey(it.groupId)) != null }.mapNotNull { row ->
+        val session = sessions[row.groupId] ?: return@mapNotNull null
+        val view = session.view.value
+        val counter = view.state.removals[view.me]?.event?.counter ?: return@mapNotNull null
+        LeftGroup(row.groupId, view.state.name.orEmpty(), counter)
+    }
+
+    /** Deletes a group this person has left, events and keys included, without waiting for the leave to be delivered ("Delete now"). Does nothing for any other group. */
+    @Synchronized
+    fun deleteLeft(id: GroupId) {
+        if (settings.get(leftKey(id)) != null) deleteGroup(id)
+    }
 
     private fun leftKey(id: GroupId) = "group_left_${id.toHex()}"
 
@@ -127,6 +152,7 @@ class Sessions(
     @Synchronized
     private fun recompute() {
         if (batching) return
+        mutableLeft.value = leftGroups()
         mutableSummaries.value = groups.listGroups().filter { settings.get(leftKey(it.groupId)) == null }.map { row ->
             val session = sessions[row.groupId]
             val view = session?.view?.value
@@ -140,6 +166,7 @@ class Sessions(
                 myBalance = view?.balances?.get(view.me) ?: Money.ZERO,
                 readable = state?.groupId != null,
                 ownershipOfferForMe = view != null && state?.pendingOffer == view.me,
+                youWereRemoved = view?.youWereRemoved == true,
             )
         }
     }
