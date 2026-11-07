@@ -27,6 +27,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import owntally.model.PublicKey
 
 /** A small stand-in for relay/ws-relay that follows the wire protocol in its README. */
 private class FakeRelay : AutoCloseable {
@@ -48,12 +49,12 @@ private class FakeRelay : AutoCloseable {
                         val frame = bytes.toByteArray()
                         framesSeen += frame
                         val members = rooms[room] ?: return
-                        val sender = PublicKey.fromHex(id).bytes
+                        val sender = PublicKey.fromHex(id).bytes()
                         when (frame[0].toInt()) {
                             0 -> members.filterKeys { it != id }.values.forEach {
                                 it.send((sender + frame.copyOfRange(1, frame.size)).toByteString())
                             }
-                            1 -> members[PublicKey(frame.copyOfRange(1, 33)).toString()]
+                            1 -> members[PublicKey(frame.copyOfRange(1, 33)).toHex()]
                                 ?.send((sender + frame.copyOfRange(33, frame.size)).toByteString())
                         }
                     }
@@ -114,7 +115,7 @@ class WebSocketTransportTest {
         assertContentEquals(byteArrayOf(4, 5), toBob.received.first())
 
         val targeted = relay.framesSeen.first { it[0].toInt() == 1 }
-        assertContentEquals(bob.bytes, targeted.copyOfRange(1, 33))
+        assertContentEquals(bob.bytes(), targeted.copyOfRange(1, 33))
     }
 
     @Test

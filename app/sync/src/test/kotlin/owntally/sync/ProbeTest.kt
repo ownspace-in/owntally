@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import owntally.model.PublicKey
 
 class ProbeTest {
     private val room = GroupRoom(ByteArray(16) { it.toByte() })

@@ -1,23 +1,10 @@
 package owntally.sync
 
 import kotlinx.coroutines.flow.Flow
+import owntally.model.PublicKey
 
-class PublicKey(val bytes: ByteArray) {
-    init {
-        require(bytes.size == SIZE) { "a public key is $SIZE bytes" }
-    }
-
-    override fun equals(other: Any?) = other is PublicKey && bytes.contentEquals(other.bytes)
-    override fun hashCode() = bytes.contentHashCode()
-    override fun toString() = bytes.joinToString("") { "%02x".format(it) }
-
-    companion object {
-        const val SIZE = 32
-
-        fun fromHex(hex: String): PublicKey =
-            PublicKey(ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() })
-    }
-}
+/** Length of a member's public key in bytes. */
+const val KEY_SIZE = 32
 
 /** Opaque room name derived from the group id. The relay must never learn the real group id. */
 class GroupRoom(val id: ByteArray) {

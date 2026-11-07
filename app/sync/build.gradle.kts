@@ -7,6 +7,7 @@ kotlin {
 }
 
 dependencies {
+    api(project(":app:core-model"))
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:5.5.1")
     testImplementation(kotlin("test"))

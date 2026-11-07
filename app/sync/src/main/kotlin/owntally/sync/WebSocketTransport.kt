@@ -21,6 +21,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import owntally.model.PublicKey
 
 enum class RelayStatus { CONNECTING, OPEN, RECONNECTING, CLOSED }
 
@@ -81,7 +82,7 @@ class WebSocketTransport(
         private var attempt = 0
 
         private fun open() {
-            val request = Request.Builder().url("$relayUrl?room=$room&id=$self").build()
+            val request = Request.Builder().url("$relayUrl?room=$room&id=${self.toHex()}").build()
             socket = client.newWebSocket(request, listener)
         }
 
@@ -121,15 +122,15 @@ class WebSocketTransport(
         }
 
         private fun dispatch(frame: ByteArray) {
-            if (frame.size < PublicKey.SIZE) return
-            val sender = PublicKey(frame.copyOfRange(0, PublicKey.SIZE))
+            if (frame.size < KEY_SIZE) return
+            val sender = PublicKey(frame.copyOfRange(0, KEY_SIZE))
             var created = false
             val link = links.computeIfAbsent(sender) {
                 created = true
                 RelayLink(sender, this)
             }
             if (created) inbound.trySend(link)
-            link.deliver(frame.copyOfRange(PublicKey.SIZE, frame.size))
+            link.deliver(frame.copyOfRange(KEY_SIZE, frame.size))
         }
 
         suspend fun awaitOpen() {
@@ -170,7 +171,7 @@ class WebSocketTransport(
         override val received: Flow<ByteArray> = inbox.receiveAsFlow()
 
         override suspend fun send(bytes: ByteArray) =
-            conn.sendFrame(byteArrayOf(MODE_TARGETED) + peer.bytes + bytes)
+            conn.sendFrame(byteArrayOf(MODE_TARGETED) + peer.bytes() + bytes)
 
         fun deliver(payload: ByteArray) {
             inbox.trySend(payload)

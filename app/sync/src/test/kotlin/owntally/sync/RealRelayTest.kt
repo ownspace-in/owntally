@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import owntally.model.PublicKey
 
 /**
  * Runs the transport against the real Go relay. Skipped unless RELAY_BIN points at a built ws-relay binary:
