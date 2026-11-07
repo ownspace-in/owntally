@@ -55,6 +55,8 @@ data class GroupView(
      * arrived. It may not be applied (it depends on events this phone never had), so the state can still list the person as a member.
      */
     val youWereRemoved: Boolean = false,
+    /** How many events this phone's user has written in this group (the highest counter of their own): a rise is a local change to sync. */
+    val ownCounter: Long = 0,
 )
 
 sealed class AddResult {
@@ -368,6 +370,7 @@ class GroupSession(
             unreadableKeyEpochs = unreadableKeyEpochs,
             cancelled = owntally.model.cancelledEntries(log, s),
             youWereRemoved = wasRemovedByOwner(s),
+            ownCounter = log.summary()[me.publicKey] ?: 0L,
         )
     }
 
