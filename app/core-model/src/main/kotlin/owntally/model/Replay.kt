@@ -38,6 +38,12 @@ private class Run(private val forced: Set<EventId>) {
     val ignored = ArrayList<IgnoredEvent>()
     val applied = HashSet<EventId>()
 
+    /** The event that made each person a member (the creating event for the creator). */
+    private val joinedBy = HashMap<PublicKey, EventId>()
+
+    /** Every applied event that removed or let go of each person: a leave and an owner's removal of the same person can both apply. */
+    private val removedBy = HashMap<PublicKey, MutableList<EventId>>()
+
     fun state(held: List<EventId>) =
         GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, declinedOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
 
@@ -45,6 +51,22 @@ private class Run(private val forced: Set<EventId>) {
     private fun nameTaken(name: String, except: PublicKey?): Boolean = isNameTaken(members.values, name, except)
 
     private fun currentKeys() = members.filterValues { !it.removed }.keys
+
+    /**
+     * Decision S7 (M5): what an author's event may name, and which epoch it belongs to, is judged by what the AUTHOR had seen when
+     * writing it ([Event.after]), not by the state at the event's place in the deterministic order. Otherwise an event that was valid
+     * for its author would be ignored on every phone as soon as something concurrent (a leave, a join, a key change) sorts before it.
+     * An event X was seen by E if its counter is within E's `after` for X's author.
+     */
+    private fun seenBy(e: Event, id: EventId) = id.counter <= (e.after[id.author] ?: 0L)
+
+    /** The people who were members as far as [e]'s author knew: admitted in what the author had seen, and not removed in it. */
+    private fun knownTo(e: Event): Set<PublicKey> = members.keys.filterTo(LinkedHashSet()) { m ->
+        joinedBy[m]?.let { seenBy(e, it) } == true && removedBy[m].orEmpty().none { seenBy(e, it) }
+    }
+
+    /** The epoch [e]'s author was in: the latest key change they had seen (1 if none). */
+    private fun epochSeenBy(e: Event): Long = epochStarts.filterValues { seenBy(e, it) }.keys.maxOrNull() ?: 1L
 
     private fun current(key: PublicKey) = members[key]?.takeIf { !it.removed }
     private fun roleOf(key: PublicKey) = current(key)?.role
@@ -75,6 +97,7 @@ private class Run(private val forced: Set<EventId>) {
                 if (members.values.count { !it.removed } >= MAX_MEMBERS) return IgnoreReason.NOT_ALLOWED
                 if (nameTaken(body.name, except = null)) return IgnoreReason.INVALID
                 members[body.member] = Member(body.member, body.name, body.phone, Role.MEMBER, removed = false, encryptionKey = body.encryptionKey)
+                joinedBy[body.member] = event.id
                 null
             }
             is EventBody.ProfileUpdated -> {
@@ -83,7 +106,10 @@ private class Run(private val forced: Set<EventId>) {
                 null
             }
             is EventBody.ExpenseAdded -> {
-                if (current(body.paidBy) == null || body.split.participantKeys.any { current(it) == null }) return IgnoreReason.INVALID
+                // Everyone named must have been a member as far as the author knew; someone who left at the same time is taken out by the
+                // removal rules (their share is divided among the others, an expense they paid does not count).
+                val known = knownTo(event)
+                if (body.paidBy !in known || body.split.participantKeys.any { it !in known }) return IgnoreReason.INVALID
                 expenses[event.id] = Expense(event.id, author, body.description, body.total, body.paidBy, body.day, body.split, deleted = false, deletedBy = null)
                 null
             }
@@ -97,7 +123,8 @@ private class Run(private val forced: Set<EventId>) {
             }
             is EventBody.SettlementRecorded -> {
                 if (author != body.from && author != body.to) return IgnoreReason.NOT_ALLOWED
-                if (current(body.from) == null || current(body.to) == null) return IgnoreReason.INVALID
+                val known = knownTo(event)
+                if (body.from !in known || body.to !in known) return IgnoreReason.INVALID
                 val status = if (author == body.from) SettlementStatus.PAID_MARKED else SettlementStatus.CONFIRMED
                 settlements[event.id] = Settlement(event.id, body.from, body.to, body.amount, status, null)
                 null
@@ -167,13 +194,17 @@ private class Run(private val forced: Set<EventId>) {
             is EventBody.KeyRotated -> {
                 // Owner decision, 4 Nov 2026: only the owner changes the key (admins approve joins, which do not change it).
                 if (role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
-                if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys()) return IgnoreReason.INVALID
+                if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != knownTo(event)) return IgnoreReason.INVALID
                 epoch = body.newEpoch
                 epochStarts[epoch] = event.id
                 null
             }
             is EventBody.MemberRemoved -> {
-                val target = current(body.member) ?: return IgnoreReason.UNKNOWN_TARGET
+                val target = members[body.member] ?: return IgnoreReason.UNKNOWN_TARGET
+                // The author must have known the target as a member (S7). The target may have left at the same time; then the removal
+                // is still what starts the new key, and changes nothing else.
+                val known = knownTo(event)
+                if (body.member !in known) return IgnoreReason.UNKNOWN_TARGET
                 if (target.role == Role.OWNER) return IgnoreReason.NOT_ALLOWED
                 // Owner decision, 4 Nov 2026: only the owner removes anyone. A plain member may leave; an admin may not (the owner
                 // makes them a plain member first, or removes them).
@@ -182,19 +213,23 @@ private class Run(private val forced: Set<EventId>) {
                     else -> role == Role.OWNER
                 }
                 if (!allowed) return IgnoreReason.NOT_ALLOWED
-                // A leave keeps the epoch and carries no keys; a removal by someone else starts the next epoch and seals
-                // the new key to exactly the members who stay.
+                // A leave names the epoch its author was in and carries no keys; a removal by someone else starts the next epoch and
+                // seals the new key to the members who stay, as the author knew them.
                 if (author == target.key) {
-                    if (body.newEpoch != epoch || body.sealedKeys.isNotEmpty()) return IgnoreReason.INVALID
+                    if (target.removed) return IgnoreReason.UNKNOWN_TARGET
+                    if (body.newEpoch != epochSeenBy(event) || body.sealedKeys.isNotEmpty()) return IgnoreReason.INVALID
                 } else {
-                    if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != currentKeys() - target.key) return IgnoreReason.INVALID
+                    if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != known - target.key) return IgnoreReason.INVALID
                     epoch = body.newEpoch
                     epochStarts[epoch] = event.id
                 }
-                members[target.key] = target.copy(removed = true)
-                removals[target.key] = Removal(target.key, author, event.id, event.after[target.key] ?: 0L)
-                if (pendingOffer == target.key) pendingOffer = null
-                if (declinedOffer == target.key) declinedOffer = null
+                removedBy.getOrPut(target.key) { ArrayList() } += event.id
+                if (!target.removed) {
+                    members[target.key] = target.copy(removed = true)
+                    removals[target.key] = Removal(target.key, author, event.id, event.after[target.key] ?: 0L)
+                    if (pendingOffer == target.key) pendingOffer = null
+                    if (declinedOffer == target.key) declinedOffer = null
+                }
                 null
             }
         }
@@ -212,6 +247,7 @@ private class Run(private val forced: Set<EventId>) {
         owner = event.author
         epoch = 1
         members[event.author] = Member(event.author, "", "", Role.OWNER, removed = false, encryptionKey = body.encryptionKey)
+        joinedBy[event.author] = event.id
         return null
     }
 }

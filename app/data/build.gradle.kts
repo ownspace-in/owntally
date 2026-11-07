@@ -25,6 +25,10 @@ android {
         unitTests.all { test ->
             test.systemProperty("user.language", "en")
             test.systemProperty("user.country", "IN")
+            // The simulation (T5.4) reads how many seeds to run from the environment; Gradle must know, or it skips a rerun with other seeds.
+            for (name in listOf("OWNTALLY_SIM_SEEDS", "OWNTALLY_SIM_FIRST", "OWNTALLY_SIM_SEED")) {
+                test.inputs.property(name, providers.environmentVariable(name).orElse(""))
+            }
         }
     }
 }

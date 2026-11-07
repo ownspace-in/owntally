@@ -12,8 +12,6 @@ import kotlinx.coroutines.test.runTest
 class SimulationTest {
     private fun env(name: String) = System.getenv(name)?.toLongOrNull()
 
-    // Ignored until decision S7 (docs/tasks/M5-sync.md) is made: seed 4 fails because of a real protocol problem, not a test fault.
-    @kotlin.test.Ignore
     @Test
     fun everyScenarioEndsWithPhonesThatAgree() {
         val single = env("OWNTALLY_SIM_SEED")

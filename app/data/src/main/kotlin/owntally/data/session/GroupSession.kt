@@ -26,6 +26,7 @@ import owntally.model.Payment
 import owntally.model.PublicKey
 import owntally.model.Split
 import owntally.model.balances
+import owntally.model.keyChangeNeeded
 import owntally.model.replay
 import owntally.model.settlementPlan
 
@@ -108,16 +109,13 @@ class GroupSession(
     }
 
     /**
-     * Owner only (D2): a member left and the key now in use was started before that leave was seen, so the leaver still holds it.
-     * The key then has to change. A removal or a rotation written after the leave was seen covers it, so this cannot repeat.
+     * Owner only (D2, and S7 in M5): the key in use no longer fits the group (someone left whom the key change had not seen, or a member
+     * was admitted at the same time as it), so the key has to change. Both are covered by the new key change, so this cannot repeat.
      */
     private fun leaveNotCoveredByTheKey(): Boolean {
         val st = replay(log)
         if (st.groupId == null || st.owner != me.publicKey) return false
-        val leaves = st.removals.values.filter { it.by == it.member }
-        if (leaves.isEmpty()) return false
-        val start = st.epochStarts[st.epoch]?.let { id -> log.allEvents().firstOrNull { it.id == id } }
-        return leaves.any { start == null || (start.after[it.member] ?: 0L) < it.event.counter }
+        return keyChangeNeeded(log, st)
     }
 
     /** The counter the next event written by this phone will get. The Add expense screen needs it to show the rounding exactly. */
