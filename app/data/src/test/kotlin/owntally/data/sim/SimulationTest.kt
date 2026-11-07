@@ -19,6 +19,7 @@ class SimulationTest {
         var syncs = 0
         var completed = 0
         var interrupted = 0
+        var forks = 0
         val failures = ArrayList<Pair<Long, String>>()
         for (seed in seeds) {
             try {
@@ -26,6 +27,7 @@ class SimulationTest {
                 runTest(timeout = kotlin.time.Duration.parse("10m")) { r = Simulation(seed).run(this) }
                 val report = r!!
                 syncs += report.syncs
+                forks += report.forks
                 completed += report.outcomes[owntally.sync.SyncOutcome.COMPLETED] ?: 0
                 interrupted += report.outcomes.filterKeys { it != owntally.sync.SyncOutcome.COMPLETED }.values.sum()
             } catch (e: Throwable) {
@@ -36,7 +38,7 @@ class SimulationTest {
             val first = failures.first()
             throw AssertionError("${failures.size} of ${seeds.size} scenarios failed: seeds ${failures.map { it.first }}\nFirst failure:\n${first.second}\nRepeat with OWNTALLY_SIM_SEED=${first.first}")
         }
-        println("simulation: ${seeds.size} seeds, $syncs syncs ($completed sides completed, $interrupted sides interrupted, refused or timed out)")
+        println("simulation: ${seeds.size} seeds, $syncs syncs ($completed sides completed, $interrupted sides interrupted, refused or timed out), $forks forked events")
         assertTrue(syncs > 0)
         assertEquals(true, interrupted > 0 || seeds.size < 5, "the faults really interrupted syncs")
     }

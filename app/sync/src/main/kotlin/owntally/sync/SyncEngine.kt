@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import owntally.model.PublicKey
 
 enum class SyncRole { INITIATOR, RESPONDER }
 
@@ -40,6 +41,8 @@ data class SyncResult(
     val rejected: Map<Rejection, Int>,
     val peerSummary: SyncSummary?,
     val peerFinal: SyncSummary?,
+    /** Authors whose events the two phones disagreed about (same counters, different versions); every version of them was exchanged. */
+    val reconciled: Set<PublicKey>,
     val error: ErrorCode?,
     val detail: String,
 )
@@ -85,22 +88,35 @@ class SyncEngine(
         var peerSummary: SyncSummary? = null
         var peerFinal: SyncSummary? = null
 
+        val reconciled = LinkedHashSet<PublicKey>()
+
         suspend fun execute(): SyncResult = try {
             send(SyncMessage.Hello(room, store.summary()))
             val hello = next() as? SyncMessage.Hello ?: throw refuse(ErrorCode.INVALID, "the first message must be a Hello")
             if (hello.room != room) throw refuse(ErrorCode.WRONG_GROUP, "this is another group")
             peerSummary = hello.summary
             val owed = owedTo(hello.summary) // worked out before anything arrives, so what the peer sends is not sent back
+            val mismatched = mismatches(hello.summary) // authors whose versions differ from the peer's (S1)
             when (role) {
                 SyncRole.INITIATOR -> {
-                    sendEnvelopes(owed)
+                    for (author in mismatched) { send(SyncMessage.Reconcile(author)); reconciled += author }
+                    sendEnvelopes(distinct(owed + mismatched.flatMap { store.versionsOf(it) }))
                     send(SyncMessage.Done(store.summary()))
-                    receiveUntilDone()
+                    val asked = receiveRound()
+                    // The responder found a difference we could not see (its history is longer): send it every version we hold of those.
+                    if (asked.isNotEmpty()) {
+                        reconciled += asked
+                        sendEnvelopes(distinct((asked - mismatched.toSet()).flatMap { store.versionsOf(it) }))
+                        send(SyncMessage.Done(store.summary()))
+                    }
                 }
                 SyncRole.RESPONDER -> {
-                    receiveUntilDone()
-                    sendEnvelopes(owed)
+                    val asked = receiveRound()
+                    reconciled += asked
+                    for (author in mismatched) { send(SyncMessage.Reconcile(author)); reconciled += author }
+                    sendEnvelopes(distinct(owed + (asked + mismatched).flatMap { store.versionsOf(it) }))
                     send(SyncMessage.Done(store.summary()))
+                    if (mismatched.isNotEmpty()) receiveRound() // the initiator's answer to our Reconcile
                 }
             }
             result(SyncOutcome.COMPLETED, null, "")
@@ -109,7 +125,7 @@ class SyncEngine(
         }
 
         private fun result(outcome: SyncOutcome, error: ErrorCode?, detail: String) =
-            SyncResult(outcome, sent, stored, duplicates, rejected.toMap(), peerSummary, peerFinal, error, detail)
+            SyncResult(outcome, sent, stored, duplicates, rejected.toMap(), peerSummary, peerFinal, reconciled.toSet(), error, detail)
 
         /** Everything the peer lacks according to its summary: per author, our versions above its counter. */
         private fun owedTo(peer: SyncSummary): List<ByteArray> {
@@ -121,6 +137,17 @@ class SyncEngine(
             return out
         }
 
+        /**
+         * The authors for whom both phones hold the same counters (as far as the shorter one goes) but a different fingerprint: some
+         * event exists in different versions. Only the phone with the longer (or equal) history can see it; the other is told with `Reconcile`.
+         */
+        private fun mismatches(peer: SyncSummary): List<PublicKey> = peer.entries.filter { (author, theirs) ->
+            val mine = store.summary().entries[author]
+            mine != null && theirs.counter <= mine.counter && store.fingerprintAt(author, theirs.counter)?.contentEquals(theirs.fingerprint) != true
+        }.keys.toList()
+
+        private fun distinct(list: List<ByteArray>) = list.distinctBy { it.toList() }
+
         private suspend fun sendEnvelopes(list: List<ByteArray>) {
             for (batch in SyncMessage.Envelopes.batches(list)) {
                 send(batch)
@@ -128,11 +155,14 @@ class SyncEngine(
             }
         }
 
-        private suspend fun receiveUntilDone() {
+        /** Takes in what the peer sends until its `Done`; returns the authors it asked about with `Reconcile`. */
+        private suspend fun receiveRound(): Set<PublicKey> {
+            val asked = LinkedHashSet<PublicKey>()
             while (true) {
                 when (val m = next()) {
                     is SyncMessage.Envelopes -> take(m)
-                    is SyncMessage.Done -> { peerFinal = m.summary; return }
+                    is SyncMessage.Reconcile -> asked += m.author
+                    is SyncMessage.Done -> { peerFinal = m.summary; return asked }
                     else -> throw refuse(ErrorCode.INVALID, "unexpected message")
                 }
             }

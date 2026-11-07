@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import owntally.crypto.EnvelopeSigning
 import owntally.crypto.KeyDerivation
 import owntally.crypto.MasterSeed
+import owntally.model.Envelope
 import owntally.model.GroupId
 import owntally.model.PublicKey
 
@@ -324,5 +325,95 @@ class SyncEngineTest {
         val after = Fingerprint.next(Fingerprint.next(Fingerprint.ZERO, 1, listOf(e1, e1b)), 2, listOf(e2))
         assertContentEquals(after, s.summary().entries.getValue(who(1).publicKey).fingerprint)
         assertEquals(null, s.fingerprintAt(who(1).publicKey, 3), "not held that far")
+    }
+
+    // ---- two different versions of one event (S1, T5.5) -----------------------------------------------------------------
+
+    private fun versions(s: InMemorySyncStore, n: Int, counter: Long) = s.versionsAbove(who(n).publicKey, counter - 1).filter { Envelope.decode(it).counter == counter }.map { it.toList() }.toSet()
+
+    @Test fun twoPhonesWithTheSameCountersButDifferentVersionsFindItAndEndWithBoth() = runTest {
+        val a = store(1 to 1L..1L).also { it.offer(envelope(1, 2, tag = 0)) }
+        val b = store(1 to 1L..1L).also { it.offer(envelope(1, 2, tag = 5)) }
+        assertEquals(a.summary().entries.getValue(who(1).publicKey).counter, b.summary().entries.getValue(who(1).publicKey).counter, "both believe they are up to date")
+        assertTrue(!a.summary().entries.getValue(who(1).publicKey).fingerprint.contentEquals(b.summary().entries.getValue(who(1).publicKey).fingerprint))
+        val (ra, rb) = sync(a, b)
+        assertEquals(SyncOutcome.COMPLETED, ra.outcome)
+        assertEquals(SyncOutcome.COMPLETED, rb.outcome)
+        assertEquals(setOf(who(1).publicKey), ra.reconciled + rb.reconciled)
+        assertEquals(2, versions(a, 1, 2).size)
+        assertEquals(versions(a, 1, 2), versions(b, 1, 2))
+        assertEquals(a.summary(), b.summary(), "the same fingerprints now")
+        // and it is over: a second sync reconciles nothing and stores nothing
+        val (ra2, rb2) = sync(a, b)
+        assertEquals(emptySet(), ra2.reconciled + rb2.reconciled)
+        assertEquals(0, ra2.stored + rb2.stored + ra2.sent + rb2.sent)
+    }
+
+    @Test fun theLongerPhoneNoticesAndTheShorterOneGetsBothTheRestAndTheOtherVersion() = runTest {
+        for (longerInitiates in listOf(true, false)) {
+            val long = store(1 to 1L..2L).also { it.offer(envelope(1, 3, tag = 0)); it.offer(envelope(1, 4)); it.offer(envelope(1, 5)) }
+            val short = store(1 to 1L..2L).also { it.offer(envelope(1, 3, tag = 5)) }
+            val (ra, rb) = if (longerInitiates) sync(long, short) else sync(short, long).let { it.second to it.first }
+            assertEquals(SyncOutcome.COMPLETED, ra.outcome, "longer initiates: $longerInitiates")
+            assertEquals(SyncOutcome.COMPLETED, rb.outcome, "longer initiates: $longerInitiates")
+            assertEquals(2, versions(long, 1, 3).size)
+            assertEquals(versions(long, 1, 3), versions(short, 1, 3))
+            assertEquals(long.summary(), short.summary())
+            assertEquals(5L, short.summary().entries.getValue(who(1).publicKey).counter, "the later events arrived too")
+            assertEquals(all(long), all(short))
+        }
+    }
+
+    @Test fun aDifferenceBeyondTheShorterPhonesEventsIsNotAForkJustMissingEvents() = runTest {
+        val long = store(1 to 1L..5L)
+        val short = store(1 to 1L..3L)
+        val (ra, rb) = sync(long, short)
+        assertEquals(emptySet(), ra.reconciled + rb.reconciled, "the same first three events: nothing to reconcile")
+        assertEquals(all(long), all(short))
+    }
+
+    @Test fun onlyTheAuthorWhoseVersionsDifferIsReconciled() = runTest {
+        val a = store(1 to 1L..3L, 2 to 1L..3L).also { it.offer(envelope(2, 4, tag = 0)) }
+        val b = store(1 to 1L..3L, 2 to 1L..3L).also { it.offer(envelope(2, 4, tag = 7)) }
+        val (ra, rb) = sync(a, b)
+        assertEquals(setOf(who(2).publicKey), ra.reconciled + rb.reconciled)
+        assertEquals(all(a), all(b))
+    }
+
+    @Test fun threeVersionsAcrossTwoPhonesEndWithTheTwoSmallestOnBoth() = runTest {
+        val v = (1..3).map { envelope(1, 1, tag = it) }
+        val two = Fingerprint.smallestTwo(v)
+        val smallest = two.map { it.toList() }.toSet()
+        val third = v.first { x -> two.none { it.contentEquals(x) } }
+        // A holds the second smallest and the largest, B the two smallest.
+        val a = InMemorySyncStore(group).also { it.offer(two[1]); it.offer(third) }
+        val b = InMemorySyncStore(group).also { it.offer(two[0]); it.offer(two[1]) }
+        sync(a, b)
+        assertEquals(smallest, versions(a, 1, 1))
+        assertEquals(smallest, versions(b, 1, 1))
+        assertEquals(a.summary(), b.summary())
+    }
+
+    @Test fun aLinkCutAnywhereDuringAReconcileLeavesNothingBrokenAndALaterSyncFinishes() = runTest {
+        fun phones(): Pair<InMemorySyncStore, InMemorySyncStore> {
+            val a = store(1 to 1L..3L, 2 to 1L..2L).also { it.offer(envelope(1, 4, tag = 0)); it.offer(envelope(3, 1)) }
+            val b = store(1 to 1L..3L, 2 to 1L..2L).also { it.offer(envelope(1, 4, tag = 9)); it.offer(envelope(1, 5)) }
+            return a to b
+        }
+        val probe = Cutter(Int.MAX_VALUE)
+        phones().let { (a, b) -> sync(a, b, wrap = { x, y -> lateinit var wb: Link; val wa = probe.wrap(x) { wb }; wb = probe.wrap(y) { wa }; wa to wb }) }
+        val total = probe.sent
+        assertTrue(total >= 6, "a reconcile sync is $total messages")
+        for (limit in 0..total) {
+            val (a, b) = phones()
+            val cutter = Cutter(limit)
+            sync(a, b, wrap = { x, y -> lateinit var wb: Link; val wa = cutter.wrap(x) { wb }; wb = cutter.wrap(y) { wa }; wa to wb })
+            val (r1, r2) = sync(a, b)
+            assertEquals(SyncOutcome.COMPLETED, r1.outcome, "limit $limit")
+            assertEquals(SyncOutcome.COMPLETED, r2.outcome, "limit $limit")
+            assertEquals(a.summary(), b.summary(), "limit $limit")
+            assertEquals(all(a), all(b), "limit $limit")
+            assertEquals(2, versions(a, 1, 4).size, "limit $limit")
+        }
     }
 }

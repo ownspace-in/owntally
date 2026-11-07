@@ -83,7 +83,7 @@ class GroupSession(
         repo.group(groupId)?.let { identity.groupIdentity(it.keySlot) },
     ) { "no such group, or no usable seed" }
 
-    private val log = EventLog()
+    private var log = EventLog()
     private val seen = HashSet<String>()
     private val waiting = ArrayList<Envelope>()
     private val deferred = ArrayList<Envelope>()
@@ -274,6 +274,17 @@ class GroupSession(
         unreadableKeyEpochs = load.unreadableEpochs
         val stored = repo.envelopes(groupId)
         damaged = stored.damaged
+        // Only the two smallest versions of an id are read (S1). A newer arrival can push out one that was already taken in: start the
+        // log again from what is stored now, so the result is the same as if everything had arrived at once.
+        val current = stored.envelopes.map { fingerprint(it) }.toHashSet()
+        if (seen.any { it !in current }) {
+            log = EventLog()
+            seen.clear()
+            waiting.clear()
+            deferred.clear()
+            rejected.clear()
+            opened = 0
+        }
         val pending = ArrayList<Envelope>()
         pending += waiting
         waiting.clear()

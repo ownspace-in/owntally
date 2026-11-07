@@ -7,6 +7,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import owntally.model.Envelope
 import owntally.model.Money
 import owntally.model.Split
 import owntally.sync.GroupRoom
@@ -28,6 +29,8 @@ class SimReport(
     val linksBroken: Int,
     val settleRounds: Int,
     val envelopes: Int,
+    /** How many times a cheating phone handed a different version of one of its events to another phone. */
+    val forks: Int,
     val log: List<String>,
 )
 
@@ -47,6 +50,7 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
     private var syncs = 0
     private var operations = 0
     private var nameCounter = 0
+    private var forks = 0
     private lateinit var devices: List<SimDevice>
     private lateinit var network: SimNetwork
 
@@ -68,6 +72,7 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
         network.faults = faults
         val running = ArrayList<Job>()
         repeat(steps) { step ->
+            if (random.nextInt(100) < 3) fork(devices.random(random))
             if (random.nextInt(100) < 62) operate(devices.random(random)) else {
                 val online = devices.filter { it.online }
                 if (online.size >= 2) {
@@ -88,9 +93,11 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
         return report(faults, rounds)
     }
 
+    private infix fun <T> Set<T>.xor(other: Set<T>): Set<T> = (this - other) + (other - this)
+
     private fun report(faults: SimFaults, rounds: Int) = SimReport(
         seed, devices.size, faults, operations, syncs, outcomes.toMap(), network.messagesLost, network.linksBroken, rounds,
-        devices[0].syncStore().summary().entries.values.sumOf { it.counter.toInt() }, log.toList(),
+        devices[0].syncStore().summary().entries.values.sumOf { it.counter.toInt() }, forks, log.toList(),
     )
 
     // ---- what the phones do ---------------------------------------------------------------------------------------------
@@ -128,6 +135,31 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
             else -> { nameCounter++; what = "updateProfile"; d.session.updateProfile("${d.name} v$nameCounter", "98765 %05d".format(10_000 + nameCounter)) }
         }
         note("${d.name}: $what -> ${result.toString().take(60)}")
+    }
+
+    /**
+     * A cheating (or broken) phone gives another phone a different version of one of its own events: same author and counter, different
+     * content, really signed. Counters alone cannot show it (S1), so this checks that the fingerprints do, and that in the end every phone
+     * holds both versions and ignores the event, so everyone still agrees.
+     */
+    private fun fork(d: SimDevice) {
+        val mine = d.env.groups.envelopes(d.group).envelopes.filter { it.author == d.key }
+        val target = mine.randomOrNull(random) ?: return
+        val ring = d.env.secrets.loadKeyring(d.group).keyring
+        val key = ring[target.epoch] ?: return
+        val original = (owntally.crypto.EventSealing.open(target, ring) as? owntally.crypto.OpenResult.Opened)?.event ?: return
+        val body = when (val b = original.body) {
+            is owntally.model.EventBody.ExpenseAdded -> b.copy(description = b.description + "!")
+            is owntally.model.EventBody.ProfileUpdated -> b.copy(phone = "98765 99999")
+            else -> return
+        }
+        val second = owntally.model.Event(original.version, original.author, original.counter, original.after, original.time, body)
+        val envelope = owntally.crypto.EventSealing.seal(d.env.identity.groupIdentity(d.slot)!!, d.group, target.epoch, key, second)
+        val victim = (devices - d).random(random)
+        victim.env.groups.appendEnvelope(d.group, envelope)
+        victim.session.refresh()
+        forks++
+        note("${d.name} hands ${victim.name} a different version of ${d.name}#${original.counter}")
     }
 
     private suspend fun oneSync(a: SimDevice, b: SimDevice): Pair<SyncResult, SyncResult> {
@@ -193,7 +225,16 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
         val ref = readers[0].session.view.value
         for (d in readers.drop(1)) {
             val v = d.session.view.value
-            if (v.state != ref.state) fail("the state on ${d.name} differs from ${readers[0].name}: ${diff(ref.state.toString(), v.state.toString())}")
+            if (v.state != ref.state) {
+                val odd = (ref.state.ignored.toSet() xor v.state.ignored.toSet()).map { it.id }
+                val detail = odd.joinToString("\n") { id ->
+                    devices.joinToString(" ") { x ->
+                        val stored = x.env.groups.rawEnvelopes(x.group).map { Envelope.decode(it) }.filter { it.author == id.author && it.counter == id.counter }
+                        "${x.name}: stored ${stored.size} (epochs ${stored.map { it.epoch }}), reason ${x.session.view.value.state.ignored.firstOrNull { it.id == id }?.reason}, applied ${id in x.session.view.value.state.expenses || x.session.view.value.state.members.containsKey(id.author)}, counts ${x.session.view.value.counts}"
+                    }
+                }
+                fail("the state on ${d.name} differs from ${readers[0].name}: ${diff(ref.state, v.state)}\n$detail")
+            }
             if (v.balances != ref.balances) fail("the balances on ${d.name} differ from ${readers[0].name}")
             if (v.plan != ref.plan) fail("the settlement plan on ${d.name} differs from ${readers[0].name}")
         }
@@ -221,8 +262,25 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
         }
     }
 
-    private fun diff(a: String, b: String): String {
-        val i = a.zip(b).indexOfFirst { it.first != it.second }.let { if (it < 0) minOf(a.length, b.length) else it }
-        return "first difference at $i: ...${a.drop(maxOf(0, i - 40)).take(120)} | ...${b.drop(maxOf(0, i - 40)).take(120)}"
+    /** Which parts of two states differ, field by field (a printed copy differs in set order even when the states are equal). */
+    private fun diff(x: owntally.model.GroupState, y: owntally.model.GroupState): String {
+        val parts = ArrayList<String>()
+        fun <K, V> mapDiff(name: String, p: Map<K, V>, q: Map<K, V>) {
+            val keys = (p.keys + q.keys).filter { p[it] != q[it] }
+            if (keys.isNotEmpty()) parts += "$name differs at ${keys.take(3).joinToString { k -> "$k: ${p[k]} | ${q[k]}" }.take(700)}"
+        }
+        if (x.name != y.name) parts += "name"
+        mapDiff("members", x.members, y.members)
+        if (x.owner != y.owner) parts += "owner ${x.owner} | ${y.owner}"
+        if (x.pendingOffer != y.pendingOffer) parts += "pendingOffer"
+        if (x.declinedOffer != y.declinedOffer) parts += "declinedOffer"
+        if (x.epoch != y.epoch) parts += "epoch ${x.epoch} | ${y.epoch}"
+        mapDiff("epochStarts", x.epochStarts, y.epochStarts)
+        mapDiff("expenses", x.expenses, y.expenses)
+        mapDiff("settlements", x.settlements, y.settlements)
+        mapDiff("removals", x.removals, y.removals)
+        if (x.ignored.toSet() != y.ignored.toSet()) parts += "ignored: only left ${(x.ignored.toSet() - y.ignored.toSet()).take(4)}, only right ${(y.ignored.toSet() - x.ignored.toSet()).take(4)}"
+        if (x.heldBack != y.heldBack) parts += "heldBack"
+        return parts.joinToString("; ").ifEmpty { "(equal field by field; the order of the ignored list differs?)" }
     }
 }

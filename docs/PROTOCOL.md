@@ -60,7 +60,7 @@ A log is a set of events. Two phones with the same set of events must compute th
 1. **Dependencies.** An event depends on its own previous counter, and on every `(author, c)` with `c <= after[author]`.
 2. **Ready.** An event is applied only when all its dependencies are present. Events whose dependencies are missing are held back and do not affect state until the dependencies arrive.
 3. **Order.** Apply ready events with a deterministic topological order: repeatedly take, from all ready events, the one with the smallest `(author bytes, counter)`.
-4. **Duplicates.** If two different events have the same `EventId`, both are ignored with `DUPLICATE_ID`, but they still count as present for dependencies.
+4. **Duplicates.** If two different events have the same `EventId`, both are ignored with `DUPLICATE_ID`, but they still count as present for dependencies. A phone keeps at most the two versions of an id with the smallest hashes (WIRE_FORMAT.md section 6); the rules treat two or more alike. Counters alone cannot show that two phones hold different versions, so the sync summary carries a fingerprint of each author's events (owner decision S1, 7 Nov 2026): phones with the same counters but different fingerprints exchange every version they hold of that author's events, end with the same two, and so ignore the event everywhere.
 5. **Unknown types.** An event with an unknown body type or a newer `version` is kept in the log with no effect (`UNKNOWN_TYPE`), and counts as present for dependencies.
 6. **Rules** (section 4) are checked against the state at that point in the order. An event that fails a rule stays in the log but has no effect, and is reported with a reason.
 

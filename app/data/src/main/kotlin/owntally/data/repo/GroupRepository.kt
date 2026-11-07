@@ -16,6 +16,7 @@ import owntally.model.Event
 import owntally.model.EventBody
 import owntally.model.GroupId
 import owntally.model.GroupIds
+import owntally.sync.Fingerprint
 
 enum class RejectedBecause { UNKNOWN_GROUP, WRONG_GROUP, TOO_LARGE, BAD_SIGNATURE }
 
@@ -91,7 +92,7 @@ class GroupRepository(
 
     fun envelopes(groupId: GroupId): StoredEnvelopes {
         var damaged = 0
-        val list = events.envelopes(groupId).mapNotNull { bytes ->
+        val decoded = events.envelopes(groupId).mapNotNull { bytes ->
             try {
                 Envelope.decode(bytes)
             } catch (e: DecodeException) {
@@ -99,7 +100,19 @@ class GroupRepository(
                 null
             }
         }
-        return StoredEnvelopes(list, damaged)
+        return StoredEnvelopes(atMostTwoPerId(decoded), damaged)
+    }
+
+    /**
+     * Of the envelopes stored for one id (author and counter) only the two with the smallest hashes are read (docs/WIRE_FORMAT.md section 6):
+     * the same two the sync keeps and compares, so every phone reaches the same state however many versions it has been handed. Any
+     * further ones stay in the database, unread. Order is kept.
+     */
+    private fun atMostTwoPerId(all: List<Envelope>): List<Envelope> {
+        val crowded = all.groupBy { it.author to it.counter }.filterValues { it.size > 2 }
+        if (crowded.isEmpty()) return all
+        val keep = crowded.values.flatMap { group -> Fingerprint.smallestTwo(group.map { it.encode() }) }.map { it.toList() }.toSet()
+        return all.filter { e -> (e.author to e.counter) !in crowded || e.encode().toList() in keep }
     }
 
     /** Removes the group's events first and its keys second, so a crash in between leaves at worst an unused key. */
