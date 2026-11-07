@@ -21,7 +21,7 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 | T5.9 leave delivered, then deleted | Done (7 Nov 2026), see below. |
 | T5.10 sync status and screen | Done (7 Nov 2026), see below. |
 | T5.11 | Done. |
-| T5.12 | Not started. |
+| T5.12 | Done locally; CI runs when the pull request is opened. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -131,6 +131,28 @@ Done when: a test kills the engine after every stored envelope and restarts; on 
 
 ### T5.12 Hand back
 Checklist: all tests, lint, debug and release builds and the vulnerability check pass locally and in CI; the simulation passes its seeds; every rule in DESIGN.md "Data model" and "Remove member" about syncing has a test (a table in the task notes maps each to its test); no network permission and no analytics in the release build (the sync module still has no real network use); docs match; every interpretation is listed in the pull request.
+
+**T5.12 result (8 Nov 2026).** **Run locally on `m5-sync`:** all unit tests of every module, lint, debug and release builds (pass); `tools/check_vulnerabilities.py` (120 libraries, none known); the simulation with 500 seeds (pass); emulator suites as of T5.10 and T5.11 (data, ui, app pass). CI runs on the pull request. **Release build:** the merged release manifest asks only for `USE_BIOMETRIC` and `USE_FINGERPRINT` (no `INTERNET`; `ManifestRulesTest` fails if one is added); no analytics or crash-reporting library is in any module; `app/sync` has no real network code in the app (OkHttp is compile-only, `NoTransport` is wired).
+
+**Where each sync rule of DESIGN.md is tested**
+
+| Rule (DESIGN.md) | Test |
+|---|---|
+| Data model: swap a summary (author to highest counter), send only what is missing, merge is a union | `SyncEngineTest`: `twoStoresWithDifferentHistoriesEndWithTheUnion`, `aSecondSyncStoresAndSendsNothing`, `aGapIsFilledFromTheOtherSide`, `aLargeHistoryGoesInSeveralBatchesAndArrivesWhole` |
+| Data model: phones always agree after exchanging everything | `SimulationTest.everyScenarioEndsWithPhonesThatAgree` (500 seeds), `ConcurrentRulesTest.theStateIsTheSameWhateverOrderTheEventsArriveIn` |
+| Data model: an event is (author, counter); two different events with one id are ignored, on every phone | `ForkTest.twoVersionsOfOneEventAreFoundExchangedAndBothIgnoredSoEveryoneAgrees`; `SyncEngineTest` fork and reconcile tests; `theStoreKeepsOneVersionTwoAtMostAndOnlyTheSmallestTwo` |
+| Data model: signed, encrypted; bad or foreign envelopes never stored | `SyncEngineTest`: bad signature, other group, malformed, oversize, `aPeerThatSendsOnlyBadDataIsCutOffAfterALimit`; `SyncCoordinatorTest.envelopesThatWereDroppedProduceOneNoticeAndALogLineAndTheNoticeCanBeDismissed` |
+| Both phones online to sync, no mailbox; a stopped sync resumes | `SyncEngineTest.aLinkCutAfterAnyNumberOfMessages...`, `InterruptionTest`, `InterruptionDataTest`, `LargeHistoryInstrumentedTest` |
+| Remove 3: remaining members get the new key on next sync | `SyncCoordinatorTest.aLeaveWrittenOnOnePhoneMakesTheOwnersPhoneChangeTheKeyByItselfAndTheNewKeyReachesOnlyThoseWhoStay`; `KeyCoverageTest` |
+| Remove 3: entries newer than the last seen counter are ignored | `AccessTest.aPersonRemovedByTheOwnerIsSentOnlyTheRemovalAndHerLateEntriesBecomeCancelledEntries` |
+| Remove 4: the removed member sees "You were removed" when she next syncs, without the rest | `AccessTest.aPersonRemovedByTheOwnerIsSentOnlyTheRemoval...`, `aRemovalThatDependsOnEventsSheNeverGotIsStillRecognisedWithoutBeingApplied`, `aRemovalThatDidNotComeFromTheOwnerIsNotTakenForTheRealThing` |
+| Remove 5: after a leave the group is hidden at once, kept until a member has it, then deleted with its keys | `LeaveDeliveryTest` (hidden and kept, deleted after proof, restart in between, claim without proof, Delete now) |
+| Remove 5: a leaver gets nothing and no copy | `AccessTest.aPersonWhoLeftIsSentNothingAndTheAnswerProvesHerLeaveArrived` |
+| Nobody outside the group learns anything | `AccessTest.someoneWhoWasNeverAMemberIsRefusedAndLearnsNothing` |
+| Concurrent leave, key change, admission and expenses | `ConcurrentRulesTest` (S7), `KeyCoverageTest` |
+| Sync states shown to the user; can't reach a member; retries 1, 5, 30 minutes | `SyncModelTest`, `SyncCoordinatorTest` (retries, status, "Not reachable yet"), `SyncScreen` emulator tests |
+
+**Interpretations to list in the pull request:** S1 (fingerprint in the summary so forks always converge); S2 (removed by the owner: only the removal event, recognised but not applied on her phone; leaver sent nothing; never-members refused; anyone who ever was a member may connect); S3 (background sync is only a callable pass until M6); S4 (three ways to report rejected entries); S5 (screen in all builds, "Not reachable yet" on real phones, **debug pretend devices not built**); S6 ("Delete now" in Settings); S7 (facts an author writes are judged by what the author had seen, chosen by the owner; this changed M2 and M4 rules); at most two versions of one event are kept per id; the access check refreshes the session at each connection, which is slow for very large groups; the owner role changing hands at the same time as a key change by the old owner could still be ignored (not seen in 500 seeds); AGP and Kotlin stay at 8.9.2 and 2.2.0 (PR #23 reverted), OkHttp is compile-only until M6.
 
 ## Open questions
 
