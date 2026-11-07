@@ -48,14 +48,14 @@ dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
     implementation(libs.tink.android)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-    implementation("androidx.room:room-runtime:2.8.5")
-    ksp("androidx.room:room-compiler:2.8.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("androidx.room:room-runtime:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation(kotlin("test"))
 
     androidTestImplementation(kotlin("test"))
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
-    androidTestImplementation("androidx.room:room-testing:2.8.5")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
 }
