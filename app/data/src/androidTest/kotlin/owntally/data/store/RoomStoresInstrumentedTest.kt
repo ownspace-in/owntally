@@ -136,4 +136,23 @@ class RoomStoresInstrumentedTest {
         assertEquals(emptyList(), requests.list(a))
         assertNull(requests.get(a, ben))
     }
+
+    @Test
+    fun theProblemLogKeepsTheNewestLinesPerGroupAndHoldsNoEnvelopeContent() {
+        store.addGroup(GroupRow(a, 0, 1), emptyList())
+        store.addGroup(GroupRow(b, 1, 2), emptyList())
+        val log = RoomSyncProblemLog(db, maxPerGroup = 4)
+        val peer = PublicKey(ByteArray(32) { 9 })
+        repeat(7) { n -> log.add(SyncProblem(a, peer, ProblemKind.MALFORMED, n + 1, 100L + n)) }
+        log.add(SyncProblem(b, peer, ProblemKind.CUT_OFF, 1, 200))
+        assertEquals(listOf(7, 6, 5, 4), log.recent(a, 50).map { it.count }, "the newest first, the oldest dropped")
+        assertEquals(1, log.recent(b, 50).size)
+        assertEquals(ProblemKind.CUT_OFF, log.recent(b, 50).single().kind)
+        log.clear(a)
+        assertEquals(emptyList(), log.recent(a, 50))
+        assertEquals(1, log.recent(b, 50).size)
+        // The table has no column that could hold bytes of an envelope: only ids, a kind, a count and a time.
+        val columns = db.openHelper.readableDatabase.query("PRAGMA table_info(sync_problems)").use { c -> generateSequence { if (c.moveToNext()) c.getString(1) else null }.toList() }
+        assertEquals(listOf("row_id", "group_id", "peer", "kind", "count", "at_seconds"), columns)
+    }
 }
