@@ -124,7 +124,7 @@ The entries are in ascending author order with no duplicates. `counter` is the h
 
 - **Hello** opens a sync; each side sends one. `room` is the group's room name (DESIGN.md, `GroupRoom`); a different room is refused with code 2.
 - **Envelopes** carries whole envelopes (section 3), at most 200 and at most 262,144 bytes in all, each at most 65,536 bytes. A sender with more sends several messages.
-- **Done** says "I have nothing more to send in this round" and carries the sender's summary after storing what it received. A phone that wants proof that its leave arrived reads it from here (T5.9).
+- **Done** ends one side's sending and carries the sender's summary at that moment. The order is fixed: both send `Hello`; the **initiator** sends what the responder lacks and a `Done`; the **responder**, having stored all of it, sends what the initiator lacks and a `Done`, whose summary therefore shows what it stored of the initiator's events. A phone that wants proof that its leave arrived (it is the initiator) reads it from the responder's `Done` (T5.9).
 - **Reconcile** says "our histories of this author disagree (the fingerprints differ for counters we both have): send me every version you hold of this author's events, and I send you mine".
 - **Error** ends the sync. Codes: 1 unsupported version, 2 wrong group, 3 not allowed, 4 message too large, 5 invalid message, 6 too many bad envelopes. `text` is plain UTF-8 for the log, never shown as a rule.
 
