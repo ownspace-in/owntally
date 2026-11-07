@@ -4,13 +4,13 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M5. Rules: [DESIGN.md](../D
 
 Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchange version summaries, send only the missing events, verify and apply, idempotent, resumable. Tested with an in-memory transport and 3 to 5 simulated devices with random delays, drops and reordering. Acceptance: simulated devices always converge to identical logs and balances; interrupted syncs resume; events with bad signatures are dropped and reported. Also (from the M4 plan, D4): a group the person has left is deleted, keys included, once the leave has reached another member.
 
-**This file is a draft: nothing below is built until the owner approves it** (section "Decisions needed").
+**Decisions S1 to S6 are made (7 Nov 2026, below). Nothing is built until the owner approves this plan.**
 
 ## Progress
 
 | Task | Status |
 |---|---|
-| T5.1 plan and decisions | In progress (this file). |
+| T5.1 plan and decisions | Done (7 Nov 2026): S1 to S6 decided. Waiting for the owner's go-ahead to build T5.2. |
 | T5.2 to T5.12 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -20,16 +20,16 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 - **Envelopes:** `author`, `counter`, `groupId` and `epoch` are readable without any key; everything else is encrypted. A phone can therefore store and pass on envelopes it cannot read (an epoch whose key it lacks). `GroupRepository.appendEnvelope` already checks group, size (64 KB) and signature, and stores identical bytes once.
 - **`GroupSession`:** reads stored envelopes, keeps unreadable ones ("waiting for key" and "waiting for member"), takes keys from accepted rotation events, and (M4) the owner's phone changes the key after a leave when it refreshes. `refresh()` is the hook sync will call after storing new envelopes.
 
-## Decisions needed
+## Decisions made
 
-To be asked one at a time, with options and no default marked. Each answer is written here as "D(n) (date): ...".
-
-- **S1. Two different events with the same id (a cheating or broken author).** A summary of counters cannot see them: two phones can each hold a different version of "Ben #7" and both believe they are up to date, and then the group no longer agrees (one phone ignores both, the other uses the one it has). Options: (A) accept this in v1, because it needs a cheating member, and say so; (B) add a short fingerprint of each author's events to the summary, so a mismatch is found and the two versions are exchanged, and every phone ends up ignoring both (as PROTOCOL.md says); (C) refuse to sync with a phone that shows a second version and tell the user.
-- **S2. Who may connect, and what a person who left or was removed receives.** DESIGN.md says a removed person's phone shows "You were removed" the next time it syncs, but that person must not get later entries. Options: how much a removed person is sent (nothing but their own removal; everything up to their removal; nothing at all), and whether a person who left on their own may connect once to hand over their leave.
-- **S3. When a phone syncs.** Options: when the app opens; after each local change (push to everyone who is reachable); every few minutes while the app is open; when the network changes. Which of these are in M5 (as functions the app can call) and which wait until M6 has real connections.
-- **S4. Where a rejected event is reported.** "Dropped and reported": in a log kept on the phone, in a count on the Sync status, a message to the person, or only in tests and debug builds for now.
-- **S5. The Sync tab in M5.** The tab says "arrives in a later update". Options: leave it until M6, show a real status (up to date with N members, syncing, waiting for a friend) fed by the fake network in debug builds only, or build the status model without a screen.
-- **S6. A group the person has left and nobody ever received the leave.** The group stays hidden and kept until the leave reaches someone. If the person is offline for good, or the others never come back, the data stays forever. Options: keep it hidden until delivered (no way out); add a "Delete now, even though nobody has seen that I left" in settings, with a warning; or delete after a time limit.
+- **S1 (7 Nov 2026): two different events with the same id: B.** The summary carries a short fingerprint of each author's events next to the counters. If two phones show the same counters but different fingerprints, they exchange that author's events, both versions end up on both phones, and every phone ignores both, as PROTOCOL.md says. Phones therefore always converge, even with a cheating member. Needs: the fingerprint defined in WIRE_FORMAT.md (how it is computed, so it is the same on every phone and cheap to update), tests with two versions of one event on different devices.
+- **S2 (7 Nov 2026): who may connect and what they get.**
+  - **A person removed by the owner receives only the removal event (answer to S2a).** She is not sent the events she missed before it, and nothing written after it. Consequence found while planning: a phone applies an event only when everything that event saw is present, and her phone will not have all of it, so the removal event cannot be *applied* there. Her phone therefore recognises a removal event addressed to her own key, checks its signature and that its author is a member she knows as the owner, and shows "You were removed from Goa Trip" from that, without applying it. What she already had stays as it was.
+  - **Decided while planning, not asked (say if you object):** anyone who is, or ever was, a member may connect and hand over events; events from a removed or departed member after their cut-off are kept as cancelled entries (D5b). Someone who left on their own is sent nothing (D4: no copy), and a leaver's phone never asks for anything. A connection from a key that was never a member is refused before anything is sent, and learns nothing about the group.
+- **S3 (7 Nov 2026): when a phone syncs: all four.** When the app opens; after each local change; every few minutes while the app is open; and in the background about every 15 minutes (or more, as Android allows) while the app is closed. M5 builds the first three and a `SyncScheduler` the background job will call, all tested on virtual time; the Android background job itself (WorkManager) needs real connections and is wired in M6. The retry delays of DESIGN.md (1, 5 and 30 minutes) apply to a peer that cannot be reached.
+- **S4 (7 Nov 2026): rejected events are reported three ways.** (1) A log on the phone (kind, which peer, when; never the content). (2) A note on the Sync screen ("1 entry from Ben was rejected"). (3) A message to the person: one dismissible notice per sync run ("Some entries from Ben were rejected"), never one per envelope. A phone that sends only bad data is disconnected after a limit.
+- **S5 (7 Nov 2026): the Sync screen is built in all builds.** The per-group screen of mockup 05 without the Nearby button (M6) and without the relay card (the app decides, 4 Nov): "Sync now", one line per member (how they are reached, when last, "3 entries not shared", "Not reachable directly" and so on), the rejected-entries note. On a real phone every member shows "Not reachable yet" until M6 gives it real connections. Debug builds can connect pretend devices through the fake network. The tab's "later update" text goes away.
+- **S6 (7 Nov 2026): a hidden group whose leave nobody received: "Delete now" in settings.** A list of hidden groups under Settings with a **Delete now** button for each and a warning: "Nobody has seen that you left. If you delete now, the others will still count you as a member." Deleting removes the group's events and keys. A group is also deleted automatically, as in D4, once the leave has been delivered.
 
 ## Tasks
 
@@ -46,28 +46,28 @@ Do: a simulated network on virtual time (no real waiting): 3 to 5 devices, each 
 Done when: for at least 500 seeds, after a final quiet period with full connectivity, every device has the same set of envelopes, the same state and the same balances; a failing seed reproduces exactly.
 
 ### T5.5 Same id, different event (S1)
-Do: whatever S1 decides, with the decision written into PROTOCOL.md.
-Done when: a test builds two versions of one event on two devices and shows what the decision promises.
+Do: the fingerprint in the summary (T5.2) and the exchange when it differs; the decision written into PROTOCOL.md. The fingerprint of an author's events is computed from the envelopes' content hashes in counter order, so it changes when any version differs and is the same on every phone.
+Done when: a test builds two versions of one event on two devices that each believe they are up to date; after one sync both hold both versions, both ignore the event, and balances agree; the fingerprint is the same for the same envelopes on any phone and different for any difference.
 
 ### T5.6 Bad events: drop and report (S4)
-Do: an envelope with a bad signature, a wrong group, an unknown author, or too large is not stored; it is counted and recorded (kind, from which peer, when) where S4 says; an unknown author is kept for later as in M2 (it may be admitted later), a bad signature is not.
-Done when: tests for each kind; the report never contains the envelope's content; a peer that sends only bad data is disconnected after a limit.
+Do: an envelope with a bad signature, a wrong group or too large is not stored; it is counted and recorded in a log on the phone (kind, which peer, when); an unknown author is kept for later as in M2 (it may be admitted later), a bad signature is not. The sync result carries the counts so the Sync screen (T5.10) can show the note and the one notice per run.
+Done when: tests for each kind; the log never contains the envelope's content; a peer that sends only bad data is disconnected after a limit; one notice per sync run however many envelopes were rejected.
 
 ### T5.7 Who may connect (S2)
-Do: the access rules from S2, checked before any data is sent. A phone answers a link only from a key it knows as a member (or former member, as S2 says), and sends a removed person only what S2 says.
-Done when: tests for a member, an outsider, a removed member and a leaver; an outsider gets nothing and learns nothing about the group.
+Do: the access rules from S2, checked before any data is sent: a link from a key that was never a member is refused; a member gets everything; a person removed by the owner is sent only the removal event; a person who left is sent nothing; events they hand over are stored and, after their cut-off, listed as cancelled. On the removed person's phone: recognise a removal event addressed to the own key (signature checked, author known as the owner) and show "You were removed" without applying it; a forged one (not from the known owner) is ignored.
+Done when: tests for a member, an outsider, a removed member, a leaver and a forged removal; an outsider learns nothing about the group; the removed person's phone shows the state and keeps what it had.
 
 ### T5.8 Sync in the data layer
-Do: `SyncCoordinator` on top of `Sessions`: for a group, connect to the other members, run the engine, call `GroupSession.refresh()` after new envelopes arrive (so the owner's phone changes the key after a leave, T4.11), and publish a status (idle, syncing with N, waiting for a friend, last result). Triggers as S3 decides.
+Do: `SyncCoordinator` on top of `Sessions`: for a group, connect to the other members, run the engine, call `GroupSession.refresh()` after new envelopes arrive (so the owner's phone changes the key after a leave, T4.11), and publish a status (idle, syncing with N, waiting for a friend, last result per member, rejected counts). Triggers (S3): when the app opens, after each local change, every few minutes while open (all on virtual time in tests), retries after 1, 5 and 30 minutes for a peer that cannot be reached, and a `SyncScheduler` that the Android background job calls in M6.
 Done when: two real `Sessions` on two in-memory stores, joined to one fake network, converge after a change on either side; a leave written on one phone makes the owner's phone change the key by itself on the other.
 
 ### T5.9 Leave delivered, then deleted (D4, S6)
-Do: after a leave, the phone keeps syncing the hidden group until at least one other member's summary shows the leave's counter; then it deletes the group's events, keys and the "left" mark. S6 decides what happens if that never happens.
-Done when: tests: hidden and kept before delivery; deleted, keys included, after delivery; a restart in between keeps it hidden and still delivers; nothing is deleted if the peer only claims to have it (the summary must come from a connection that was accepted by the rules of S2).
+Do: after a leave, the phone keeps syncing the hidden group (pushing only) until at least one other member's summary shows the leave's counter; then it deletes the group's events, keys and the "left" mark. Settings gets a list of hidden groups with **Delete now** and the warning of S6.
+Done when: tests: hidden and kept before delivery; deleted, keys included, after delivery; a restart in between keeps it hidden and still delivers; nothing is deleted if the peer only claims to have it (the summary must come from a connection accepted by the rules of S2); Delete now removes events and keys and the group does not come back; on the emulator, the Settings list and the warning.
 
-### T5.10 Sync status (S5)
-Do: the status model for DESIGN.md "Sync states shown to the user" (up to date with N members, syncing, waiting for a friend to come online, not reachable directly, relay unreachable) and, as S5 decides, a screen.
-Done when: model tests for every state; the screen (if any) compared with mockup 05.
+### T5.10 Sync status and screen (S4, S5)
+Do: the status model for DESIGN.md "Sync states shown to the user" (up to date with N members, syncing, waiting for a friend to come online, not reachable directly, relay unreachable) and the per-group Sync screen in all builds (mockup 05 without the Nearby button and the relay card): "Sync now", one line per member, the rejected-entries note and the one dismissible notice per run. On a real phone every member shows "Not reachable yet" until M6; debug builds can connect pretend devices through the fake network.
+Done when: model tests for every state and for the notice (once per run); the screen compared with mockup 05 on the emulator; the "later update" text is gone.
 
 ### T5.11 Interruptions and restart
 Do: a sync that stops (link drop, app killed) resumes from what is stored; nothing is half-stored; a restart loses nothing.
@@ -78,4 +78,4 @@ Checklist: all tests, lint, debug and release builds and the vulnerability check
 
 ## Open questions
 
-S1 to S6 above.
+None. (S1 to S6 are decided above.)
