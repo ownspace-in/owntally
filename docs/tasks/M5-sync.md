@@ -20,7 +20,8 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 | T5.8 sync in the data layer | Done (7 Nov 2026), see below. |
 | T5.9 leave delivered, then deleted | Done (7 Nov 2026), see below. |
 | T5.10 sync status and screen | Done (7 Nov 2026), see below. |
-| T5.11 to T5.12 | Not started. |
+| T5.11 | Done. |
+| T5.12 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -125,6 +126,8 @@ Done when: model tests for every state and for the notice (once per run); the sc
 ### T5.11 Interruptions and restart
 Do: a sync that stops (link drop, app killed) resumes from what is stored; nothing is half-stored; a restart loses nothing.
 Done when: a test kills the engine after every stored envelope and restarts; on the emulator, a sync of a large history (for example 5,000 envelopes) between two stores is stopped and resumed and ends identical.
+
+**T5.11 result (7 Nov 2026).** **Nothing needed changing in the engine or the stores:** an envelope is stored whole (one database write, checked first), the summary is rebuilt from what is stored, and a sync keeps no state between runs, so a killed sync leaves the phone as it was after its last stored envelope and the next sync asks again from there. The task is the proof. **Tests (JVM):** (sync, 3) the receiving store is killed right after each of 12 stored envelopes in turn, then restarted with a new engine on the same storage: what was stored is exactly the earlier contents plus the envelopes stored so far, the next sync completes on both sides, fetches only what was missing, and both end identical; the same with both sides holding something the other lacks; and an interrupted sync never makes the summary claim a counter with a gap below it. (data, 1) the same on real sessions and repositories: Ben's phone is killed after 1, 2, ... 8, 12, 16... envelopes, a new session is built from the database (nothing half-stored shows up as an expense), the next sync completes and both phones hold the same envelopes and read the same 6 expenses. **Emulator (data, 1 test, about 80 s):** 5,000 envelopes (5 authors, 1,000 each) in one Room file are synced to another; the receiving app is killed after 1,700 stored and again after 900 more, each time closing the file and opening it again; the database holds exactly 2,600 envelopes after the two kills, the last sync completes, and both files hold the same 5,000. One mutation (the database write skipped for the envelope, so only the in-memory view had it) fails the data test. **Cost to remember (T5.12):** the access check refreshes the session at each connection, a replay of the whole log; with 5,000 envelopes it is the slow part of a connection and is not yet measured on the emulator.
 
 ### T5.12 Hand back
 Checklist: all tests, lint, debug and release builds and the vulnerability check pass locally and in CI; the simulation passes its seeds; every rule in DESIGN.md "Data model" and "Remove member" about syncing has a test (a table in the task notes maps each to its test); no network permission and no analytics in the release build (the sync module still has no real network use); docs match; every interpretation is listed in the pull request.
