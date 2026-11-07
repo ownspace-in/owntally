@@ -146,8 +146,46 @@ class SyncCoordinator(
         syncPeers(g, manual = true).joinAll()
     }
 
+    private var delivery: Job? = null
+
+    /** While running, tries to deliver the leave of every group this person left, now and every few minutes, until a member has it. */
+    @Synchronized
+    fun startDelivery() {
+        if (delivery?.isActive == true) return
+        delivery = scope.launch {
+            while (isActive) {
+                deliverLeaves()
+                delay(config.intervalMs)
+            }
+        }
+    }
+
+    @Synchronized
+    fun stopDelivery() {
+        delivery?.cancel()
+        delivery = null
+    }
+
+    /**
+     * For each group this person has left: connect to the members one by one and hand over the leave; when a member's closing summary proves
+     * it has it ([LeaveProof]), the group is deleted with its keys (D4). Nothing is deleted before that.
+     */
+    suspend fun deliverLeaves() {
+        for (left in sessions.leftGroups()) {
+            val g = open(left.id) ?: continue
+            for (peer in peersOf(g)) {
+                val result = runEngine(g, peer) ?: continue
+                if (LeaveProof.delivered(g.session.view.value.state, g.self, left.leaveCounter, peer, result)) {
+                    sessions.deleteLeft(left.id)
+                    break
+                }
+            }
+        }
+    }
+
     /** One pass over every group on this phone, then done (the background job of M6 calls this). */
     suspend fun runOnce() {
+        deliverLeaves()
         for (summary in sessions.summaries.value) {
             if (!summary.readable || summary.youWereRemoved) continue
             syncNow(summary.groupId)
@@ -181,14 +219,8 @@ class SyncCoordinator(
 
     private suspend fun syncOnce(g: Group, peer: PublicKey, run: PeerRun) {
         peerUpdate(g, peer) { it.copy(state = PeerState.SYNCING, attempts = it.attempts + 1, lastAttemptSeconds = now()) }
-        val store = RepositorySyncStore(g.id, groups)
         val result: SyncResult = try {
-            val link = g.transport.connect(g.room, peer)
-            try {
-                SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(link, SyncRole.INITIATOR)
-            } finally {
-                link.close()
-            }
+            runEngine(g, peer, throwUnreachable = true)!!
         } catch (e: CancellationException) {
             throw e
         } catch (e: PeerUnreachable) {
@@ -207,6 +239,24 @@ class SyncCoordinator(
             }
         } else {
             failed(g, peer, run, PeerState.FAILED)
+        }
+    }
+
+    /** Connects and runs the engine as the initiator; null if the member cannot be reached (unless [throwUnreachable]). */
+    private suspend fun runEngine(g: Group, peer: PublicKey, throwUnreachable: Boolean = false): SyncResult? {
+        val store = RepositorySyncStore(g.id, groups)
+        return try {
+            val link = g.transport.connect(g.room, peer)
+            try {
+                SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(link, SyncRole.INITIATOR)
+            } finally {
+                link.close()
+            }.also { g.session.refresh() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (throwUnreachable) throw e
+            null
         }
     }
 

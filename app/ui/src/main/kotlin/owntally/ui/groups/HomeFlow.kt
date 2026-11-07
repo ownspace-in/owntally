@@ -76,7 +76,7 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
-            Screen.Settings -> if (lock != null) owntally.ui.lock.SettingsScreen(lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
+            Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
             is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
             is Screen.Cancelled -> CancelledRoute(
@@ -649,4 +649,15 @@ private fun CancelledRoute(sessions: Sessions, id: GroupId, member: owntally.mod
             onAddAgain(form)
         }
     })
+}
+
+@Composable
+private fun SettingsRoute(sessions: Sessions, lock: owntally.ui.lock.LockController, onBack: () -> Unit) {
+    val left by sessions.left.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    owntally.ui.lock.SettingsScreen(
+        lock, onBack,
+        leftGroups = remember(left) { owntally.ui.lock.LeftGroupsModels.rows(left) },
+        onDeleteLeft = { id -> scope.launch { withContext(Dispatchers.IO) { sessions.deleteLeft(id) } } },
+    )
 }
