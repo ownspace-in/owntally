@@ -105,6 +105,12 @@ sealed class EventBody {
     data class OwnershipOffered(val to: PublicKey) : EventBody()
     data object OwnershipOfferCancelled : EventBody()
     data object OwnershipAccepted : EventBody()
+
+    /**
+     * The offered member says no (owner decision, 5 Nov 2026, M4 D1): written only by the member the pending offer is for. It ends
+     * the offer, and the owner can see the answer. No content.
+     */
+    data object OwnershipDeclined : EventBody()
     /**
      * Removes a member, or lets a member leave (when [member] is the author). Removal by someone else starts a new key
      * epoch and carries the new group key sealed to each remaining member; a leave carries the current epoch and no keys

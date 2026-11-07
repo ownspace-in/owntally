@@ -276,13 +276,12 @@ class GroupSessionTest {
     }
 
     @Test
-    fun ifTheCurrentEpochsKeyIsMissingNothingIsWrittenEvenThoughTheOldKeyIsStillThere() {
-        rotate()
+    fun aLostKeyOfTheCurrentEpochIsTakenAgainFromTheEventThatStartedItIfItWasSealedForThisPerson() {
+        val k2 = rotate()
         env.blobs.delete("key-${group.toHex()}-2")
-        val before = env.groups.envelopes(group).envelopes.size
-        assertEquals(AddResult.NoKey, expense(owner, rupees(10), owner))
-        assertEquals(before, env.groups.envelopes(group).envelopes.size)
-        assertEquals(setOf(1L), env.secrets.loadKeyring(group).keyring.epochs())
+        assertAdded(expense(owner, rupees(10), owner))
+        assertEquals(setOf(1L, 2L), env.secrets.loadKeyring(group).keyring.epochs())
+        assertTrue(env.secrets.loadKeyring(group).keyring[2]!!.bytes().contentEquals(k2.bytes()))
     }
 
     // --- restart and flow ------------------------------------------------------------------------

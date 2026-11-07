@@ -44,6 +44,7 @@ def body(b):
     if t == "OwnershipOffered": return 11, key(b["to"])
     if t == "OwnershipOfferCancelled": return 12, b""
     if t == "OwnershipAccepted": return 13, b""
+    if t == "OwnershipDeclined": return 16, b""
     if t == "MemberRemoved": return 14, key(b["member"]) + u32(b["newEpoch"]) + kmap({k: sealed(v) for k, v in b["sealedKeys"].items()})
     if t == "KeyRotated": return 15, u32(b["newEpoch"]) + kmap({k: sealed(v) for k, v in b["sealedKeys"].items()})
     if t == "Unknown": return b["tag"], bytes.fromhex(b["content"])
@@ -77,11 +78,12 @@ V = [
     ev("ownership-offered", "asha", 12, {"asha": 11}, 1011, {"type": "OwnershipOffered", "to": "ben"}),
     ev("ownership-offer-cancelled", "asha", 13, {"asha": 12}, 1012, {"type": "OwnershipOfferCancelled"}),
     ev("ownership-accepted", "ben", 4, {"ben": 3, "asha": 13}, 1013, {"type": "OwnershipAccepted"}),
+    ev("ownership-declined", "chitra", 3, {"chitra": 2, "asha": 13}, 1019, {"type": "OwnershipDeclined"}),
     ev("member-removed", "asha", 14, {"asha": 13}, 1014, {"type": "MemberRemoved", "member": "eve", "newEpoch": 2, "sealedKeys": {"ben": SEALED(2), "asha": SEALED(1), "dev": SEALED(4), "chitra": SEALED(3)}}),
     ev("leave", "dev", 3, {"dev": 2}, 1015, {"type": "MemberRemoved", "member": "dev", "newEpoch": 2, "sealedKeys": {}}),
     ev("key-rotated", "asha", 15, {"asha": 14}, 1016, {"type": "KeyRotated", "newEpoch": 3, "sealedKeys": {"asha": SEALED(1), "ben": SEALED(2)}}),
     ev("unknown-tag", "asha", 16, {"asha": 15}, 1017, {"type": "Unknown", "tag": 200, "content": "0102"}),
-    ev("unknown-tag-empty", "asha", 17, {"asha": 16}, 1018, {"type": "Unknown", "tag": 16, "content": ""}),
+    ev("unknown-tag-empty", "asha", 17, {"asha": 16}, 1018, {"type": "Unknown", "tag": 17, "content": ""}),
     ev("large-numbers", "fay", 1099511627777, {"fay": 1099511627776, "asha": 4294967296}, -1, {"type": "ExpenseAdded", "description": "Big", "total": 10000000000, "paidBy": "fay", "day": -1, "split": {"type": "Equal", "participants": ["fay"]}}),
     ev("unicode-name", "asha", 2, {"asha": 1}, 1019, {"type": "ProfileUpdated", "name": "अशोक ☃", "phone": "+91 98765"}),
 ]
@@ -113,6 +115,7 @@ INVALID_P = [
     mut("unsorted-set", eq, swap_first_two_keys_in_set, "participants not in ascending key order"),
     mut("duplicate-in-set", eq, dup_key_in_set, "the same participant twice"),
     mut("trailing-byte", pr, lambda b: b + b"\x00", "a byte after the body"),
+    mut("declined-with-content", byname["ownership-declined"], add_len(1, b"\x00"), "OwnershipDeclined has no content, one byte was added"),
     mut("content-longer-than-fields", pr, add_len(1, b"\x00"), "body content has a byte left over"),
     mut("content-shorter-than-fields", pr, add_len(-1, b""), "body content ends in the middle of a field"),
     mut("unknown-split-kind", ex, lambda b: b.__setitem__(bytes(b).index(bytes([2, 0, 4])), 3) or b, "split kind 3"),

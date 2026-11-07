@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import owntally.crypto.Clock
 import owntally.crypto.EventSealing
+import owntally.crypto.GroupKey
 import owntally.crypto.GroupKeyring
+import owntally.crypto.KeyRotation
 import owntally.crypto.OpenResult
 import owntally.data.repo.AppendResult
 import owntally.data.repo.GroupRepository
@@ -45,6 +47,8 @@ data class GroupView(
     val counts: Counts,
     /** Epochs whose key is stored but cannot be opened (for example the Keystore key was lost). */
     val unreadableKeyEpochs: Set<Long>,
+    /** Late entries of removed or departed members that the rules cancelled, in event order (M4, D5b). */
+    val cancelled: List<owntally.model.CancelledEntry> = emptyList(),
 )
 
 sealed class AddResult {
@@ -55,6 +59,9 @@ sealed class AddResult {
 
     /** There is no key for the group's current epoch on this phone, so nothing new can be sealed. */
     data object NoKey : AddResult()
+
+    /** The event could not even be built, for example a blank name or a phone number with letters. [problem] says what is wrong. */
+    data class Invalid(val problem: String) : AddResult()
 }
 
 /**
@@ -82,7 +89,7 @@ class GroupSession(
     private var ring = GroupKeyring(groupId)
     private var unreadableKeyEpochs = emptySet<Long>()
     private var opened = 0
-    private var unreadable = 0
+    private val rejected = ArrayList<Envelope>()
     private var damaged = 0
 
     private val state = MutableStateFlow(compute())
@@ -97,6 +104,20 @@ class GroupSession(
     fun refresh() {
         sync()
         publish()
+        if (leaveNotCoveredByTheKey()) rotateKey()
+    }
+
+    /**
+     * Owner only (D2): a member left and the key now in use was started before that leave was seen, so the leaver still holds it.
+     * The key then has to change. A removal or a rotation written after the leave was seen covers it, so this cannot repeat.
+     */
+    private fun leaveNotCoveredByTheKey(): Boolean {
+        val st = replay(log)
+        if (st.groupId == null || st.owner != me.publicKey) return false
+        val leaves = st.removals.values.filter { it.by == it.member }
+        if (leaves.isEmpty()) return false
+        val start = st.epochStarts[st.epoch]?.let { id -> log.allEvents().firstOrNull { it.id == id } }
+        return leaves.any { start == null || (start.after[it.member] ?: 0L) < it.event.counter }
     }
 
     /** The counter the next event written by this phone will get. The Add expense screen needs it to show the rounding exactly. */
@@ -110,6 +131,71 @@ class GroupSession(
         append(EventBody.ExpenseAdded(description, total, paidBy, day, split))
 
     fun deleteExpense(expense: EventId): AddResult = append(EventBody.ExpenseDeleted(expense))
+
+    // ---- membership (M4) -------------------------------------------------------------------------------------------
+
+    /** Admits a person who asked to join. The owner or an admin may; the name must be free in this group. */
+    fun approveJoin(member: PublicKey, encryptionKey: owntally.model.EncryptionKey, name: String, phone: String): AddResult =
+        build { EventBody.MemberJoined(member, encryptionKey, name, phone) }
+
+    /** Changes this person's own name and phone number in the group. */
+    fun updateProfile(name: String, phone: String): AddResult = build { EventBody.ProfileUpdated(name, phone) }
+
+    fun makeAdmin(member: PublicKey): AddResult = append(EventBody.AdminAdded(member))
+    fun removeAdmin(member: PublicKey): AddResult = append(EventBody.AdminRemoved(member))
+    fun offerOwnership(to: PublicKey): AddResult = append(EventBody.OwnershipOffered(to))
+    fun cancelOffer(): AddResult = append(EventBody.OwnershipOfferCancelled)
+    fun acceptOwnership(): AddResult = append(EventBody.OwnershipAccepted)
+    fun declineOwnership(): AddResult = append(EventBody.OwnershipDeclined)
+
+    /** This person leaves. No new key is made here: the owner's phone does that (docs/tasks/M4-membership.md, D2). */
+    @Synchronized
+    fun leave(): AddResult {
+        sync()
+        return append(EventBody.MemberRemoved(me.publicKey, replay(log).epoch, emptyMap()))
+    }
+
+    /** Owner only: removes [member] and changes the group key so that they cannot read anything written from now on. */
+    fun removeMember(member: PublicKey): AddResult = rotating(setOf(member)) { epoch, sealed -> EventBody.MemberRemoved(member, epoch, sealed) }
+
+    /** Owner only: changes the group key for the people who are in the group now. */
+    fun rotateKey(): AddResult = rotating(emptySet()) { epoch, sealed -> EventBody.KeyRotated(epoch, sealed) }
+
+    private fun build(make: () -> EventBody): AddResult {
+        val body = try {
+            make()
+        } catch (e: IllegalArgumentException) {
+            return AddResult.Invalid(e.message ?: "invalid")
+        }
+        return append(body)
+    }
+
+    /**
+     * Makes the next key, saves it on this phone BEFORE the event that announces it is written (a crash in between must never leave an
+     * event that nobody can open), and forgets it again if the rules refuse the event.
+     */
+    @Synchronized
+    private fun rotating(excluding: Set<PublicKey>, body: (Long, Map<PublicKey, owntally.model.SealedKey>) -> EventBody): AddResult {
+        sync()
+        val now = replay(log)
+        if (now.groupId == null || ring[now.epoch] == null) {
+            publish()
+            return AddResult.NoKey
+        }
+        val epoch = now.epoch + 1
+        val fresh = GroupKey.generate()
+        val sealed = KeyRotation.seal(me.publicKey, groupId, epoch, fresh, KeyRotation.recipients(now, excluding))
+        secrets.saveGroupKey(groupId, epoch, fresh)
+        val result = try {
+            append(body(epoch, sealed))
+        } catch (e: Throwable) {
+            secrets.deleteGroupKey(groupId, epoch)
+            throw e
+        }
+        if (result !is AddResult.Added) secrets.deleteGroupKey(groupId, epoch)
+        refresh()
+        return result
+    }
 
     /**
      * Writes an event by this phone's user. The event is first put through the core's replay rules on a copy of the log; if the
@@ -173,7 +259,7 @@ class GroupSession(
                     }
                     is OpenResult.NeedKey -> waiting += e
                     OpenResult.UnknownAuthor -> next += e
-                    is OpenResult.Rejected -> unreadable++
+                    is OpenResult.Rejected -> rejected += e
                 }
             }
             if (!progress) {
@@ -197,6 +283,39 @@ class GroupSession(
         deferred.clear()
         for (e in stored.envelopes) if (seen.add(fingerprint(e))) pending += e
         process(pending)
+        adoptKeys()
+    }
+
+    /**
+     * For every epoch from 2 on, the key must be the one sealed in the event the rules accepted as its start. A key already stored for
+     * that epoch (for example one left behind by an event that was refused) is replaced if it differs. Envelopes that were waiting for
+     * a key are then tried again, until nothing changes.
+     */
+    private fun adoptKeys() {
+        while (true) {
+            val st = replay(log)
+            var changed = false
+            for ((epoch, id) in st.epochStarts) {
+                if (epoch < 2) continue
+                val event = log.allEvents().firstOrNull { it.id == id } ?: continue
+                val temp = GroupKeyring(groupId)
+                if (!KeyRotation.receive(st, event, me, temp)) continue
+                val real = temp[epoch] ?: continue
+                val held = ring[epoch]
+                if (held == null || !held.bytes().contentEquals(real.bytes())) {
+                    secrets.saveGroupKey(groupId, epoch, real)
+                    ring.add(epoch, real)
+                    changed = true
+                }
+            }
+            if (!changed || (waiting.isEmpty() && rejected.isEmpty())) return
+            // A key was replaced: what failed to open with the old one, and what was waiting, may open now.
+            val again = ArrayList(waiting)
+            again += rejected
+            waiting.clear()
+            rejected.clear()
+            process(again)
+        }
     }
 
     private fun compute(): GroupView {
@@ -207,8 +326,9 @@ class GroupSession(
             me = me.publicKey,
             balances = b,
             plan = settlementPlan(b),
-            counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), unreadable, damaged, deferred.size),
+            counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), rejected.size, damaged, deferred.size),
             unreadableKeyEpochs = unreadableKeyEpochs,
+            cancelled = owntally.model.cancelledEntries(log, s),
         )
     }
 

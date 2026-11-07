@@ -15,6 +15,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.runner.RunWith
 import owntally.data.db.OwnTallyDatabase
+import owntally.model.EncryptionKey
 import owntally.model.GroupId
 import owntally.model.PublicKey
 
@@ -114,5 +115,25 @@ class RoomStoresInstrumentedTest {
         assertEquals("4", settings.get("next_slot"))
         settings.put("default_name", "Åsha ₹")
         assertEquals("Åsha ₹", settings.get("default_name"))
+    }
+
+    @Test
+    fun joinRequestsAreStoredPerGroupReplacedBySameMemberChangedInStateAndDeletedWithTheGroup() {
+        val requests = RoomJoinRequestStore(db)
+        store.addGroup(GroupRow(a, 0, 1), emptyList())
+        store.addGroup(GroupRow(b, 1, 2), emptyList())
+        val ben = PublicKey(ByteArray(32) { 5 })
+        fun request(group: GroupId, name: String, at: Long) = JoinRequest(group, ben, EncryptionKey(ByteArray(32) { 6 }), name, "98765 00001", at, JoinState.WAITING)
+        requests.put(request(a, "Ben", 10))
+        requests.put(request(b, "Ben B", 11))
+        requests.put(request(a, "Benny", 12))
+        assertEquals(listOf("Benny"), requests.list(a).map { it.name })
+        assertEquals(listOf("Ben B"), requests.list(b).map { it.name })
+        requests.setState(a, ben, JoinState.DECLINED)
+        assertEquals(JoinState.DECLINED, requests.get(a, ben)!!.state)
+        assertEquals(JoinState.WAITING, requests.get(b, ben)!!.state)
+        store.deleteGroup(a)
+        assertEquals(emptyList(), requests.list(a))
+        assertNull(requests.get(a, ben))
     }
 }

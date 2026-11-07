@@ -30,6 +30,7 @@ class EventTest {
             EventBody.OwnershipOffered(b),
             EventBody.OwnershipOfferCancelled,
             EventBody.OwnershipAccepted,
+            EventBody.OwnershipDeclined,
             EventBody.MemberRemoved(c, 2, mapOf(a to sealed(1), b to sealed(2))),
             EventBody.KeyRotated(3, mapOf(a to sealed(1))),
             EventBody.Unknown(200, byteArrayOf(1, 2, 3)),

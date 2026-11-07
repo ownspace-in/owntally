@@ -80,7 +80,8 @@ object OnboardingText {
 
     fun phoneError(p: PhoneProblem) = when (p) {
         PhoneProblem.EMPTY -> "Enter your phone number."
-        PhoneProblem.BAD_CHARACTERS -> "Use only digits, + and spaces."
+        PhoneProblem.BAD_CHARACTERS -> "Use only digits, spaces and + - ( ) ."
+        PhoneProblem.TOO_FEW_DIGITS -> "Use at least 5 digits."
         PhoneProblem.BAD_LENGTH -> "Use 5 to 20 characters."
     }
 }

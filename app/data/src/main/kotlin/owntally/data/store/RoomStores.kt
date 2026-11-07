@@ -2,9 +2,12 @@ package owntally.data.store
 
 import owntally.data.db.EventEntity
 import owntally.data.db.GroupEntity
+import owntally.data.db.JoinRequestEntity
 import owntally.data.db.OwnTallyDatabase
 import owntally.data.db.SettingEntity
+import owntally.model.EncryptionKey
 import owntally.model.GroupId
+import owntally.model.PublicKey
 
 /** [EventStore] on the Room database. Queries block, so call it from a background thread. */
 class RoomEventStore(private val db: OwnTallyDatabase, private val nowSeconds: () -> Long = { System.currentTimeMillis() / 1000 }) : EventStore {
@@ -45,4 +48,24 @@ class RoomSettingsStore(db: OwnTallyDatabase) : SettingsStore {
     override fun get(key: String): String? = dao.setting(key)
     override fun put(key: String, value: String) = dao.putSetting(SettingEntity(key, value))
     override fun remove(key: String) = dao.deleteSetting(key)
+}
+
+/** [JoinRequestStore] on the Room database. */
+class RoomJoinRequestStore(db: OwnTallyDatabase) : JoinRequestStore {
+    private val dao = db.dao()
+
+    private fun JoinRequestEntity.toModel() = JoinRequest(
+        GroupId(groupId), PublicKey(memberKey), EncryptionKey(encryptionKey), name, phone, receivedAt, JoinState.entries[state],
+    )
+
+    override fun put(request: JoinRequest) = dao.putJoinRequest(
+        JoinRequestEntity(
+            request.groupId.bytes(), request.member.bytes(), request.encryptionKey.bytes(), request.name, request.phone,
+            request.receivedAtSeconds, request.state.ordinal,
+        ),
+    )
+
+    override fun get(groupId: GroupId, member: PublicKey): JoinRequest? = dao.joinRequest(groupId.bytes(), member.bytes())?.toModel()
+    override fun list(groupId: GroupId): List<JoinRequest> = dao.joinRequests(groupId.bytes()).map { it.toModel() }
+    override fun setState(groupId: GroupId, member: PublicKey, state: JoinState) = dao.setJoinRequestState(groupId.bytes(), member.bytes(), state.ordinal)
 }

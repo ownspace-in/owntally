@@ -158,6 +158,45 @@ class GroupScreenModelsTest {
         assertTrue(m.allSettled)
     }
 
+    private fun payerGone(left: Boolean): ExpenseRow {
+        val w = TestWorld()
+        val s = w.sessions.session(w.newGroup("G"))
+        val me = s.view.value.me
+        val rohan = w.addFriend(s, "Rohan", 2_000_001)
+        val kabir = w.addFriend(s, "Kabir", 2_000_002)
+        w.expense(s, "Scooter", w.rupees(2500), rohan, me, rohan, kabir)
+        val view = s.view.value
+        val gone = view.state.copy(
+            members = view.state.members.mapValues { if (it.key == rohan) it.value.copy(removed = true) else it.value },
+            removals = mapOf(rohan to owntally.model.Removal(rohan, if (left) rohan else me, owntally.model.EventId(me, 99), 0)),
+        )
+        return GroupScreenModels.build(view.copy(state = gone)).expenses.single()
+    }
+
+    @Test fun anExpenseTheRemovedMemberPaidIsExcludedWithTheReasonNotShownAsDeleted() {
+        val row = payerGone(left = false)
+        assertEquals("Excluded: Rohan was removed", row.subtitle)
+        assertTrue(row.excluded)
+        assertFalse(row.deleted, "greyed, not struck through")
+        assertNull(row.caption)
+    }
+
+    @Test fun anExpenseTheMemberWhoLeftPaidSaysLeft() {
+        val row = payerGone(left = true)
+        assertEquals("Excluded: Rohan left", row.subtitle)
+        assertTrue(row.excluded)
+    }
+
+    @Test fun aNormalExpenseIsNeitherDeletedNorExcluded() {
+        val w = TestWorld()
+        val s = w.sessions.session(w.newGroup("G"))
+        val me = s.view.value.me
+        w.expense(s, "Lunch", w.rupees(100), me, me)
+        val row = GroupScreenModels.build(s.view.value).expenses.single()
+        assertFalse(row.excluded)
+        assertFalse(row.deleted)
+    }
+
     @Test fun roleWording() {
         assertEquals("You are the owner", GroupScreenModels.roleText(owntally.model.Role.OWNER))
         assertEquals("You are an admin", GroupScreenModels.roleText(owntally.model.Role.ADMIN))

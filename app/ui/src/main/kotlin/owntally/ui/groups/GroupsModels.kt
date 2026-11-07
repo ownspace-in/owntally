@@ -24,6 +24,8 @@ data class GroupCardModel(
     val subtitle: String,
     val balance: BalanceView,
     val readable: Boolean,
+    /** Someone offered this person the ownership and they have not answered (the tag on the card). */
+    val ownershipOffer: Boolean = false,
 )
 
 data class GroupsListModel(val owed: BalanceView, val owe: BalanceView, val cards: List<GroupCardModel>)
@@ -65,6 +67,7 @@ object GroupsModels {
                     },
                     balance = MoneyFormat.describe(it.myBalance),
                     readable = it.readable,
+                    ownershipOffer = it.ownershipOfferForMe,
                 )
             },
         )
@@ -83,6 +86,8 @@ data class ExpenseRow(
     val amount: String,
     val kind: BalanceKind,
     val deleted: Boolean,
+    /** Not counted because the person who paid was removed or left (shown greyed, not struck through). */
+    val excluded: Boolean = false,
 )
 
 data class GroupScreenModel(
@@ -145,6 +150,15 @@ object GroupScreenModels {
         }
         val payer = if (e.paidBy == view.me) "You" else nameOf(view, e.paidBy)
         val shares = sharesOf(view.state, e)
+        if (shares == null && !e.deleted) {
+            val gone = view.state.members[e.paidBy]
+            val left = view.state.removals[e.paidBy]?.let { it.by == it.member } == true
+            val who = gone?.name?.takeIf { it.isNotBlank() } ?: "Someone"
+            return ExpenseRow(
+                e.id, e.description, "Excluded: $who ${if (left) "left" else "was removed"}",
+                null, MoneyFormat.format(e.total), BalanceKind.SETTLED, deleted = false, excluded = true,
+            )
+        }
         if (shares == null) {
             val by = e.deletedBy?.let { nameOf(view, it) }
             return ExpenseRow(
@@ -312,6 +326,27 @@ data class AddExpenseModel(
         const val MAX_DESCRIPTION = 80
         const val INPUT_LIMIT = 120
         const val AMOUNT_LIMIT = 16
+
+        /**
+         * The form filled in from a cancelled late entry (D5c). People who are no longer in the group are left out: out of an equal split,
+         * and their share of an exact split is left blank to be assigned. If the payer is gone the owner becomes the payer. A date in the future is brought back to today.
+         */
+        fun fromCancelled(view: GroupView, counter: Long, today: Long, entry: owntally.model.CancelledEntry.Expense): AddExpenseModel {
+            val base = start(view, counter, today)
+            val here = base.people.map { it.key }.toSet()
+            val day = minOf(entry.day, today)
+            val common = base.copy(
+                description = entry.description, amountText = MoneyFormat.editable(entry.total), day = day,
+                paidBy = if (entry.paidBy in here) entry.paidBy else view.me,
+            )
+            return when (val split = entry.split) {
+                is Split.Equal -> common.copy(mode = SplitMode.EQUAL, selected = split.participants.filter { it in here }.toSet())
+                is Split.Exact -> common.copy(
+                    mode = SplitMode.EXACT, selected = here,
+                    exactText = split.amounts.filterKeys { it in here }.mapValues { MoneyFormat.editable(it.value) },
+                )
+            }
+        }
 
         fun start(view: GroupView, counter: Long, today: Long): AddExpenseModel {
             val others = view.state.currentMembers.values.filter { it.key != view.me }

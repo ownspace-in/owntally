@@ -36,6 +36,11 @@ class InMemorySecretStore : SecretStore {
     }
 
     @Synchronized
+    override fun deleteGroupKey(groupId: GroupId, epoch: Long) {
+        keys.remove(name(groupId, epoch))
+    }
+
+    @Synchronized
     override fun deleteGroup(groupId: GroupId) {
         keys.keys.removeAll { it.startsWith("${groupId.toHex()}-") }
     }

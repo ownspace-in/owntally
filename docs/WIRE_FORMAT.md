@@ -28,7 +28,7 @@ time    = i64                  wall clock milliseconds
 body    = tag u8 | length u32 | content
 ```
 
-`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 15 are always known events; a body can only be unknown when its tag is 0 or 16 and above.
+`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 16 are always known events; a body can only be unknown when its tag is 0 or 17 and above.
 
 ### Example
 
@@ -64,6 +64,7 @@ That is 34 bytes. The same event always gives these 34 bytes.
 | 13 | `OwnershipAccepted` | empty |
 | 14 | `MemberRemoved` | `key` member, `u32` newEpoch, `map<key, sealedKey>` (see CRYPTO.md section 6; `sealedKey` is `u16` length and bytes) |
 | 15 | `KeyRotated` | `u32` newEpoch, `map<key, sealedKey>` |
+| 16 | `OwnershipDeclined` | empty (added 5 Nov 2026; an older decoder keeps it as an unknown body) |
 
 `split` is `u8` kind then: kind 1 (`Equal`) `set<key>` participants; kind 2 (`Exact`) `map<key, i64>` amounts.
 
@@ -91,7 +92,7 @@ Consequence: `decode(bytes)` succeeds only if `encode(decode(bytes)) == bytes`. 
 
 ## 5. Test vectors
 
-`app/core-model/src/test/resources/fixtures/wire-vectors.json` holds 21 valid events, 17 bytes sequences that must be rejected (with the reason), 2 envelopes and 9 invalid envelopes, all with their exact hex. They were made before the Kotlin codec by a separate encoder written from this file (`app/core-model/src/test/tools/wire_vectors.py`), and they are the contract for other languages. The example in section 2 is vector `profile-updated`.
+`app/core-model/src/test/resources/fixtures/wire-vectors.json` holds 22 valid events, 21 bytes sequences that must be rejected (with the reason), 2 envelopes and 9 invalid envelopes, all with their exact hex. They were made before the Kotlin codec by a separate encoder written from this file (`app/core-model/src/test/tools/wire_vectors.py`), and they are the contract for other languages. The example in section 2 is vector `profile-updated`.
 
 Note (4 Nov 2026): the 16 bytes of a `groupId` are not all random. They are 8 random bytes followed by the first 8 bytes of SHA-256(creator's public key + those 8 bytes), and a `GroupCreated` is valid only if its id matches its author (PROTOCOL.md). The bytes on the wire are unchanged.
 

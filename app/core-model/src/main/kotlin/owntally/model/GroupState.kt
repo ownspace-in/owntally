@@ -42,6 +42,8 @@ data class GroupState(
     val members: Map<PublicKey, Member>,
     val owner: PublicKey?,
     val pendingOffer: PublicKey?,
+    /** The member who declined the last ownership offer, until the owner offers again, cancels, or someone becomes owner. Lets the owner see "Rohan declined". */
+    val declinedOffer: PublicKey? = null,
     /** The current group key epoch: 1 after the group is created, +1 for each rotation. 0 before the group exists. */
     val epoch: Long,
     /** For each epoch after the first, the accepted event that started it. Only such an event may deliver that epoch's key. */

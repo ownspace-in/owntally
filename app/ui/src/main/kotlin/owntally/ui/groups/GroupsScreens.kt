@@ -44,7 +44,7 @@ import owntally.ui.components.PrimaryButton
 import owntally.ui.components.Wordmark
 import owntally.ui.theme.OwnTallyColors
 
-private fun BalanceKind.colour(onDark: Boolean = false) = when (this) {
+internal fun BalanceKind.colour(onDark: Boolean = false) = when (this) {
     BalanceKind.OWED -> if (onDark) OwnTallyColors.Mint else OwnTallyColors.Green
     BalanceKind.OWES -> if (onDark) OwnTallyColors.PeachOnDark else OwnTallyColors.Red
     BalanceKind.SETTLED -> if (onDark) OwnTallyColors.OnDarkMuted else OwnTallyColors.TextSecondary
@@ -143,6 +143,13 @@ fun GroupCard(card: GroupCardModel, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(card.name, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Text(card.subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+            if (card.ownershipOffer) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Ownership request", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.WarningText,
+                    modifier = Modifier.background(OwnTallyColors.WarningBackground, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
         }
         if (card.readable) {
             Column(horizontalAlignment = Alignment.End) {
@@ -164,6 +171,11 @@ fun GroupScreen(
     onAdd: (() -> Unit)? = null,
     onSettle: (() -> Unit)? = null,
     onOpenExpense: (ExpenseRow) -> Unit = {},
+    onMembers: (() -> Unit)? = null,
+    onProfile: (() -> Unit)? = null,
+    banner: OwnershipBannerModel? = null,
+    onAcceptOffer: () -> Unit = {},
+    onDeclineOffer: () -> Unit = {},
     extra: @Composable () -> Unit = {},
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -174,12 +186,24 @@ fun GroupScreen(
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(model.name, style = MaterialTheme.typography.titleLarge, color = OwnTallyColors.Ink)
-                    Text(model.roleText, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                    Text(
+                        model.roleText, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary,
+                        modifier = if (onProfile != null) Modifier.clickable(onClick = onProfile) else Modifier,
+                    )
+                }
+                if (onMembers != null) {
+                    Box(Modifier.size(44.dp).clickable(onClick = onMembers).semantics { contentDescription = "Members"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                        GlyphIcon(Glyph.GROUPS, OwnTallyColors.Ink)
+                    }
                 }
             }
             Spacer(Modifier.height(14.dp))
+            if (banner != null) {
+                OwnershipBanner(banner, onAcceptOffer, onDeclineOffer)
+                Spacer(Modifier.height(14.dp))
+            }
             BalanceCard(model, onSettle)
             extra()
             Spacer(Modifier.height(24.dp))
@@ -249,13 +273,14 @@ private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
 @Composable
 private fun ExpenseRowView(row: ExpenseRow, modifier: Modifier = Modifier) {
     val strike = if (row.deleted) TextDecoration.LineThrough else null
+    val grey = row.deleted || row.excluded
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.InfoBackground, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
             Text(row.description.trim().take(1).uppercase(), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(row.description, style = MaterialTheme.typography.labelLarge, color = if (row.deleted) OwnTallyColors.TextHint else OwnTallyColors.Ink, textDecoration = strike, maxLines = 2)
+            Text(row.description, style = MaterialTheme.typography.labelLarge, color = if (grey) OwnTallyColors.TextHint else OwnTallyColors.Ink, textDecoration = strike, maxLines = 2)
             Text(row.subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
         }
         Spacer(Modifier.width(8.dp))
@@ -263,7 +288,7 @@ private fun ExpenseRowView(row: ExpenseRow, modifier: Modifier = Modifier) {
             if (row.caption != null) Text(row.caption, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
             Text(
                 row.amount, style = MaterialTheme.typography.labelLarge, textDecoration = strike,
-                color = if (row.deleted) OwnTallyColors.TextHint else row.kind.colour(),
+                color = if (grey) OwnTallyColors.TextHint else row.kind.colour(),
             )
         }
     }
@@ -316,5 +341,24 @@ fun MessageTab(title: String, body: String) {
         Text(title, style = MaterialTheme.typography.headlineMedium, color = OwnTallyColors.Ink)
         Spacer(Modifier.height(14.dp))
         Text(body, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary, textAlign = TextAlign.Start)
+    }
+}
+
+/** "Asha wants to make you the owner of Goa Trip", with Accept and Decline (D1). */
+@Composable
+fun OwnershipBanner(banner: OwnershipBannerModel, onAccept: () -> Unit, onDecline: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, RoundedCornerShape(20.dp)).padding(16.dp)) {
+        Text(banner.text, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.WarningText)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                Modifier.background(OwnTallyColors.Green, RoundedCornerShape(50)).clickable(onClick = onAccept).padding(horizontal = 20.dp, vertical = 10.dp)
+                    .semantics { role = SemanticsRole.Button },
+            ) { Text("Accept", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnDark) }
+            Box(
+                Modifier.border(1.dp, OwnTallyColors.WarningText, RoundedCornerShape(50)).clickable(onClick = onDecline).padding(horizontal = 20.dp, vertical = 10.dp)
+                    .semantics { role = SemanticsRole.Button },
+            ) { Text("Decline", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.WarningText) }
+        }
     }
 }

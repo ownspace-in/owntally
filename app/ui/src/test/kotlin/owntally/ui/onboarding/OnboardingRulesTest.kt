@@ -18,15 +18,17 @@ class OnboardingRulesTest {
     }
 
     @Test
-    fun aPhoneNumberIsDigitsPlusAndSpacesOfFiveToTwentyCharacters() {
-        for (ok in listOf("98765 43210", "+91 98765 43210", "12345", "1".repeat(20), "  98765 43210 ")) assertNull(OnboardingRules.phoneProblem(ok), ok)
+    fun aPhoneNumberIsDigitsPlusMinusBracketsDotAndSpacesOfFiveToTwentyCharactersWithAtLeastFiveDigits() {
+        for (ok in listOf("98765 43210", "+91 98765 43210", "12345", "1".repeat(20), "  98765 43210 ", "98765-43210", "(98765) 43210", "98765.43210", "+91 (98765) 43-210")) assertNull(OnboardingRules.phoneProblem(ok), ok)
         assertEquals(PhoneProblem.EMPTY, OnboardingRules.phoneProblem(""))
         assertEquals(PhoneProblem.EMPTY, OnboardingRules.phoneProblem("   "))
         assertEquals(PhoneProblem.BAD_LENGTH, OnboardingRules.phoneProblem("1234"))
         assertEquals(PhoneProblem.BAD_LENGTH, OnboardingRules.phoneProblem("1".repeat(21)))
-        for (bad in listOf("98765-43210", "(98765) 43210", "98765a43210", "9876०१२", "98765.43210")) {
+        for (bad in listOf("98765a43210", "9876०१२", "98765_43210", "98765/43210")) {
             assertEquals(PhoneProblem.BAD_CHARACTERS, OnboardingRules.phoneProblem(bad), bad)
         }
+        assertEquals(PhoneProblem.TOO_FEW_DIGITS, OnboardingRules.phoneProblem("+(  )-.. +"), "no digits")
+        assertEquals(PhoneProblem.TOO_FEW_DIGITS, OnboardingRules.phoneProblem("12-34 +.()"), "four digits")
     }
 
     @Test

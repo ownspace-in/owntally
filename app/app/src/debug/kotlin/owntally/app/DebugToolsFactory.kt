@@ -12,12 +12,16 @@ import owntally.ui.groups.DebugTools
 /**
  * Debug builds only: puts two test friends and a few expenses in a group so the screens can be tried before joining by link
  * exists (M4). The friends are made from this phone's own seed, at slots far above those real groups use, and are named "(test)".
- * A group never has more than three members here, the limit until M4.
+ * More buttons (up to five people, pretend join requests, acting as a pretend member) are in [PretendMembers].
  */
 internal object DebugToolsFactory {
     private const val FIRST_TEST_SLOT = 2_000_000L
 
     fun create(container: AppContainer): DebugTools = object : DebugTools {
+        private val pretend by lazy { PretendMembers(container.secrets, container.groups, container.joinRequests, owntally.crypto.Clock.SYSTEM) }
+
+        override fun actions(session: GroupSession) = pretend.actions(session)
+
         override fun addTestData(session: GroupSession) {
             val seed = (container.secrets.loadMasterSeed() as? SecretLoad.Found)?.value ?: return
             val state = session.view.value.state
