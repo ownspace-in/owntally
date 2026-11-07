@@ -13,7 +13,8 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 | T5.1 plan and decisions | Done (7 Nov 2026): S1 to S6 decided. Waiting for the owner's go-ahead to build T5.2. |
 | T5.2 messages and wire format | Done (7 Nov 2026), see below. |
 | T5.3 sync engine | Done (7 Nov 2026), see below. |
-| T5.4 to T5.12 | Not started. |
+| T5.4 simulation | Built; **found a protocol problem (S7)**: the scenario test is ignored until the owner decides. |
+| T5.5 to T5.12 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -32,6 +33,15 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 - **S4 (7 Nov 2026): rejected events are reported three ways.** (1) A log on the phone (kind, which peer, when; never the content). (2) A note on the Sync screen ("1 entry from Ben was rejected"). (3) A message to the person: one dismissible notice per sync run ("Some entries from Ben were rejected"), never one per envelope. A phone that sends only bad data is disconnected after a limit.
 - **S5 (7 Nov 2026): the Sync screen is built in all builds.** The per-group screen of mockup 05 without the Nearby button (M6) and without the relay card (the app decides, 4 Nov): "Sync now", one line per member (how they are reached, when last, "3 entries not shared", "Not reachable directly" and so on), the rejected-entries note. On a real phone every member shows "Not reachable yet" until M6 gives it real connections. Debug builds can connect pretend devices through the fake network. The tab's "later update" text goes away.
 - **S6 (7 Nov 2026): a hidden group whose leave nobody received: "Delete now" in settings.** A list of hidden groups under Settings with a **Delete now** button for each and a warning: "Nobody has seen that you left. If you delete now, the others will still count you as a member." Deleting removes the group's events and keys. A group is also deleted automatically, as in D4, once the leave has been delivered.
+
+## Found by the simulation (T5.4), decision S7 needed
+
+The simulation (3 to 5 phones, random operations, a faulty network, then a quiet period) fails on seed 4 and, reproducibly, on others: phones that hold the same envelopes do not agree on what happened, and a member ends up unable to read part of the log. The cause is not the sync engine. It is that the rules judge some facts against the state **at the event's place in the deterministic order**, not against **what its author had seen**. When two things happen at the same time on different phones (a member leaves while the owner is offline and rotates the key; a member is admitted while the owner removes someone), the order can put them the other way round, and an event that was valid for its author becomes invalid for everyone:
+
+- **A key change is ignored.** The owner (offline) did not know Ben had left, so the new key was sealed to Ben, Chitra and the owner. In the order, Ben's leave comes first, the rule "sealed to exactly the current members" fails, and the event is ignored on every phone. But the owner had already written ten more entries under the new key: nobody else can open them (Chitra: "waiting for epoch 2"), and the owner's own phone still reads them with the key it saved, so the owner's view differs from everyone else's.
+- **Entries are ignored.** An expense that names Ben as payer or sharer, written by someone who did not know Ben had left, is ignored (the rule: everyone named must be a current member at that point), although the rules already know how to take a departed member out of an expense.
+
+See the question under S7 once it is asked; the three ways out are written there. Until it is decided the scenario test is marked ignored (it passes for 24 of 25 seeds). The finding is also a result of M5: this is the kind of fault the acceptance test is for.
 
 ## Tasks
 

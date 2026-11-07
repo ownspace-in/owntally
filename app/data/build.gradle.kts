@@ -47,12 +47,14 @@ configurations.configureEach {
 dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
+    implementation(project(":app:sync"))
     implementation(libs.tink.android)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("androidx.room:room-runtime:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation(kotlin("test"))
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 
     androidTestImplementation(kotlin("test"))
     androidTestImplementation("androidx.test:runner:1.7.0")

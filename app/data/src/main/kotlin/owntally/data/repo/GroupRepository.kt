@@ -86,6 +86,9 @@ class GroupRepository(
         return if (events.addEnvelope(groupId, StoredEnvelope(envelope.author, envelope.counter, bytes))) AppendResult.Added else AppendResult.Duplicate
     }
 
+    /** The stored envelopes as bytes, in the order they were added (the sync reads these without decoding them twice). */
+    fun rawEnvelopes(groupId: GroupId): List<ByteArray> = events.envelopes(groupId)
+
     fun envelopes(groupId: GroupId): StoredEnvelopes {
         var damaged = 0
         val list = events.envelopes(groupId).mapNotNull { bytes ->

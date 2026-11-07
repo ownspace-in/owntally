@@ -80,6 +80,20 @@ class InMemorySyncStore(private val group: GroupId) : SyncStore {
             is EnvelopeCheck.Result.Bad -> return Offered.Rejected(c.why)
             is EnvelopeCheck.Result.Valid -> c.envelope
         }
+        return insert(envelope, bytes)
+    }
+
+    /**
+     * Takes in an envelope that was already checked when it was first stored (for example, read back from the phone's own database),
+     * without checking the signature again. Anything that does not decode or belongs to another group is ignored.
+     */
+    @Synchronized
+    fun load(bytes: ByteArray) {
+        val envelope = try { Envelope.decode(bytes) } catch (e: DecodeException) { return }
+        if (envelope.groupId == group) insert(envelope, bytes)
+    }
+
+    private fun insert(envelope: Envelope, bytes: ByteArray): Offered {
         val a = authors.getOrPut(envelope.author) { Author() }
         val versions = a.events.getOrPut(envelope.counter) { ArrayList() }
         if (versions.any { it.contentEquals(bytes) }) return Offered.Duplicate
