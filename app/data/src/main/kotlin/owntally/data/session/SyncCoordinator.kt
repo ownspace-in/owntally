@@ -94,6 +94,9 @@ class SyncCoordinator(
 
     fun dismissNotice(group: GroupId) = flow(group).update { it.copy(notice = null) }
 
+    /** The newest lines of the log of dropped entries (S4), for the note on the Sync screen. */
+    fun problems(group: GroupId, limit: Int = 5) = recorder.recent(group, limit)
+
     private fun now() = clock.nowSeconds()
 
     private fun MutableStateFlow<SyncStatus>.update(change: (SyncStatus) -> SyncStatus) {
@@ -223,6 +226,10 @@ class SyncCoordinator(
             runEngine(g, peer, throwUnreachable = true)!!
         } catch (e: CancellationException) {
             throw e
+        } catch (e: owntally.sync.TransportUnavailable) {
+            // No real transport yet (until M6): not a failure, so no waiting time and no retry.
+            peerUpdate(g, peer) { it.copy(state = PeerState.NEVER) }
+            return
         } catch (e: PeerUnreachable) {
             failed(g, peer, run, PeerState.UNREACHABLE)
             return
@@ -235,7 +242,7 @@ class SyncCoordinator(
             run.retry?.cancel()
             run.retry = null
             peerUpdate(g, peer) {
-                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result))
+                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via)
             }
         } else {
             failed(g, peer, run, PeerState.FAILED)

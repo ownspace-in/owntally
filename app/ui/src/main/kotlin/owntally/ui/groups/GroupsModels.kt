@@ -184,13 +184,9 @@ object GroupScreenModels {
     }
 }
 
-/** The bottom bar. All four tabs are always there; Sync is a placeholder until M4 and says so on its screen. */
+/** The bottom bar. All four tabs are always there. */
 enum class Tab(val label: String, val enabled: Boolean) {
-    GROUPS("Groups", true), SETTLE("Settle", true), SYNC("Sync", false), ABOUT("About", true),
-}
-
-object SyncPlaceholder {
-    const val TEXT = "Syncing with friends arrives in a later update. For now your data is stored only on this phone."
+    GROUPS("Groups", true), SETTLE("Settle", true), SYNC("Sync", true), ABOUT("About", true),
 }
 
 /** The Create group form: a name, a colour for the icon (kept only on this phone), and rupees as the only currency for now. */

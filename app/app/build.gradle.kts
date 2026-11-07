@@ -57,6 +57,7 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation(project(":app:data"))
     implementation(project(":app:crypto"))
+    implementation(project(":app:sync"))
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))

@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":app:core-model"))
     implementation(project(":app:crypto"))
     implementation(project(":app:data"))
+    implementation(project(":app:sync"))
     implementation(libs.tink.android)
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.material3:material3")

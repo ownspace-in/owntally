@@ -30,6 +30,15 @@ interface Link {
     suspend fun close()
 }
 
+/** There is no way to reach other phones at all yet (no real transport is built in): not a failure to reach someone, so nothing is retried. */
+class TransportUnavailable : Exception("No way to reach other phones is available yet")
+
+/** The transport of a phone that has none yet (until M6): it cannot connect and nobody can connect to it. */
+object NoTransport : Transport {
+    override suspend fun connect(room: GroupRoom, peer: PublicKey): Link = throw TransportUnavailable()
+    override fun incoming(room: GroupRoom): Flow<Link> = kotlinx.coroutines.flow.emptyFlow()
+}
+
 interface Transport {
     /** Connect to the member with this public key, in this group. Throws if the peer cannot be reached. */
     suspend fun connect(room: GroupRoom, peer: PublicKey): Link

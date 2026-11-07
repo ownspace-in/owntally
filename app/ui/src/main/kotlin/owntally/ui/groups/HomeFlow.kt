@@ -58,7 +58,13 @@ interface DebugTools {
 
 /** The screens after first run: the four tabs, and the Group and New group screens above them. */
 @Composable
-fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.ui.lock.LockController? = null, joinRequests: owntally.data.session.JoinRequests? = null) {
+fun HomeFlow(
+    sessions: Sessions,
+    debugTools: DebugTools? = null,
+    lock: owntally.ui.lock.LockController? = null,
+    joinRequests: owntally.data.session.JoinRequests? = null,
+    sync: owntally.data.session.SyncCoordinator? = null,
+) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { sessions.refresh() } }
@@ -72,10 +78,12 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
                 onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(it)) },
                 onHow = { ui.nav = ui.nav.push(Screen.HowItWorks) },
                 onSettings = if (lock != null) ({ ui.nav = ui.nav.push(Screen.Settings) }) else null,
+                sync = sync, onSync = { ui.nav = ui.nav.push(Screen.Sync(it)) },
                 onCreate = { ui.nav = ui.nav.push(Screen.CreateGroup) },
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
+            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
             is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
@@ -102,7 +110,10 @@ fun HomeFlow(sessions: Sessions, debugTools: DebugTools? = null, lock: owntally.
 }
 
 @Composable
-private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onSettings: (() -> Unit)?, onCreate: () -> Unit) {
+private fun HomeTabs(
+    sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onSettings: (() -> Unit)?, onCreate: () -> Unit,
+    sync: owntally.data.session.SyncCoordinator?, onSync: (GroupId) -> Unit,
+) {
     val ui: HomeViewModel = viewModel()
     val tab = ui.tab
     val summaries by sessions.summaries.collectAsStateWithLifecycle()
@@ -112,7 +123,14 @@ private fun HomeTabs(sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (G
             when (Tab.entries[tab]) {
                 Tab.GROUPS -> GroupsScreen(model, onOpen = { onOpen(it.id) }, onCreate = onCreate)
                 Tab.SETTLE -> SettleTab(model, onSettle)
-                Tab.SYNC -> MessageTab("Sync", SyncPlaceholder.TEXT)
+                Tab.SYNC -> if (sync == null) MessageTab("Sync", "Sync is not available on this phone.") else SyncTab(
+                    GroupsModels.settleTabCards(model.cards),
+                    statusLine = { card ->
+                        val st by sync.status(card.id).collectAsStateWithLifecycle()
+                        SyncModels.shortHeadline(st)
+                    },
+                    onOpen = { onSync(it.id) },
+                )
                 Tab.ABOUT -> Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
                         MessageTab(
@@ -660,4 +678,22 @@ private fun SettingsRoute(sessions: Sessions, lock: owntally.ui.lock.LockControl
         leftGroups = remember(left) { owntally.ui.lock.LeftGroupsModels.rows(left) },
         onDeleteLeft = { id -> scope.launch { withContext(Dispatchers.IO) { sessions.deleteLeft(id) } } },
     )
+}
+
+@Composable
+private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null || sync == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val status by sync.status(id).collectAsStateWithLifecycle()
+    val problems by produceState(emptyList<owntally.data.store.SyncProblem>(), id, status) { value = withContext(Dispatchers.IO) { sync.problems(id) } }
+    val scope = rememberCoroutineScope()
+    val model = remember(view, status, problems) { SyncModels.build(view, status, problems, System.currentTimeMillis() / 1000) }
+    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) })
 }

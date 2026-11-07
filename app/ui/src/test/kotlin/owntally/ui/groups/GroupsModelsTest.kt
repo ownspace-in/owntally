@@ -206,8 +206,7 @@ class GroupScreenModelsTest {
 
     @Test fun tabs() {
         assertEquals(listOf("Groups", "Settle", "Sync", "About"), Tab.entries.map { it.label })
-        assertEquals(listOf(true, true, false, true), Tab.entries.map { it.enabled })
-        assertTrue(SyncPlaceholder.TEXT.contains("stored only on this phone"))
+        assertEquals(listOf(true, true, true, true), Tab.entries.map { it.enabled }, "the Sync tab is real now")
     }
 
     @Test fun aGroupTheOwnerRemovedYouFromSaysSoOnItsCardAndStopsShowingNumbers() {

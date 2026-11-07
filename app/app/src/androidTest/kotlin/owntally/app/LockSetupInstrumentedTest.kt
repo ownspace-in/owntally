@@ -26,6 +26,7 @@ class LockSetupInstrumentedTest {
         context.deleteDatabase(OwnTallyDatabase.FILE_NAME)
         File(context.noBackupFilesDir, "secrets").deleteRecursively()
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KeystoreSecretBox.DEFAULT_ALIAS)
+        (context as OwnTallyApplication).resetContainerForTests()
     }
 
     private fun onlyWhenAsked() = org.junit.Assume.assumeTrue(androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("lockSetup") == "yes")

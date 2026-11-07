@@ -30,6 +30,9 @@ class SyncRecorder(private val log: SyncProblemLog, private val clock: Clock) {
         return RunNotice(peer, kinds.filterKeys { it != ProblemKind.CUT_OFF }.values.sum(), kinds.filterKeys { it != ProblemKind.CUT_OFF }, cutOff)
     }
 
+    /** The newest lines of the log for a group, for the note on the Sync screen. */
+    fun recent(group: GroupId, limit: Int): List<SyncProblem> = log.recent(group, limit)
+
     private fun kindOf(why: Rejection) = when (why) {
         Rejection.MALFORMED -> ProblemKind.MALFORMED
         Rejection.WRONG_GROUP -> ProblemKind.WRONG_GROUP

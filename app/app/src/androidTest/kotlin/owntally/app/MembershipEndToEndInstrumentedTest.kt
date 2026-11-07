@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
@@ -42,6 +43,7 @@ class MembershipEndToEndInstrumentedTest {
         context.deleteDatabase(OwnTallyDatabase.FILE_NAME)
         File(context.noBackupFilesDir, "secrets").deleteRecursively()
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KeystoreSecretBox.DEFAULT_ALIAS)
+        (context as OwnTallyApplication).resetContainerForTests()
     }
 
     private fun see(text: String, ms: Long = 20_000) = rule.waitUntilExactlyOneExists(hasText(text), ms)
@@ -122,4 +124,38 @@ class MembershipEndToEndInstrumentedTest {
             wipe()
         }
     }
+
+    @Test
+    fun theSyncTabAndScreenSayEveryoneIsNotReachableYetBecauseNoWayToReachThemIsBuiltInYet() {
+        wipe()
+        try {
+            container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
+            container().sessions.createGroup("Goa Trip", "INR", 0)
+            ActivityScenario.launch(MainActivity::class.java)
+            see("Goa Trip")
+            tap("Goa Trip")
+            see("You are the owner")
+            tap("Add pretend friend: Ben (test) (debug)")
+            see("Add pretend friend: Meera (test) (debug)")
+            tap("Add pretend friend: Meera (test) (debug)")
+            see("Add pretend friend: Kabir (test) (debug)")
+            tapDescription("Back")
+            // The Sync tab lists the group; opening it shows the screen of design/05 without Nearby and the relay card.
+            tapDescription("Sync")
+            see("Choose a group to see who it has reached.")
+            see("Not syncing yet")
+            tap("Goa Trip")
+            see("Not syncing yet. Your entries are saved on this phone.")
+            see("MEMBERS")
+            assertEquals(2, rule.onAllNodesWithText("Not reachable yet").fetchSemanticsNodes().size, "one line per friend")
+            tapDescription("Sync now")
+            rule.waitForIdle()
+            see("Not syncing yet. Your entries are saved on this phone.")
+            tapDescription("Back")
+            see("Choose a group to see who it has reached.")
+        } finally {
+            wipe()
+        }
+    }
 }
+

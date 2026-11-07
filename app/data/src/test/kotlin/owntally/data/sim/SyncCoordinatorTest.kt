@@ -215,4 +215,39 @@ class SyncCoordinatorTest {
         assertEquals(PeerState.OK, asha.peer(ben)!!.state)
     }
 
+
+    @Test fun withNoWayToReachOtherPhonesYetEveryMemberIsNotReachableYetAndNothingIsRetried() = runTest {
+        val net = InMemoryNetwork()
+        val clock = Clock { base + testScheduler.currentTime / 1000 }
+        val asha = SimDevice.owner(51, "Asha")
+        SimDevice.joined(51, 1, "Ben", asha)
+        val sessions = Sessions(asha.env.groups, asha.env.secrets, asha.env.identity, asha.env.clock, asha.env.settings)
+        val coordinator = SyncCoordinator(sessions, asha.env.groups, { _, _ -> owntally.sync.NoTransport }, SyncRecorder(InMemorySyncProblemLog(), clock), clock, backgroundScope, SyncConfig())
+        sessions.session(asha.group).refresh()
+        coordinator.start(asha.group)
+        runCurrent()
+        coordinator.syncNow(asha.group)
+        advanceTimeBy(2 * 3_600_000L)
+        val peer = coordinator.status(asha.group).value.peers.values.single()
+        assertEquals(PeerState.NEVER, peer.state)
+        assertNull(peer.nextTrySeconds, "not a failure: no waiting time")
+        assertEquals(0, peer.failures)
+        // Only the start, "Sync now" and the five-minute passes try; no retry job is scheduled (a retry would add tries between the passes).
+        assertTrue(peer.attempts <= 2 + 2 * 60 / 5 + 1, "tries: ${peer.attempts}")
+    }
+
+    @Test fun theStatusRemembersWhichKindOfLinkWasUsed() = runTest {
+        val (asha, ben) = phones(52, 2)
+        asha.coordinator.start(asha.device.group); ben.coordinator.start(ben.device.group)
+        runCurrent()
+        advanceTimeBy(2_000)
+        assertEquals(owntally.sync.LinkKind.DIRECT, asha.peer(ben)!!.kind)
+        assertEquals(owntally.sync.LinkKind.DIRECT, ben.peer(asha)!!.kind)
+    }
+
+    @Test fun theLatestDroppedEntriesCanBeReadBackForTheNote() = runTest {
+        val (asha, _) = phones(53, 2)
+        assertEquals(emptyList(), asha.coordinator.problems(asha.device.group))
+    }
 }
+
