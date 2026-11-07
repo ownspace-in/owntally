@@ -97,3 +97,53 @@ Consequence: `decode(bytes)` succeeds only if `encode(decode(bytes)) == bytes`. 
 Note (4 Nov 2026): the 16 bytes of a `groupId` are not all random. They are 8 random bytes followed by the first 8 bytes of SHA-256(creator's public key + those 8 bytes), and a `GroupCreated` is valid only if its id matches its author (PROTOCOL.md). The bytes on the wire are unchanged.
 
 Note (4 Nov 2026): a decoder also rejects an `ExpenseAdded` total or a `SettlementRecorded` amount above 10,000,000,000 paise (100,000,000 whole currency units), as an invalid value. The vectors `total-over-limit`, `total-huge` and `payment-over-limit` in `wire-vectors.json` cover it.
+
+## 6. Sync messages (M5, T5.2)
+
+Status: **draft for the M5 plan (docs/tasks/M5-sync.md), decided in S1 and S2.** Two phones that sync exchange these messages over a `Link` (one message per send; a transport that has a size limit cuts it into chunks and joins them again, so a message is always whole when it arrives). They carry envelopes as opaque bytes and never need a key.
+
+```
+message = 'OS' | version u8 | type u8 | content
+```
+
+`'OS'` is the two ASCII bytes 0x4F 0x53. `version` is 1. A decoder never throws: it returns the message, or a refusal with a reason, and the engine answers a refusal with an `Error` message.
+
+| type | name | content |
+|---|---|---|
+| 1 | `Hello` | `room bytes(16)` \| `summary` |
+| 2 | `Envelopes` | `count u16` (1 to 200) \| count times (`length u32` (1 to 65,536) \| envelope bytes) |
+| 3 | `Done` | `summary` |
+| 4 | `Reconcile` | `author key` |
+| 5 | `Error` | `code u8` \| `text str` (at most 200 bytes) |
+
+```
+summary = count u16 (at most 1,000) | count times ( author key | counter u64 (at least 1) | fingerprint bytes(16) )
+```
+
+The entries are in ascending author order with no duplicates. `counter` is the highest counter such that every counter from 1 to it is present for that author (the same number as `EventLog.summary()`), and `fingerprint` is the fingerprint (below) at that counter. An author with no events is left out.
+
+- **Hello** opens a sync; each side sends one. `room` is the group's room name (DESIGN.md, `GroupRoom`); a different room is refused with code 2.
+- **Envelopes** carries whole envelopes (section 3), at most 200 and at most 262,144 bytes in all, each at most 65,536 bytes. A sender with more sends several messages.
+- **Done** says "I have nothing more to send in this round" and carries the sender's summary after storing what it received. A phone that wants proof that its leave arrived reads it from here (T5.9).
+- **Reconcile** says "our histories of this author disagree (the fingerprints differ for counters we both have): send me every version you hold of this author's events, and I send you mine".
+- **Error** ends the sync. Codes: 1 unsupported version, 2 wrong group, 3 not allowed, 4 message too large, 5 invalid message, 6 too many bad envelopes. `text` is plain UTF-8 for the log, never shown as a rule.
+
+**Strict decoding**, as in section 4: wrong magic, a version other than 1, an unknown type, a short or long message, trailing bytes, unsorted or duplicate summary entries, a counter of 0, a count or length over its limit, an empty `Envelopes`, an unknown error code, or text that is not valid UTF-8 are all refusals. A newer `version` is refused with code 1, an envelope or a batch over its size limit with code 4, and every other fault (including an unknown `type`) with code 5, so the other side can be told.
+
+### Fingerprint (S1)
+
+Counters alone cannot show that two phones hold different versions of the same event (same author and counter). The fingerprint of an author's events changes if any version differs:
+
+```
+fp(0) = 16 zero bytes
+fp(c) = first 16 bytes of SHA-256( 'OTFP1' | fp(c-1) | c u64 | n u8 | h(1) ... h(n) )
+```
+
+`c` is the counter, from 1. `h(i)` is the SHA-256 of an envelope's bytes (section 3) stored for the id (author, c); the distinct hashes are in ascending unsigned byte order, and `n` is how many there are: **1 normally, 2 when two different versions exist.** A phone keeps at most the two smallest distinct versions of an id (the rules treat two or more alike: both are ignored, PROTOCOL.md section 3), so two phones that exchange their versions end with the same two and the same fingerprint. Phones with the same counters but different fingerprints for an author use `Reconcile`.
+
+`summary()` uses the fingerprint at the author's highest contiguous counter; to compare with a peer whose counter is lower, a phone computes its own fingerprint at the peer's counter.
+
+### Test vectors
+
+`app/sync/src/test/resources/fixtures/sync-vectors.json` holds valid messages, invalid byte sequences (with the refusal), and fingerprint chains, with exact hex, made by an independent encoder written from this section (`app/sync/src/test/tools/sync_vectors.py`) before the Kotlin codec.
+

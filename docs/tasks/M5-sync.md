@@ -11,7 +11,8 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 | Task | Status |
 |---|---|
 | T5.1 plan and decisions | Done (7 Nov 2026): S1 to S6 decided. Waiting for the owner's go-ahead to build T5.2. |
-| T5.2 to T5.12 | Not started. |
+| T5.2 messages and wire format | Done (7 Nov 2026), see below. |
+| T5.3 to T5.12 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -36,6 +37,9 @@ Goal (BUILD_PLAN): a `Transport` interface and the protocol on top of it: exchan
 ### T5.2 Messages and wire format
 Do: the sync messages as bytes, with a version number: `Hello` (group room, protocol version, my summary), `Request` (author and counter ranges I lack), `Envelopes` (a batch), `Done`/`Ack`, `Error`. Limits: a batch is at most 200 envelopes or 256 KB, an envelope at most 64 KB (the store's limit), a whole sync at most a set number of batches before it pauses and resumes. Unknown message types and newer versions are refused with a clear error, not a crash. Written into WIRE_FORMAT.md with test vectors from an independent encoder, as for the event format.
 Done when: round-trip and invalid-input tests, vectors checked by the Python generator, an unknown version refused, a batch over the limits refused.
+
+
+**T5.2 result (7 Nov 2026).** Specified in WIRE_FORMAT.md section 6 and built in `app/sync` (`SyncMessages.kt`): the messages `Hello` (room and summary), `Envelopes` (1 to 200 whole envelopes, at most 256 KB, each at most 64 KB), `Done` (a summary after storing), `Reconcile` (author) and `Error` (code and text), each after `'OS' | version | type`. The summary has per author the highest contiguous counter and a **fingerprint** (S1): a 16-byte chain `fp(c) = SHA-256('OTFP1' | fp(c-1) | c | n | hashes)[:16]` over the stored versions of each event (at most the two smallest by hash, so phones that swap versions end with the same two). Decoding never throws: it returns the message or a refusal with the code to tell the other side (a newer version: 1; over a size limit: 4; anything else, an unknown type included: 5). `SyncMessage.Envelopes.batches(...)` cuts a list into messages that keep every limit. The sync module now uses the core's `PublicKey` (its own copy is gone) and depends on `core-model`. **Tests:** 9 valid and 27 invalid vectors and 5 fingerprint chains from an independent Python encoder (`app/sync/src/test/tools/sync_vectors.py`), written before the Kotlin codec, all matched byte for byte; a round trip and damaged and cut input on 300 random messages (never an exception); the encoder refuses what the decoder refuses. Six rules were checked by putting the old behaviour back (fingerprint ignoring the earlier events, an unsorted summary accepted, the batch byte limit ignored, trailing bytes accepted, the version not checked, more than two versions counted): each failed tests. **Also in this work:** `main` was repaired after PR #23 (Kotlin 2.4 and AGP 8.13 on Gradle 9.8) by reverting it in PR #26 and holding those bumps back in Dependabot until the AGP 9 migration.
 
 ### T5.3 The sync engine (plain Kotlin)
 Do: one sync session over one `Link`: exchange summaries, work out what each side lacks, send it in batches, verify each envelope (group, size, signature, known author) before storing it, store it only if new, answer with what was stored. Idempotent (running it twice stores nothing the second time), safe when the link drops at any point, and the engine never reads message bodies (only the fields in the clear). `sync` depends on `core-model` and `crypto`; the duplicate `PublicKey` in `app/sync` is replaced by the core's.
