@@ -5,6 +5,11 @@
 # the Kotlin plugins) are major versions that must move together and need a deliberate migration, so major version updates are not
 # proposed here. A major upgrade is done on purpose, as its own task.
 #
+# 7 Nov 2026: PR #23 (Kotlin 2.2 to 2.4, KSP, AGP 8.9 to 8.13 and libraries built with Kotlin 2.4) was merged and broke `main`: AGP 8.12 and
+# newer cannot run on the Gradle 9.8 wrapper, and the new Kotlin needs the new AGP. It was reverted. Until the planned migration to
+# AGP 9, minor and major updates of the Kotlin and Android toolchain and of the libraries that need the new Kotlin are not proposed
+# (patch updates are). Remove these entries when that migration is done.
+#
 # Tink's version lives in gradle/libs.versions.toml, which Dependabot reads.
 version: 2
 
@@ -21,6 +26,18 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "com.android.library"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "com.google.devtools.ksp"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "org.jetbrains.kotlinx:kotlinx-coroutines-*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "org.jetbrains.kotlinx:kotlinx-serialization-*"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: "/"
     patterns: ["*"]
