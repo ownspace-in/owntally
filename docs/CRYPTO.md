@@ -90,7 +90,7 @@ Four proofs, all from Tink (Ed25519 and XChaCha20-Poly1305), each with its own l
 - **Sealed preview:** `XChaCha20-Poly1305(groupKey)` with associated data `"owntally/v1/join-preview" | ticketId | hostKey | nonce` (decision J1, 8 Nov 2026): the group's name, the owner's name and the member count, for someone holding a ticket. Its own label, so a preview never opens as a request or the other way round.
 - **Status proof:** `Ed25519(joinerKey, "owntally/v1/join-status" | groupId | hostKey | nonce)`, so only the holder of the key can ask what became of the request.
 
-The host uses the ticket up only after the request opened, the joiner's signature held and the request was well formed; a request that fails any of these leaves the ticket usable. A made-up or replayed request therefore cannot burn someone's invitation. Expired, used and unknown tickets are answered alike. Not yet independent test vectors (the other proofs have them in `crypto_vectors.py`): to add before M6 is handed back.
+The host uses the ticket up only after the request opened, the joiner's signature held and the request was well formed; a request that fails any of these leaves the ticket usable. A made-up or replayed request therefore cannot burn someone's invitation. Expired, used and unknown tickets are answered alike. Independent test vectors for these proofs, for the link proofs (7b) and the TLS binding (7c) are in `crypto-vectors.json` (section `join`), made by `crypto_vectors.py` from this text and compared byte for byte by `JoinVectorsTest` (Ed25519 is deterministic; the sealed request and preview made by the Python side must open in Kotlin).
 
 ### 7b. The local link handshake (M6, T6.7)
 

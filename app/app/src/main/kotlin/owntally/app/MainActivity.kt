@@ -23,6 +23,16 @@ class MainActivity : FragmentActivity() {
         viewModelFactory { initializer { OnboardingViewModel(container.firstRun) } }
     }
 
+    override fun onStart() {
+        super.onStart()
+        container.beginSyncing()
+    }
+
+    override fun onStop() {
+        container.endSyncing()
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

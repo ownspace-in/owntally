@@ -47,7 +47,7 @@ A ticket is about 150 characters: host id, connection hint, group id, group key.
 Ways to share it, in order of preference:
 1. Tappable link `https://joinowntally.ownspace.in/j#<ticket>`, with the ticket after `#` (never sent to the web host). Needs a small static page on that domain to hand off to the app (see Invite link page). WhatsApp only linkifies `https://`, not `owntally://`.
 2. Plain-text ticket through the share sheet, pasted into "Join group".
-3. QR code, for people in the same room. QR holds under about 2.9 KB, so it carries the ticket only, never data.
+3. QR code, for people in the same room. QR holds under about 2.9 KB, so it carries the ticket only, never data. **Showing the QR is built; scanning it inside the app is not in this version (owner decision L4, 8 Nov 2026: the scanner libraries add network permissions and Google's reporting, or need Play services); a friend pastes the link or code, or opens the link, instead.**
 
 Safety:
 - The ticket contains the group key, so treat it as a secret. Prefer end-to-end encrypted chats. SMS is not encrypted.
@@ -69,6 +69,8 @@ Safety:
 - The relay then sees every user's IP address, timing and data volume on every sync, not only for users who cannot connect directly.
 - Server load is higher than with Iroh first; the nginx limits and rate cap in `relay/iroh-relay/` and `relay/ws-relay/` matter more.
 - The internet transports are staggered, not tried one after the other (see the timeouts above), so a blocked Iroh costs about 3 s before the relay is also tried. The relay is still the last resort in the sense that it only starts when Iroh has not connected within 3 s.
+
+**M6 decisions (owner, 8 Nov 2026; details in docs/tasks/M6-nearby-invites.md).** The same-network link (L1) is found with Android's own service discovery and comes in two kinds, TLS 1.3 with certificates that carry the members' keys, and a plain link; a phone calls TLS first and falls back to plain if TLS does not connect, but never after a refusal for a wrong key, and the status says which was used (L6; a Noise link was dropped because the one library considered cannot do what it was needed for). Same-network links need the **INTERNET permission**, the only network permission, guarded by a build test that keeps all other code off the network (L5). Nearby needs Bluetooth and Wi-Fi permissions, asked only when the person opens the Nearby screen, and runs only while that screen is open.
 
 ## Relay
 

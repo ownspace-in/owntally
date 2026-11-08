@@ -56,6 +56,7 @@ class MembershipEndToEndInstrumentedTest {
     fun everyMembershipScreenWorksThroughThePretendPeople() {
         wipe()
         try {
+            container().syncOnStart = false // these screens are about membership, not about a phone looking for friends
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
             container().sessions.createGroup("Goa Trip", "INR", 0)
             ActivityScenario.launch(MainActivity::class.java)
@@ -131,6 +132,7 @@ class MembershipEndToEndInstrumentedTest {
     fun theOwnerOpensInviteFriendsFromMembersGetsAnInviteThatSurvivesARestartAndCanBeRevokedAndRenewed() {
         wipe()
         try {
+            container().syncOnStart = false
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
             val group = container().sessions.createGroup("Goa Trip", "INR", 0)
             ActivityScenario.launch(MainActivity::class.java)
@@ -150,6 +152,7 @@ class MembershipEndToEndInstrumentedTest {
 
             // The invite is in the database: a new container (as after the app is closed) finds the same one.
             (context as OwnTallyApplication).resetContainerForTests()
+            container().syncOnStart = false
             assertEquals(first, container().invites.current(group)!!.link)
 
             // The Join requests screen lists it under OPEN INVITES.
@@ -178,6 +181,7 @@ class MembershipEndToEndInstrumentedTest {
     fun aPersonPastesAnInviteSeesTheFormAsksToJoinAndTheInvitationSurvivesARestartUntilDiscarded() {
         wipe()
         try {
+            container().syncOnStart = false
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Rohan", "98765 43210") }
             // An invite for a group on some other phone (made up here: there is no other phone to reach until M6's real connections).
             val ticket = owntally.crypto.Ticket(
@@ -198,9 +202,9 @@ class MembershipEndToEndInstrumentedTest {
             // Nobody can be reached: the form says so, with the name and number from first run already filled in.
             see("You were invited")
             see("A group")
-            see("The person who invited you isn't reachable right now, so we can't show the group yet. You can still ask to join.")
+            see("The person who invited you isn't reachable right now, so we can't show the group yet. You can still ask to join.", 40_000)
             tap("Request to join")
-            see("The phone of the person who invited you isn't reachable. Ask them to open OwnTally, then tap Retry.")
+            see("The phone of the person who invited you isn't reachable. Ask them to open OwnTally, then tap Retry.", 40_000)
             tapDescription("Back")
 
             // The invitation is on the Groups list and in the database: a new container finds it.
@@ -220,7 +224,7 @@ class MembershipEndToEndInstrumentedTest {
     }
 
     @Test
-    fun theSyncTabAndScreenSayEveryoneIsNotReachableYetBecauseNoWayToReachThemIsBuiltInYet() {
+    fun withSyncOnThePhoneLooksForEachFriendAndShowsThemOfflineWhenNobodyAnswersOnTheNetwork() {
         wipe()
         try {
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
@@ -234,17 +238,18 @@ class MembershipEndToEndInstrumentedTest {
             tap("Add pretend friend: Meera (test) (debug)")
             see("Add pretend friend: Kabir (test) (debug)")
             tapDescription("Back")
-            // The Sync tab lists the group; opening it shows the screen of design/05 without Nearby and the relay card.
+            // The Sync tab lists the group; opening it shows the screen of design/05. The app started the group's sync when it came to the front:
+            // the pretend friends are not on the network, so after the first try (service discovery, TLS then plain) each shows Offline.
             tapDescription("Sync")
             see("Choose a group to see who it has reached.")
-            see("Not syncing yet")
             tap("Goa Trip")
-            see("Not syncing yet. Your entries are saved on this phone.")
             see("MEMBERS")
-            assertEquals(2, rule.onAllNodesWithText("Not reachable yet").fetchSemanticsNodes().size, "one line per friend")
+            rule.waitUntil(90_000) { rule.onAllNodesWithText("Offline").fetchSemanticsNodes().size == 2 }
+            rule.waitUntil(30_000) { rule.onAllNodesWithText("trying again in", substring = true).fetchSemanticsNodes().size == 2 }
+            see("Waiting for a friend to come online.", 30_000)
+            // "Sync now" tries again at once, without waiting for the retry time.
             tapDescription("Sync now")
-            rule.waitForIdle()
-            see("Not syncing yet. Your entries are saved on this phone.")
+            rule.waitUntil(90_000) { rule.onAllNodesWithText("Offline").fetchSemanticsNodes().size == 2 }
             // Nearby: opened from here, and nothing about it runs before the person says why and taps Continue and Start.
             tapDescription("Nearby")
             see("Sit near your friends and open this screen on each phone. Phones in the same room find each other and swap notes, with no internet.")
