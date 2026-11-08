@@ -25,6 +25,9 @@ enum class LinkKind { DIRECT, RELAYED, NEARBY }
 interface Link {
     val peer: PublicKey
     val kind: LinkKind
+
+    /** How a local link is protected on the network (TLS or plain); null for a link that is not a local network link. */
+    val security: LinkSecurity? get() = null
     suspend fun send(bytes: ByteArray)
     val received: Flow<ByteArray>
     suspend fun close()

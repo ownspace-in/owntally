@@ -44,9 +44,12 @@ import owntally.ui.components.Glyph
 import owntally.ui.components.GlyphIcon
 import owntally.ui.theme.OwnTallyColors
 
-/** Join requests (design/11). The "Open invites" section of the mockup arrives with invitations in M6. */
+/** Join requests (design/11): who is waiting, and the invitations this phone made that still work. */
 @Composable
-fun JoinRequestsScreen(model: JoinRequestsScreenModel, onBack: () -> Unit, onApprove: (JoinRequestRow) -> Unit, onDecline: (JoinRequestRow) -> Unit) {
+fun JoinRequestsScreen(
+    model: JoinRequestsScreenModel, onBack: () -> Unit, onApprove: (JoinRequestRow) -> Unit, onDecline: (JoinRequestRow) -> Unit,
+    onRevoke: (OpenInviteRow) -> Unit = {}, onNewInvite: (() -> Unit)? = null,
+) {
     Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 16.dp)) {
             item {
@@ -98,6 +101,30 @@ fun JoinRequestsScreen(model: JoinRequestsScreenModel, onBack: () -> Unit, onApp
                     }
                 }
                 Spacer(Modifier.height(14.dp))
+            }
+            if (onNewInvite != null) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Text(model.openInvitesHeading, style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
+                    Spacer(Modifier.height(10.dp))
+                    if (model.noOpenInvites != null) Text(model.noOpenInvites, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
+                }
+                items(model.openInvites, key = { "invite-" + it.id }) { row ->
+                    Row(
+                        Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(20.dp)).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(row.title, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+                            Text(row.detail, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                        }
+                        Text("Revoke", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Red, modifier = Modifier.clickable { onRevoke(row) }.padding(8.dp).semantics { role = SemanticsRole.Button })
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                item {
+                    Text(model.newInviteLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green, modifier = Modifier.clickable(onClick = onNewInvite).padding(8.dp).semantics { role = SemanticsRole.Button })
+                }
             }
         }
         Box(Modifier.padding(20.dp, 0.dp, 20.dp, 20.dp).fillMaxWidth().background(OwnTallyColors.InfoBackground, RoundedCornerShape(20.dp)).padding(18.dp)) {

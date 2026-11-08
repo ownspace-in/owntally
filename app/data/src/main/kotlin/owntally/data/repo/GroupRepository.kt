@@ -78,6 +78,15 @@ class GroupRepository(
     }
 
     @Synchronized
+    /**
+     * Makes a group of this phone for one the person was admitted to (M6): the group's row, with no events yet; the history arrives by sync.
+     * The group's key must already be saved. Does nothing if the group is already here. Throws if the slot belongs to another group.
+     */
+    fun joinGroup(groupId: GroupId, keySlot: Long) {
+        if (events.group(groupId) != null) return
+        events.addGroup(GroupRow(groupId, keySlot, clock.nowSeconds()), emptyList())
+    }
+
     fun appendEnvelope(groupId: GroupId, envelope: Envelope): AppendResult {
         if (events.group(groupId) == null) return AppendResult.Rejected(RejectedBecause.UNKNOWN_GROUP)
         if (envelope.groupId != groupId) return AppendResult.Rejected(RejectedBecause.WRONG_GROUP)

@@ -47,6 +47,8 @@ data class SyncResult(
     val detail: String,
     /** The kind of link the sync ran over. */
     val via: LinkKind? = null,
+    /** How the link was protected (a local link: TLS or plain), if it says. */
+    val security: LinkSecurity? = null,
 )
 
 /** What this phone does for a peer that connects or is connected to (decision S2, T5.7). */
@@ -172,7 +174,7 @@ class SyncEngine(
         }
 
         private fun result(outcome: SyncOutcome, error: ErrorCode?, detail: String) =
-            SyncResult(outcome, sent, stored, duplicates, rejected.toMap(), peerSummary, peerFinal, reconciled.toSet(), error, detail, link.kind)
+            SyncResult(outcome, sent, stored, duplicates, rejected.toMap(), peerSummary, peerFinal, reconciled.toSet(), error, detail, link.kind, link.security)
 
         /** Everything the peer lacks according to its summary: per author, our versions above its counter. */
         private fun owedTo(peer: SyncSummary): List<ByteArray> {

@@ -139,6 +139,32 @@ assert alphabet[last | 1] != odd_text[-1]
 # the 34-byte worked example of docs/WIRE_FORMAT.md (a ProfileUpdated for counter 1)
 EXAMPLE_PAYLOAD = bytes.fromhex("0000" "00000000000003e8" "03" "00000013" "0004" "41736861" "000b" "3938373635203433323130")
 
+# --- the proofs of joining and of the local link, docs/CRYPTO.md sections 7a, 7b and 7c: Ed25519 over a label and the fields, and the
+# sealed request and preview (XChaCha20-Poly1305 with the label, ticket id, host key and nonce as associated data)
+def sign_label(slot, label, *parts):
+    return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(keys_for(slot)["signSeed"])).sign(label + b"".join(parts)).hex()
+
+def join_vectors():
+    host, joiner = 0, 1
+    host_key = bytes.fromhex(keys_for(host)["signPub"]); joiner_key = bytes.fromhex(keys_for(joiner)["signPub"])
+    group = bytes([9]) * 16; ticket_id = bytes(range(1, 17)); nonce = bytes(range(100, 132)); group_key = bytes(range(32, 64))
+    body = bytes(range(10, 70)); nonce24 = bytes(range(0x60, 0x78)); transcript = bytes(range(200, 255)) * 2; spki = bytes(range(91))
+    request_plain = b"request plaintext for the vector"; preview_plain = b"preview plaintext for the vector"
+    def sealed(label, plain):
+        return (nonce24 + xchacha_seal(group_key, nonce24, label + ticket_id + host_key + nonce, plain)).hex()
+    return {
+        "host": host, "joiner": joiner, "group": group.hex(), "ticketId": ticket_id.hex(), "nonce": nonce.hex(), "groupKey": group_key.hex(),
+        "body": body.hex(), "transcript": transcript.hex(), "certificateKey": spki.hex(),
+        "hostSignature": sign_label(host, b"owntally/v1/join-host", group, ticket_id, nonce),
+        "requestSignature": sign_label(joiner, b"owntally/v1/join-request", group, host_key, nonce, body),
+        "statusSignature": sign_label(joiner, b"owntally/v1/join-status", group, host_key, nonce),
+        "requestPlain": request_plain.hex(), "sealedRequest": sealed(b"owntally/v1/join-sealed", request_plain),
+        "previewPlain": preview_plain.hex(), "sealedPreview": sealed(b"owntally/v1/join-preview", preview_plain),
+        "linkServerSignature": sign_label(host, b"owntally/v1/link-server", transcript),
+        "linkClientSignature": sign_label(joiner, b"owntally/v1/link-client", transcript),
+        "tlsBindingSignature": sign_label(host, b"owntally/v1/tls-binding", spki),
+    }
+
 out = {
     "description": "Key derivation and signing vectors for docs/CRYPTO.md, from an independent implementation (Python cryptography + hashlib). The phrase is the well-known all-'abandon' test phrase; never use it for a real group.",
     "phrase": PHRASE, "seed": SEED.hex(),
@@ -156,6 +182,7 @@ out = {
     "sealed": [
         sealed_event(0, bytes([9]) * 16, 2, 1, bytes(range(32)), bytes(range(0x40, 0x58)), EXAMPLE_PAYLOAD),
     ],
+    "join": join_vectors(),
 }
 json.dump(out, open(sys.argv[1], "w"), indent=1)
 print(len(out["slots"]), len(out["envelopes"]), len(out["sealed"]), len(out["keyDeliveries"]), len(T), len(IT))

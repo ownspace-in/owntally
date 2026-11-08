@@ -64,6 +64,9 @@ fun HomeFlow(
     lock: owntally.ui.lock.LockController? = null,
     joinRequests: owntally.data.session.JoinRequests? = null,
     sync: owntally.data.session.SyncCoordinator? = null,
+    invites: owntally.data.session.Invites? = null,
+    joinGroup: owntally.data.session.JoinGroup? = null,
+    nearby: ((GroupId) -> owntally.ui.nearby.NearbyController)? = null,
 ) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
@@ -78,22 +81,29 @@ fun HomeFlow(
                 onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(it)) },
                 onHow = { ui.nav = ui.nav.push(Screen.HowItWorks) },
                 onSettings = if (lock != null) ({ ui.nav = ui.nav.push(Screen.Settings) }) else null,
+                joinGroup = joinGroup,
+                onJoin = { ui.nav = ui.nav.push(Screen.JoinPaste) },
+                onOpenInvitation = { ui.nav = ui.nav.push(Screen.Join(it)) },
                 sync = sync, onSync = { ui.nav = ui.nav.push(Screen.Sync(it)) },
                 onCreate = { ui.nav = ui.nav.push(Screen.CreateGroup) },
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
-            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back)
+            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
+            is Screen.Nearby -> NearbyRoute(sessions, nearby, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
-            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
+            is Screen.Invite -> InviteRoute(sessions, invites, screen.id, onBack = back)
+            Screen.JoinPaste -> JoinPasteRoute(joinGroup, onBack = back, onOpened = { ui.nav = ui.nav.pop().push(Screen.Join(it)) })
+            is Screen.Join -> JoinRoute(joinGroup, screen.id, onBack = back, onOpenGroup = { ui.nav = ui.nav.home().push(Screen.Group(screen.id)) })
+            is Screen.Members -> MembersRoute(sessions, joinRequests, invites, screen.id, onBack = back, onInvite = { ui.nav = ui.nav.push(Screen.Invite(screen.id)) }, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
             is Screen.Cancelled -> CancelledRoute(
                 sessions, screen.id, screen.member, onBack = back,
                 onAddAgain = { model -> ui.addExpense = screen.id to model; ui.nav = ui.nav.push(Screen.AddExpense(screen.id)) },
             )
             is Screen.Profile -> ProfileRoute(sessions, screen.id, onBack = back, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) })
             is Screen.Leave -> LeaveRoute(sessions, screen.id, onCancel = back, onLeft = { ui.nav = ui.nav.home() })
-            is Screen.JoinRequests -> JoinRequestsRoute(sessions, joinRequests, screen.id, onBack = back)
+            is Screen.JoinRequests -> JoinRequestsRoute(sessions, joinRequests, invites, screen.id, onBack = back, onNewInvite = { ui.nav = ui.nav.push(Screen.Invite(screen.id)) })
             is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) }, onMakeOwner = { ui.nav = ui.nav.push(Screen.OwnerOffer(screen.id, screen.member)) })
             is Screen.OwnerOffer -> OwnerOfferRoute(sessions, screen.id, screen.member, onClose = back, onChoose = { ui.nav = ui.nav.pop() })
             is Screen.RemoveMember -> RemoveMemberRoute(sessions, screen.id, screen.member, onCancel = back, onRemoved = { ui.nav = ui.nav.pop().pop() })
@@ -113,6 +123,7 @@ fun HomeFlow(
 private fun HomeTabs(
     sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onSettings: (() -> Unit)?, onCreate: () -> Unit,
     sync: owntally.data.session.SyncCoordinator?, onSync: (GroupId) -> Unit,
+    joinGroup: owntally.data.session.JoinGroup? = null, onJoin: () -> Unit = {}, onOpenInvitation: (GroupId) -> Unit = {},
 ) {
     val ui: HomeViewModel = viewModel()
     val tab = ui.tab
@@ -121,7 +132,15 @@ private fun HomeTabs(
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.GROUPS -> GroupsScreen(model, onOpen = { onOpen(it.id) }, onCreate = onCreate)
+                Tab.GROUPS -> {
+                    val invitations by produceState(emptyList<PendingCardModel>(), joinGroup, summaries) {
+                        while (true) {
+                            value = if (joinGroup == null) emptyList() else withContext(Dispatchers.IO) { joinGroup.pending().map { JoinModels.card(it, System.currentTimeMillis() / 1000) } }
+                            kotlinx.coroutines.delay(3_000)
+                        }
+                    }
+                    GroupsScreen(model, onOpen = { onOpen(it.id) }, onCreate = onCreate, invitations = invitations, onOpenInvitation = { onOpenInvitation(it.group) }, onJoin = if (joinGroup != null) onJoin else null)
+                }
                 Tab.SETTLE -> SettleTab(model, onSettle)
                 Tab.SYNC -> if (sync == null) MessageTab("Sync", "Sync is not available on this phone.") else SyncTab(
                     GroupsModels.settleTabCards(model.cards),
@@ -375,7 +394,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit, onMyProfile: () -> Unit, onLeave: () -> Unit, onRemovedTap: (owntally.model.PublicKey) -> Unit) {
+private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, invites: owntally.data.session.Invites?, id: GroupId, onBack: () -> Unit, onInvite: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit, onMyProfile: () -> Unit, onLeave: () -> Unit, onRemovedTap: (owntally.model.PublicKey) -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -385,8 +404,9 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
         return
     }
     val view by s.view.collectAsStateWithLifecycle()
-    val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
-    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null, onMyProfile = onMyProfile, onLeave = onLeave, onRemovedTap = { onRemovedTap(it.key) })
+    val requestChanges by (joinRequests?.changes ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsStateWithLifecycle()
+    val waiting by produceState(0, id, view, requestChanges) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
+    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onInvite = if (invites != null) onInvite else null, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null, onMyProfile = onMyProfile, onLeave = onLeave, onRemovedTap = { onRemovedTap(it.key) })
 }
 
 @Composable
@@ -512,7 +532,7 @@ private fun OwnerOfferRoute(sessions: Sessions, id: GroupId, member: owntally.mo
 }
 
 @Composable
-private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit) {
+private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, invites: owntally.data.session.Invites?, id: GroupId, onBack: () -> Unit, onNewInvite: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -523,8 +543,12 @@ private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.se
     }
     val view by s.view.collectAsStateWithLifecycle()
     var version by remember { mutableStateOf(0) }
-    val waiting by produceState(emptyList<owntally.data.store.JoinRequest>(), id, view, version) { value = withContext(Dispatchers.IO) { joinRequests.waiting(id) } }
-    val model = remember(view, waiting) { JoinRequestsModels.build(view, waiting, System.currentTimeMillis() / 1000) }
+    val changes by joinRequests.changes.collectAsStateWithLifecycle()
+    val waiting by produceState(emptyList<owntally.data.store.JoinRequest>(), id, view, version, changes) { value = withContext(Dispatchers.IO) { joinRequests.waiting(id) } }
+    val open by produceState(emptyList<OpenInviteInfo>(), id, view, version, changes) {
+        value = withContext(Dispatchers.IO) { invites?.open(id).orEmpty().map { OpenInviteInfo(it.ticketId.joinToString("") { b -> "%02x".format(b) }, it.expiresAtSeconds) } }
+    }
+    val model = remember(view, waiting, open) { JoinRequestsModels.build(view, waiting, System.currentTimeMillis() / 1000, open) }
     val scope = rememberCoroutineScope()
     var approving by remember { mutableStateOf<JoinRequestRow?>(null) }
     if (model == null) {
@@ -536,6 +560,13 @@ private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.se
     JoinRequestsScreen(
         model, onBack, onApprove = { approving = it },
         onDecline = { row -> scope.launch { withContext(Dispatchers.IO) { joinRequests.decline(id, row.member) }; version++ } },
+        onRevoke = { row ->
+            scope.launch {
+                withContext(Dispatchers.IO) { invites?.open(id)?.firstOrNull { it.ticketId.joinToString("") { b -> "%02x".format(b) } == row.id }?.let { invites.revoke(id, it) } }
+                version++
+            }
+        },
+        onNewInvite = if (invites != null) onNewInvite else null,
     )
     val target = approving
     if (target != null) {
@@ -681,7 +712,7 @@ private fun SettingsRoute(sessions: Sessions, lock: owntally.ui.lock.LockControl
 }
 
 @Composable
-private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit) {
+private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit, onNearby: (() -> Unit)?) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -695,5 +726,190 @@ private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordi
     val problems by produceState(emptyList<owntally.data.store.SyncProblem>(), id, status) { value = withContext(Dispatchers.IO) { sync.problems(id) } }
     val scope = rememberCoroutineScope()
     val model = remember(view, status, problems) { SyncModels.build(view, status, problems, System.currentTimeMillis() / 1000) }
-    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) })
+    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) }, onNearby = onNearby)
+}
+
+
+/**
+ * Invite friends (design/10). Opening the screen shows the newest invite that still works, or makes one when there is none. Share
+ * and Copy hand the link to the system (the clipboard entry is marked sensitive: the link holds the group key).
+ */
+@Composable
+private fun InviteRoute(sessions: Sessions, invites: owntally.data.session.Invites?, id: GroupId, onBack: () -> Unit) {
+    if (invites == null) { Box(Modifier.fillMaxSize()); return }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var invite by remember(id) { mutableStateOf<owntally.data.session.Invite?>(null) }
+    var revoked by remember(id) { mutableStateOf(false) }
+    var loaded by remember(id) { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(id) {
+        invite = withContext(Dispatchers.IO) { invites.current(id) ?: invites.create(id) }
+        loaded = true
+    }
+    val now by produceState(System.currentTimeMillis() / 1000, id) {
+        while (true) { kotlinx.coroutines.delay(15_000); value = System.currentTimeMillis() / 1000 }
+    }
+    val name = remember(id) { sessions.summaries.value.firstOrNull { it.groupId == id }?.name ?: "Group" }
+    if (!loaded) { Box(Modifier.fillMaxSize()); return }
+    val shown = invite
+    val model = InviteModels.build(name, shown?.link, shown?.expiresAtSeconds ?: 0, revoked, now)
+    InviteScreen(
+        model, onBack,
+        onShare = {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, model.shareText)
+            context.startActivity(android.content.Intent.createChooser(send, "Share invite link"))
+        },
+        onCopy = { model.link?.let { owntally.ui.copySensitive(context, "OwnTally invite", it) } },
+        onRevoke = { val i = invite; if (i != null) scope.launch { withContext(Dispatchers.IO) { invites.revoke(id, i) }; revoked = true } },
+        onNew = { scope.launch { invite = withContext(Dispatchers.IO) { invites.create(id) }; revoked = false } },
+    )
+}
+
+
+/** Join a group: paste the invite, open it (the host is asked what the group is), then the form. */
+@Composable
+private fun JoinPasteRoute(joinGroup: owntally.data.session.JoinGroup?, onBack: () -> Unit, onOpened: (GroupId) -> Unit) {
+    if (joinGroup == null) { Box(Modifier.fillMaxSize()); return }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var text by remember { mutableStateOf("") }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    PasteInviteScreen(
+        text, { text = it; problem = null }, problem, busy,
+        onPaste = {
+            val clip = context.getSystemService(android.content.ClipboardManager::class.java).primaryClip
+            val pasted = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
+            if (!pasted.isNullOrBlank()) { text = pasted; problem = null }
+        },
+        onContinue = {
+            busy = true
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { joinGroup.open(text) }
+                busy = false
+                when (result) {
+                    is owntally.data.session.OpenResult.Opened -> {
+                        val bad = JoinModels.previewProblem(result.preview)
+                        if (bad != null) { withContext(Dispatchers.IO) { joinGroup.discard(result.join.group) }; problem = bad } else onOpened(result.join.group)
+                    }
+                    else -> problem = JoinModels.pasteProblem(result)
+                }
+            }
+        },
+        onBack = onBack,
+    )
+}
+
+/** The form, then waiting for approval, then "You're in" until the history arrives and the group opens. */
+@Composable
+private fun JoinRoute(joinGroup: owntally.data.session.JoinGroup?, id: GroupId, onBack: () -> Unit, onOpenGroup: () -> Unit) {
+    if (joinGroup == null) { Box(Modifier.fillMaxSize()); return }
+    var version by remember(id) { mutableStateOf(0) }
+    val join by produceState<owntally.data.store.PendingJoin?>(null, id, version) { value = withContext(Dispatchers.IO) { joinGroup.pending(id) } }
+    var name by remember(id) { mutableStateOf("") }
+    var phone by remember(id) { mutableStateOf("") }
+    var showErrors by remember(id) { mutableStateOf(false) }
+    var problem by remember(id) { mutableStateOf<String?>(null) }
+    var busy by remember(id) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(id) {
+        val profile = withContext(Dispatchers.IO) { joinGroup.defaultProfile() }
+        if (name.isEmpty() && profile != null) name = profile.name
+        if (phone.isEmpty() && profile != null) phone = profile.phone
+    }
+    val state = join?.state
+    // While waiting, ask the host now and then; once approved, wait for the history and open the group.
+    LaunchedEffect(id, state) {
+        when (state) {
+            owntally.data.store.PendingState.WAITING -> while (true) {
+                kotlinx.coroutines.delay(30_000)
+                if (withContext(Dispatchers.IO) { joinGroup.check(id) } == owntally.data.session.CheckResult.Approved) { version++; break }
+            }
+            owntally.data.store.PendingState.APPROVED -> while (true) {
+                if (withContext(Dispatchers.IO) { joinGroup.completeIfMember(id) }) { onOpenGroup(); break }
+                kotlinx.coroutines.delay(2_000)
+            }
+            else -> Unit
+        }
+    }
+    val now = System.currentTimeMillis() / 1000
+    val j = join
+    if (j == null) { Box(Modifier.fillMaxSize()); return }
+    when (j.state) {
+        owntally.data.store.PendingState.OPENED -> {
+            val model = JoinModels.form(j, name, phone, now, showErrors)
+            JoinFormScreen(
+                model, name, phone, { name = it; problem = null }, { phone = it; problem = null }, problem, busy,
+                onRequest = {
+                    showErrors = true
+                    if (model.canRequest) {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) { joinGroup.request(id, name, phone) }
+                            busy = false
+                            problem = JoinModels.problem(j, r)
+                            version++
+                        }
+                    }
+                },
+                onBack = onBack,
+                onTryAgain = if (j.groupName.isBlank()) ({ scope.launch { withContext(Dispatchers.IO) { joinGroup.refreshPreview(id) }; version++ } }) else null,
+                onDiscard = { scope.launch { withContext(Dispatchers.IO) { joinGroup.discard(id) }; onBack() } },
+            )
+        }
+        else -> {
+            var note by remember(id) { mutableStateOf<String?>(null) }
+            JoinWaitingScreen(
+                JoinModels.waiting(j, now), note, busy,
+                onRetry = {
+                    if (j.state == owntally.data.store.PendingState.DECLINED) {
+                        scope.launch { withContext(Dispatchers.IO) { joinGroup.discard(id) }; onBack() }
+                    } else {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) { joinGroup.check(id) }
+                            busy = false
+                            note = JoinModels.checkNote(j, r)
+                            version++
+                        }
+                    }
+                },
+                onBack = onBack,
+            )
+        }
+    }
+}
+
+
+/**
+ * Nearby (T6.11): Start asks for what Nearby needs only after saying why, runs while this screen is open and stops when it is left.
+ * Nothing about Nearby runs before the person taps Start.
+ */
+@Composable
+private fun NearbyRoute(sessions: Sessions, nearby: ((GroupId) -> owntally.ui.nearby.NearbyController)?, id: GroupId, onBack: () -> Unit) {
+    if (nearby == null) { Box(Modifier.fillMaxSize()); return }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val controller = remember(id) { nearby(id) }
+    val session by produceState<GroupSession?>(null, id) { value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null } }
+    val s = session ?: run { Box(Modifier.fillMaxSize()); return }
+    val view by s.view.collectAsStateWithLifecycle()
+    val status by controller.status.collectAsStateWithLifecycle()
+    val sdk = android.os.Build.VERSION.SDK_INT
+    fun granted(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(context, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    var gate by remember(id) { mutableStateOf(if (owntally.ui.nearby.NearbyPermissions.missing(sdk, ::granted).isEmpty()) owntally.ui.nearby.NearbyGate.READY else owntally.ui.nearby.NearbyGate.EXPLAIN) }
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        gate = if (owntally.ui.nearby.NearbyPermissions.missing(sdk, ::granted).isEmpty()) owntally.ui.nearby.NearbyGate.READY else owntally.ui.nearby.NearbyGate.DENIED
+    }
+    androidx.compose.runtime.DisposableEffect(id) { onDispose { controller.stop() } }
+    val names = remember(view) { view.state.currentMembers.filterKeys { it != view.me }.mapValues { it.value.name } }
+    val model = remember(view, status) { owntally.ui.nearby.NearbyModels.build(view.state.name ?: "Group", names, status, controller.availability() == owntally.ui.nearby.NearbyAvailability.NO_PLAY_SERVICES) }
+    owntally.ui.nearby.NearbyScreen(
+        model, gate, owntally.ui.nearby.NearbyPermissions.explanation(sdk),
+        onBack = onBack,
+        onContinue = { launcher.launch(owntally.ui.nearby.NearbyPermissions.request(sdk).toTypedArray()) },
+        onOpenSettings = {
+            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null)))
+        },
+        onStart = { controller.start() }, onStop = { controller.stop() }, onLookAgain = { controller.lookAgain() },
+    )
 }

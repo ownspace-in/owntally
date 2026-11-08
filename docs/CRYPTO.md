@@ -81,6 +81,27 @@ version u8 (1) | ticketId bytes(16) | hostId key | groupId bytes(16) | epoch u32
 - Expiry: 8 hours after creation, checked by the host and by the joiner. (The host is exact; the joiner allows 60 seconds of clock difference.) Single use: the host remembers each `ticketId` it has accepted and refuses a repeat. The registry lives on the host phone, so a ticket works only while the host is reachable.
 - Expired, reused, malformed or wrongly checked tickets are rejected without revealing which.
 
+### 7a. The join handshake (M6, T6.2)
+
+Four proofs, all from Tink (Ed25519 and XChaCha20-Poly1305), each with its own label so a signature made for one purpose is not accepted for another. Every one covers the group and a nonce the host chose for this one connection, so none can be replayed on another connection.
+- **Host proof:** `Ed25519(hostKey, "owntally/v1/join-host" | groupId | ticketId | nonce)`. The joiner checks it against the host key in the ticket before it sends anything it cares about.
+- **Sealed request:** `XChaCha20-Poly1305(groupKey)` with associated data `"owntally/v1/join-sealed" | ticketId | hostKey | nonce`. Only someone who holds the ticket's group key can make one the host opens; the host opens it with the key of the ticket it issued under that id. A request made for one connection does not open on another.
+- **Joiner signature:** `Ed25519(joinerKey, "owntally/v1/join-request" | groupId | hostKey | nonce | body)`, inside the sealed request, so the host knows the joiner holds the key it names.
+- **Sealed preview:** `XChaCha20-Poly1305(groupKey)` with associated data `"owntally/v1/join-preview" | ticketId | hostKey | nonce` (decision J1, 8 Nov 2026): the group's name, the owner's name and the member count, for someone holding a ticket. Its own label, so a preview never opens as a request or the other way round.
+- **Status proof:** `Ed25519(joinerKey, "owntally/v1/join-status" | groupId | hostKey | nonce)`, so only the holder of the key can ask what became of the request.
+
+The host uses the ticket up only after the request opened, the joiner's signature held and the request was well formed; a request that fails any of these leaves the ticket usable. A made-up or replayed request therefore cannot burn someone's invitation. Expired, used and unknown tickets are answered alike. Independent test vectors for these proofs, for the link proofs (7b) and the TLS binding (7c) are in `crypto-vectors.json` (section `join`), made by `crypto_vectors.py` from this text and compared byte for byte by `JoinVectorsTest` (Ed25519 is deterministic; the sealed request and preview made by the Python side must open in Kotlin).
+
+### 7b. The local link handshake (M6, T6.7)
+
+Ed25519 from Tink. Each side signs `label | transcript`, with the labels `"owntally/v1/link-server"` and `"owntally/v1/link-client"` (a server proof is never a client proof), where the transcript is the caller's `Hello` (room, both keys, the caller's nonce), the version, the chosen kind and the answerer's nonce (WIRE_FORMAT.md section 8). So a proof is bound to this pair of phones, this room and this one connection: a recorded handshake cannot be replayed (the answerer's nonce is new each time), and one conversation's answer cannot be passed off as another's. **This is the plain link of decision L2: nothing on it is encrypted beyond the envelopes.** Someone on the network can read who is syncing with whom, counters and sizes, and can relay the connection; they cannot read an entry, forge one, or get in as a member. The TLS and Noise links (T6.8, T6.9) add secrecy of that metadata.
+
+### 7c. The TLS link (M6, T6.8)
+
+TLS 1.3 from the platform (Java's JSSE, Android's Conscrypt); no cryptography of our own. Each connection shows a **self-made certificate** with a fresh P-256 key (made by the platform's key generator and signed by it, ECDSA with SHA-256) that carries the member's key and the member's Ed25519 signature over the certificate's key (`LinkAuth.signTlsBinding`, label `"owntally/v1/tls-binding"`), in an extension with the OID 2.999.1 (private use). The only thing written by us is the byte layout of the certificate (DER); the platform's own certificate parser and signature check judge it in the tests. A phone accepts a certificate only if it is correctly self-signed **and** the member's signature over its key checks out **and** (for a caller) it is the key it meant to reach. Dates are not checked: phones' clocks differ and a certificate is made fresh for each node. Both sides are authenticated (the answerer asks for a certificate). What this adds to the plain link: who is syncing with whom, the counters and the sizes are hidden from the network. What it does not: the other end is still only as trusted as the group's rules make it.
+
+**Small-order keys are refused everywhere (found in T6.8).** The Ed25519 verifier accepts a signature of zeros from a key of small order for about a quarter of all messages. Such a key belongs to nobody. `WeakKeys` holds the seven encodings (the list libsodium uses; the sign bit is ignored) and every check of a signature in the app (envelopes, join proofs, link proofs, TLS bindings) refuses them first.
+
 ## 8. Never in logs
 
 Key and phrase types print as `[redacted]` in `toString`. Their bytes are copied out only by explicit calls. A test searches the output of every public type's `toString` for the secret bytes in hex and Base64.

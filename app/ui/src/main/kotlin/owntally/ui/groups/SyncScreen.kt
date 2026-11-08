@@ -36,7 +36,7 @@ import owntally.ui.theme.OwnTallyColors
  * latest run that dropped entries and the note listing the latest dropped entries. Nearby (M6) and the relay card (the app decides) are not drawn.
  */
 @Composable
-fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit, onDismissNotice: () -> Unit) {
+fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit, onDismissNotice: () -> Unit, onNearby: (() -> Unit)? = null) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -58,6 +58,14 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
                 GlyphIcon(Glyph.SYNC, OwnTallyColors.OnDark)
                 Spacer(Modifier.width(10.dp))
                 Text("Sync now", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnDark)
+            }
+            if (onNearby != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth().border(1.dp, OwnTallyColors.Green, RoundedCornerShape(24.dp)).clickable(onClick = onNearby).padding(vertical = 16.dp)
+                        .semantics { contentDescription = "Nearby"; role = SemanticsRole.Button },
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Nearby: sync in the same room", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green) }
             }
             Spacer(Modifier.height(14.dp))
             Text(model.headlineText, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)

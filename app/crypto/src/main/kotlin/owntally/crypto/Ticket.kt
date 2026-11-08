@@ -124,32 +124,120 @@ class Ticket(
     }
 }
 
+/** What the host remembers of a ticket it issued. Deliberately **without the group key**: the key is read from the keyring when needed. */
+class TicketRecord(
+    ticketId: ByteArray,
+    val hostId: PublicKey,
+    val groupId: GroupId,
+    val epoch: Long,
+    val expiresAtSeconds: Long,
+    val hint: String,
+    val used: Boolean,
+) {
+    private val id = ticketId.copyOf()
+    fun ticketId(): ByteArray = id.copyOf()
+    override fun toString() = "TicketRecord(${id.joinToString("") { "%02x".format(it) }.take(8)}, used=$used)"
+}
+
+/** Where the records are kept: in memory for tests, in the database in the app (so they survive a restart). */
+interface TicketRecords {
+    fun put(record: TicketRecord)
+    fun get(ticketId: ByteArray): TicketRecord?
+
+    /** Marks the ticket used. True only if it existed and was not used; atomic, so two callers cannot both get true. */
+    fun markUsed(ticketId: ByteArray): Boolean
+
+    /** Forgets records that expired before [nowSeconds]. */
+    fun deleteExpired(nowSeconds: Long)
+
+    /** The records of the group that are not used and not expired at [nowSeconds], newest first (a ticket lives 8 hours, so the latest expiry is the newest). */
+    fun open(group: GroupId, nowSeconds: Long): List<TicketRecord>
+}
+
+class InMemoryTicketRecords : TicketRecords {
+    private val rows = HashMap<String, TicketRecord>()
+    private fun k(id: ByteArray) = id.joinToString("") { "%02x".format(it) }
+
+    @Synchronized override fun put(record: TicketRecord) { rows[k(record.ticketId())] = record }
+    @Synchronized override fun get(ticketId: ByteArray): TicketRecord? = rows[k(ticketId)]
+
+    @Synchronized
+    override fun markUsed(ticketId: ByteArray): Boolean {
+        val r = rows[k(ticketId)] ?: return false
+        if (r.used) return false
+        rows[k(ticketId)] = TicketRecord(r.ticketId(), r.hostId, r.groupId, r.epoch, r.expiresAtSeconds, r.hint, true)
+        return true
+    }
+
+    @Synchronized override fun deleteExpired(nowSeconds: Long) { rows.values.removeAll { it.expiresAtSeconds <= nowSeconds } }
+
+    @Synchronized
+    override fun open(group: GroupId, nowSeconds: Long): List<TicketRecord> =
+        rows.values.filter { it.groupId == group && !it.used && it.expiresAtSeconds > nowSeconds }.sortedByDescending { it.expiresAtSeconds }
+}
+
+/** The group key of an epoch, from the phone's keyring; null if the phone does not have it. */
+fun interface GroupKeys {
+    fun key(group: GroupId, epoch: Long): GroupKey?
+}
+
 /**
  * The host phone's record of the tickets it has handed out. A ticket is accepted once, before it expires, and only if this
- * host issued exactly this ticket. The answer is a plain yes or no, so a joiner cannot tell why a ticket failed. The records
- * live in memory; the storage milestone keeps them across restarts.
+ * host issued exactly this ticket. The answer is a plain yes or no, so a joiner cannot tell why a ticket failed.
+ *
+ * The records are kept in [records] (the database in the app), which survive a restart together with which tickets were already
+ * used (CRYPTO.md clarification C4). They hold no group key: it is read from [keys] when a ticket is looked up, so there is no second
+ * copy of the key to protect, and a ticket whose key is not available is simply not valid. Without [keys] (tests) the keys of the
+ * tickets issued by this object are kept in memory.
  */
-class TicketRegistry(private val hostId: PublicKey, private val clock: Clock = Clock.SYSTEM, private val random: SecureRandom = SecureRandom()) {
-    private val outstanding = HashMap<String, Ticket>()
+class TicketRegistry(
+    private val hostId: PublicKey,
+    private val clock: Clock = Clock.SYSTEM,
+    private val random: SecureRandom = SecureRandom(),
+    private val records: TicketRecords = InMemoryTicketRecords(),
+    private val keys: GroupKeys? = null,
+) {
+    private val memoryKeys = HashMap<String, GroupKey>()
+    private fun idKey(id: ByteArray) = id.joinToString("") { "%02x".format(it) }
 
     @Synchronized
     fun issue(groupId: GroupId, epoch: Long, groupKey: GroupKey, hint: String = ""): Ticket {
         val now = clock.nowSeconds()
-        outstanding.values.removeAll { it.isExpired(now) }
+        records.deleteExpired(now)
         val ticket = Ticket(ByteArray(Ticket.ID_SIZE).also { random.nextBytes(it) }, hostId, groupId, epoch, groupKey, now + Ticket.LIFETIME_SECONDS, hint)
-        outstanding[idKey(ticket)] = ticket
+        records.put(TicketRecord(ticket.ticketId(), hostId, groupId, epoch, ticket.expiresAtSeconds, hint, false))
+        if (keys == null) memoryKeys[idKey(ticket.ticketId())] = groupKey
         return ticket
+    }
+
+    /** The ticket this host issued with this id, if it has not been used or expired and its key is available; asking does not use it up. */
+    @Synchronized
+    fun find(ticketId: ByteArray): Ticket? {
+        val r = records.get(ticketId) ?: return null
+        if (r.used || r.hostId != hostId || r.expiresAtSeconds <= clock.nowSeconds()) return null
+        val key = (keys?.key(r.groupId, r.epoch) ?: memoryKeys[idKey(ticketId)]) ?: return null
+        return Ticket(r.ticketId(), r.hostId, r.groupId, r.epoch, key, r.expiresAtSeconds, r.hint)
     }
 
     /** True exactly once for a ticket this host issued, if it has not expired. */
     @Synchronized
     fun accept(ticket: Ticket): Boolean {
-        val issued = outstanding[idKey(ticket)] ?: return false
+        val issued = find(ticket.ticketId()) ?: return false
         if (issued != ticket || ticket.hostId != hostId || ticket.isExpired(clock.nowSeconds())) return false
-        outstanding.remove(idKey(ticket))
-        return true
+        return records.markUsed(ticket.ticketId())
     }
 
-    private fun idKey(ticket: Ticket) = ticket.ticketId().joinToString("") { "%02x".format(it) }
+    /** The tickets of [group] that still work, newest first (those whose key is available). */
+    @Synchronized
+    fun open(group: GroupId): List<Ticket> =
+        records.open(group, clock.nowSeconds()).filter { it.hostId == hostId }.mapNotNull { find(it.ticketId()) }
+
+    /** Cancels an invitation: the ticket stops working. */
+    @Synchronized
+    fun revoke(ticketId: ByteArray) {
+        records.markUsed(ticketId)
+        memoryKeys.remove(idKey(ticketId))
+    }
+
     override fun toString() = "TicketRegistry([redacted])"
 }

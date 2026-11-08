@@ -47,6 +47,8 @@ data class PeerStatus(
     val nextTrySeconds: Long? = null,
     val notShared: Int = 0,
     val kind: LinkKind? = null,
+    /** How the last link was protected on the network (a local link: TLS or plain), if it says. */
+    val security: owntally.sync.LinkSecurity? = null,
 )
 
 data class SyncStatus(
@@ -72,6 +74,8 @@ class SyncCoordinator(
     private val clock: Clock,
     private val scope: CoroutineScope,
     private val config: SyncConfig = SyncConfig(),
+    /** What lets this phone answer people who hold one of its invitations (M6): null for a group where this person may not invite. */
+    private val joinBackend: (GroupId) -> owntally.sync.JoinHostBackend? = { null },
 ) {
     private class PeerRun {
         var running = false
@@ -87,6 +91,7 @@ class SyncCoordinator(
 
     private val statuses = ConcurrentHashMap<GroupId, MutableStateFlow<SyncStatus>>()
     private val started = ConcurrentHashMap<GroupId, Group>()
+    private val introducers = ConcurrentHashMap<GroupId, Set<PublicKey>>()
 
     private fun flow(group: GroupId) = statuses.getOrPut(group) { MutableStateFlow(SyncStatus()) }
 
@@ -134,6 +139,18 @@ class SyncCoordinator(
         g.jobs += scope.launch {
             g.session.view.map { it.ownCounter }.distinctUntilChanged().drop(1).collect { syncPeers(g, manual = false) }
         }
+    }
+
+    /**
+     * Starts a group this person was just admitted to and syncs with the phone that approved them at once (M6). A new member knows no one
+     * yet, so without this nobody would be tried until the host's next retry; [introducer] is tried at once (and again after 1, 5 and 30
+     * minutes if it cannot be reached) and trusted until their own admission arrives.
+     */
+    fun startWith(group: GroupId, introducer: PublicKey) {
+        introducers.merge(group, setOf(introducer)) { a, b -> a + b }
+        start(group)
+        val g = started[group] ?: return
+        scope.launch { attempt(g, introducer, manual = true) }
     }
 
     @Synchronized
@@ -195,6 +212,26 @@ class SyncCoordinator(
         }
     }
 
+    /**
+     * Runs a sync over a link somebody else made (Nearby, M6): this phone is the [role] in it. The group's rules (who may have what) and the
+     * status, notices and key duty are the same as for any other sync. Null if the group cannot be opened.
+     */
+    suspend fun syncOverLink(group: GroupId, link: Link, role: SyncRole): SyncResult? {
+        val g = started[group] ?: open(group) ?: return null
+        val store = RepositorySyncStore(g.id, groups)
+        val result = try {
+            SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(link, role)
+        } finally {
+            link.close()
+        }
+        val peer = link.peer
+        finished(g, peer, result)
+        if (result.outcome == SyncOutcome.COMPLETED && peer in peersOf(g)) {
+            peerUpdate(g, peer) { it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security) }
+        }
+        return result
+    }
+
     private fun peersOf(g: Group): Set<PublicKey> = g.session.view.value.state.currentMembers.keys - g.self
 
     private fun syncPeers(g: Group, manual: Boolean): List<Job> = peersOf(g).map { peer -> scope.launch { attempt(g, peer, manual) } }
@@ -242,7 +279,7 @@ class SyncCoordinator(
             run.retry?.cancel()
             run.retry = null
             peerUpdate(g, peer) {
-                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via)
+                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security)
             }
         } else {
             failed(g, peer, run, PeerState.FAILED)
@@ -255,7 +292,7 @@ class SyncCoordinator(
         return try {
             val link = g.transport.connect(g.room, peer)
             try {
-                SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(link, SyncRole.INITIATOR)
+                SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store, introducers[g.id].orEmpty())).run(link, SyncRole.INITIATOR)
             } finally {
                 link.close()
             }.also { g.session.refresh() }
@@ -295,11 +332,33 @@ class SyncCoordinator(
         }
     }
 
+    /**
+     * Someone connected. The first message tells a join (a person holding an invitation) from a sync: a join goes to the join host if this
+     * phone may invite, anything else to the sync engine. The first message is handed on, so neither side loses it.
+     */
     private suspend fun respond(g: Group, link: Link) {
         val peer = link.peer
-        val store = RepositorySyncStore(g.id, groups)
-        val result = try {
-            SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(link, SyncRole.RESPONDER)
+        val outcome: SyncResult? = try {
+            kotlinx.coroutines.coroutineScope {
+                val inbox = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                val pump = launch { try { link.received.collect { inbox.send(it) } } finally { inbox.close() } }
+                try {
+                    val first = kotlinx.coroutines.withTimeoutOrNull(config.stallTimeoutMs) { inbox.receiveCatching().getOrNull() }
+                    if (first == null) return@coroutineScope null
+                    val wrapped = object : Link by link {
+                        override val received = kotlinx.coroutines.flow.flow { emit(first); for (m in inbox) emit(m) }
+                    }
+                    if (owntally.sync.JoinCodec.isJoin(first)) {
+                        joinBackend(g.id)?.let { owntally.sync.JoinHost(it, g.room, config.stallTimeoutMs).serve(wrapped) }
+                        null
+                    } else {
+                        val store = RepositorySyncStore(g.id, groups)
+                        SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(wrapped, SyncRole.RESPONDER)
+                    }
+                } finally {
+                    pump.cancel()
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -307,10 +366,11 @@ class SyncCoordinator(
         } finally {
             link.close()
         }
+        val result = outcome ?: return
         finished(g, peer, result)
         if (result.outcome == SyncOutcome.COMPLETED && peer in peersOf(g)) {
             peerUpdate(g, peer) {
-                it.copy(state = if (it.state == PeerState.SYNCING) it.state else PeerState.OK, lastSuccessSeconds = now(), notShared = notShared(g, result), kind = link.kind)
+                it.copy(state = if (it.state == PeerState.SYNCING) it.state else PeerState.OK, lastSuccessSeconds = now(), notShared = notShared(g, result), kind = link.kind, security = link.security)
             }
         }
     }

@@ -29,14 +29,25 @@ sealed class ApproveResult {
  * an admin through [GroupSession.approveJoin]. Declining writes nothing and tells nobody.
  */
 class JoinRequests(private val store: JoinRequestStore, private val sessions: Sessions, private val clock: Clock) {
+    private val mutableChanges = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    /** Goes up whenever a request arrives, is approved or is declined, so a screen showing the list can read it again. */
+    val changes: kotlinx.coroutines.flow.StateFlow<Int> get() = mutableChanges
+    private fun changed() { mutableChanges.value += 1 }
+
     /** A request arrived. The same person asking again replaces their earlier request; someone already in the group is ignored. */
     @Synchronized
     fun receive(group: GroupId, member: PublicKey, encryptionKey: EncryptionKey, name: String, phone: String): ReceiveResult {
         val earlier = store.get(group, member)
-        if (earlier?.state == JoinState.APPROVED && member in sessions.session(group).view.value.state.currentMembers) return ReceiveResult.AlreadyMember
+        // Anyone already in the group (admitted before, or a phone restored from the recovery phrase) needs no approval (DESIGN.md "Recovery").
+        if (member in sessions.session(group).view.value.state.currentMembers) return ReceiveResult.AlreadyMember
         store.put(JoinRequest(group, member, encryptionKey, name, phone, clock.nowSeconds(), JoinState.WAITING))
+        changed()
         return if (earlier?.state == JoinState.WAITING) ReceiveResult.Updated else ReceiveResult.New
     }
+
+    /** What this phone knows of the request from [member]: null if there is none. */
+    fun stateOf(group: GroupId, member: PublicKey): JoinState? = store.get(group, member)?.state
 
     fun waiting(group: GroupId): List<JoinRequest> = store.list(group).filter { it.state == JoinState.WAITING }
 
@@ -49,6 +60,7 @@ class JoinRequests(private val store: JoinRequestStore, private val sessions: Se
         return when (val r = session.approveJoin(member, request.encryptionKey, name, request.phone)) {
             is AddResult.Added -> {
                 store.setState(group, member, JoinState.APPROVED)
+                changed()
                 ApproveResult.Approved(r.id)
             }
             else -> ApproveResult.Failed(r)
@@ -58,6 +70,6 @@ class JoinRequests(private val store: JoinRequestStore, private val sessions: Se
     /** Marks a waiting request declined on this phone. Nothing is sent. */
     @Synchronized
     fun decline(group: GroupId, member: PublicKey) {
-        if (store.get(group, member)?.state == JoinState.WAITING) store.setState(group, member, JoinState.DECLINED)
+        if (store.get(group, member)?.state == JoinState.WAITING) { store.setState(group, member, JoinState.DECLINED); changed() }
     }
 }

@@ -155,3 +155,46 @@ fp(c) = first 16 bytes of SHA-256( 'OTFP1' | fp(c-1) | c u64 | n u8 | h(1) ... h
 ### Test vectors
 
 `app/sync/src/test/resources/fixtures/sync-vectors.json` holds valid messages, invalid byte sequences (with the refusal), and fingerprint chains, with exact hex, made by an independent encoder written from this section (`app/sync/src/test/tools/sync_vectors.py`) before the Kotlin codec.
+
+## 7. Join messages (M6, T6.2)
+
+Status: **draft for the M6 plan (docs/tasks/M6-nearby-invites.md).** A person who holds a ticket (CRYPTO.md section 7) connects to the host named in it and asks to join. These messages use the same start as the sync messages (`'OS'`, version 1) with types from 16, so the first message tells a join from a sync (`JoinCodec.isJoin`). Decoding is strict: anything that is not exactly what the encoder makes is refused, and trailing bytes are an error.
+
+| type | message | content |
+|---|---|---|
+| 16 | `Hello` (joiner) | room `bytes(16)`, ticketId `bytes(16)` (never the ticket: the group key stays on the joiner's phone) |
+| 17 | `Challenge` (host) | nonce `bytes(32)` (fresh for this connection), signature `bytes(64)` (the host's, CRYPTO.md section 7a) |
+| 18 | `Request` (joiner) | `u16` length, sealed request |
+| 19 | `Reply` (host) | `u8`: 1 kept, 0 not kept (the same for every reason) |
+| 20 | `StatusHello` (joiner, later connection) | room `bytes(16)`, joiner key `bytes(32)` |
+| 21 | `StatusChallenge` (host) | nonce `bytes(32)` |
+| 22 | `StatusProof` (joiner) | signature `bytes(64)` |
+| 23 | `StatusReply` (host) | `u8`: 0 unknown, 1 pending, 2 approved, 3 declined |
+| 24 | `PreviewRequest` (joiner, after the host's proof) | empty |
+| 25 | `Preview` (host) | `u16` length, sealed preview (decision J1) |
+
+The sealed request holds `joinerKey bytes(32) | encryptionKey bytes(32) | u16 name length, name | u16 phone length, phone | signature bytes(64)` (name at most 160 bytes, phone at most 64, UTF-8). The host answers a `Hello` with a `Challenge` for any ticket id, so a wrong id is not told apart until the reply. A silent peer is given up on after 30 seconds. The status answer is a hint: the proof of being admitted is that the host lets this phone sync.
+
+The sealed preview holds `u16 length, group name | u16 length, owner's name | u16 member count` (UTF-8, name at most 240 bytes). It is sealed like the request but under its own label. The host answers a `PreviewRequest` with a `Preview` only for a ticket that still works, and asking does not use the ticket up; for any other ticket it answers `Reply(false)`. The same connection may go on to send the `Request`. Someone who knows only a ticket id gets a sealed blob they cannot open.
+
+## 8. The local link (M6, T6.7)
+
+Status: **draft for the M6 plan (decisions L1 and L2).** Two phones on the same network connect over TCP. Every message (the sync and join messages above) travels as a **frame**: a four-byte big-endian length, then the bytes; a length over 1,048,576 (or negative) is an error and the connection is closed. A frame cut off in the middle is an error, never a short message.
+
+**Handshake (plain link).** Three frames before anything else, so each side shows it holds its key:
+- Caller to answerer, `Hello`: `'OL'`, version `u8` (1), kinds `u8` (bit 0: plain), room `bytes(16)`, caller key `bytes(32)`, key called `bytes(32)`, nonce `bytes(32)`.
+- Answerer to caller, `Reply`: `'OL'`, version, chosen kind `u8`, nonce `bytes(32)`, signature `bytes(64)`.
+- Caller to answerer, `Proof`: `'OL'`, version, signature `bytes(64)`.
+
+The answerer routes by the room and key called; if it has no such listener, or anything is wrong, it closes without a word. Both signatures (CRYPTO.md section 7b) cover the transcript: the `Hello`, the version, the chosen kind and the answerer's nonce. The caller checks the answerer's signature against the key it meant to reach; the answerer checks the caller's against the key it claims. Only then is the connection handed on. What the group allows that key to have is the sync engine's rule (decision S2).
+
+**Finding the other phone.** A phone announces itself with Android's own service discovery as `_owntally._tcp` under the name `LocalNames.serviceName(room, key)`: 20 characters (lower case letters and 2 to 7) from the first 13 bytes of SHA-256(`"owntally/v1/local"`, room, key). Someone who knows the room and the key can work out the name and look for it; to anyone else it says nothing about the group or the person.
+
+**TLS link (T6.8, decision L2).** A phone also takes TLS 1.3 connections, on a port of its own for each (room, key) it answers for, announced under its own name (`LocalNames.serviceName(room, key, TLS)`: the same recipe with the label `"owntally/v1/local-tls"`). Inside TLS the messages are the same frames. Each side shows a self-made certificate (CRYPTO.md section 7c) and asks for the other's; only TLS 1.3 is accepted. The caller checks the answerer's certificate carries the key it meant to reach; the answerer takes the caller's key from the caller's certificate. There is no `Hello` and no routing frame: the port tells the answerer which key it is answering for.
+
+**Which kind is used (T6.10, decision L6).** A phone normally calls with `secureFirstTransportFor`: TLS first; if TLS does not connect within 5 seconds (the other phone offers none, is not found under the TLS name, refuses, or the handshake fails) the plain link is tried. A phone that answers **with the wrong key** is a refusal, not a failure to connect: no plain attempt follows. Both kinds arrive in one inbox, and each link says which it is (`Link.security`), which the sync status shows ("Encrypted link" or "Unencrypted link"). **Known cost:** a hostile network that breaks the TLS handshake pushes everyone to the plain link, where it can see who syncs with whom (not what).
+
+## 9. Nearby Connections link (M6, T6.11)
+
+Status: **draft for the M6 plan.** Same-room sync over Google's Nearby Connections (P2P_CLUSTER). It runs only while the person has the Nearby screen open (DESIGN.md). Each phone advertises and looks under an endpoint name made from the room and its key (`NearbyNames.endpointName`: 20 hex characters from SHA-256 of `"owntally/v1/nearby"`, room and key; opaque to anyone else nearby) and a service id that is the same for the group (`owntally.nearby.<room>`). Of two phones, **the one with the smaller public key opens the connection**; the other only answers. Both accept the connection at once; who the other is gets proven by key, not by name or by Nearby's pairing digits. **Messages** travel as `Chunker` chunks (Nearby allows 32 KB a payload) and are put back together in order. **Handshake:** the same three messages as the plain local link (section 8: `Hello`, `Reply`, `Proof`, CRYPTO.md section 7b), sent as messages over the connection; a link is handed on only after both have shown their keys. Nearby encrypts what it carries, so the link says no `security` of its own; the status shows "Nearby". A silent or failed handshake drops the connection after 10 seconds; finding the phone and connecting wait 15 seconds (DESIGN.md).
+
