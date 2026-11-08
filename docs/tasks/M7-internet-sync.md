@@ -13,7 +13,8 @@ Acceptance (BUILD_PLAN): two phones on different mobile networks sync, the statu
 | Task | Status |
 |---|---|
 | T7.1 plan and decisions | In progress: W1, I1 and B1 decided; open questions below. |
-| T7.2 to T7.10 | Not started. |
+| T7.2 OkHttp 4.12 | Done (8 Nov 2026), see below. |
+| T7.3 to T7.10 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -47,3 +48,9 @@ Each task starts with tests, as in M5 and M6. The internet cannot be tested on t
 1. **T7.4: which key does Iroh use?** Simplest: Iroh's secret key *is* the member's signing key, so a phone's Iroh node id is its member key and Iroh's own handshake proves who it is (nothing more to build). The cost: the same key signs both our events and Iroh's connections (different contexts, but one key in two protocols). The other way: a separate Iroh key derived from the seed for each group and tied to the member key by a signature, which keeps the keys apart but needs the other phone to learn the Iroh node id (another published fact) before it can dial. To be asked when T7.4 starts, with the library's API in hand.
 2. **Real phones.** The mobile-network checks (two carriers, a pair that only the relay can connect) are the owner's, as the Nearby and Wi-Fi checks were.
 3. **The Iroh library's own checks** (T7.4): licence, size, minimum Android version, what it does on the network by default (its probing of n0's servers) and whether it fits `NetworkUseGuardTest`'s rule, as was done for the scanner and for Nearby.
+
+## Results
+
+### T7.2 OkHttp 4.12 and the relay client
+**T7.2 result (8 Nov 2026).** `app/sync` now depends on OkHttp 4.12.0 as a normal dependency (it was OkHttp 5.5.1, compile-only), and its tests on MockWebServer 4.12.0; the WebSocket transport needed **no source change** (the 4.x and 5.x APIs it uses are the same). **Tests:** the five `WebSocketTransportTest` tests (a stand-in relay that follows the README's protocol: messages both ways, broadcast, reconnecting after the relay drops the socket, an unreachable relay failing within the wait) pass, and **`RealRelayTest` passes against the real Go relay program** (built with `go build`, run with `RELAY_BIN`; it is skipped when no binary is given, as in CI's Kotlin job). The release build, the app's unit tests and `NetworkUseGuardTest` (OkHttp is allowed in the sync module's build file only; its reason text now says OkHttp 4.12, decision W1) pass. **Vulnerability check:** 129 libraries on the shipped classpaths (it was 124), none known, now including OkHttp 4.12 and Okio. The release manifest is unchanged (OkHttp adds no permission). **Dependabot:** nothing to add: the existing rule already proposes no major updates, which keeps 5.x out; a note in `.github/dependabot.yml` says why. **Not yet:** the transport is still not used by the app (T7.5 and T7.10), and it still trusts the relay's word about who is connected (T7.3 adds the proof of keys).
+

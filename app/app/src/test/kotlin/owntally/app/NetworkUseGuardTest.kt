@@ -22,7 +22,7 @@ class NetworkUseGuardTest {
         "sync/src/main/" to "the sync module: the transports",
         "app/src/main/kotlin/owntally/app/NsdLocalDiscovery.kt" to "finds the other phones of a group on the same network (decision L1)",
     )
-    private val mayDependOnNetworkLibraries = listOf("sync/build.gradle.kts" to "the WebSocket transport of the relay (compile-only until M7)")
+    private val mayDependOnNetworkLibraries = listOf("sync/build.gradle.kts" to "the WebSocket transport of the relay (OkHttp 4.12, decision W1)")
 
     /** The one Play services library allowed: Nearby Connections (same-room sync). It brings no reporting library, which the next test checks. */
     private val allowedLibraryLines = listOf("play-services-nearby")
