@@ -4,13 +4,13 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M6. Rules: [DESIGN.md](../D
 
 Goal (BUILD_PLAN): Nearby transport with a fallback for the same Wi-Fi, the invite screen (QR, share link, copy code, expiry, revoke), QR scan, the join flow, host approval, the join requests screen and the sync status screen (the last two exist from M4 and M5; here they get real connections).
 
-**Decisions L1 and L2 are made (8 Nov 2026, below). Nothing is built until the owner approves this plan.** More decisions may come before the first task starts; they are listed under "Open questions".
+**Decisions L1 to L3 are made (8 Nov 2026, below). Nothing is built until the owner approves this plan.** More decisions may come before the first task starts; they are listed under "Open questions".
 
 ## Progress
 
 | Task | Status |
 |---|---|
-| T6.1 plan and decisions | In progress: L1 and L2 decided, open questions below. |
+| T6.1 plan and decisions | In progress: L1 to L3 decided, open questions below. |
 | T6.2 to T6.12 | Not started. |
 
 ## What already exists
@@ -30,6 +30,11 @@ Goal (BUILD_PLAN): Nearby transport with a fallback for the same Wi-Fi, the invi
   - **Noise:** a Noise handshake through a library, each side with its key. **A new third-party cryptography library: it must be vetted and pinned (version, licence, maintenance, vulnerability check) and approved by the owner before it is added (see Open questions).**
   - **Choice:** the strongest first (Noise, then TLS, then plain). If one does not connect within a few seconds, the app moves down to the next. The signed announcement of what a phone supports means a failed attempt can be told apart from an older app. The status line says which kind was used. **Known cost (owner accepted this choice over "never fall back"):** a hostile network that breaks the stronger handshakes pushes everyone to the plain link, where the metadata above is visible. Nothing else is lost.
 
+- **L3 (8 Nov 2026): libraries must be MIT or Apache-2.0; the rule applies to the libraries we add directly, not to what they bring in.**
+  - **Noise: `nl.sanderdijkhuis:noise-kotlin` 1.0.1 (MIT).** Only the Noise state machine; Curve25519, ChaCha20-Poly1305 and SHA-256 are supplied by us through its `Cryptography` interface, built on Tink and the platform, so no new cryptographic primitive enters the app. Checks before it is added (T6.9): the handshake pattern we need (XX) is supported; the standard Noise test vectors pass through our `Cryptography`; it is not audited (the README says so), so our own tests and the owner's approval of that risk are part of the task; the version is pinned in `gradle/libs.versions.toml` and the vulnerability check covers it. If it cannot do what L2 needs, the task stops and asks (the fallback would be TLS plus plain only, which changes L2).
+  - **QR generation: Nayuki's QR Code generator (Java, MIT).** One file with no dependencies, copied into the repo with its licence header (it is not on Maven Central); its tests are ours.
+  - **QR scanning: `io.github.g00fy2.quickie:quickie-bundled` 1.12.0 (MIT).** Built on CameraX (Apache-2.0) and ML Kit (Google's terms, bundled so no Play Services are needed, about 2.5 MB more per ABI). Bundled, not unbundled, because of risk R3.
+
 ## Plan (tasks)
 
 Proposed order. Each task ends with tests first, as in M5.
@@ -46,6 +51,5 @@ Proposed order. Each task ends with tests first, as in M5.
 
 ## Open questions
 
-1. **The Noise library.** Which one, and who vets it. Tink has no Noise. The owner decides (BUILD_PLAN: anything involving a new cryptographic dependency is the owner's).
-2. **QR code library** (generate and scan). Scanning on Android needs camera permission and either Google's code scanner (Play Services) or an independent library. Phones without Play Services need the second.
-3. **Who tests on real phones.** Nearby and local discovery cannot be tested on the emulator; the acceptance needs two phones and the owner's report.
+1. ~~Noise library~~ and ~~QR libraries~~: decided in L3. Still to confirm in T6.9: the pattern support and the owner's acceptance of an unaudited library.
+2. **Who tests on real phones.** Nearby and local discovery cannot be tested on the emulator; the acceptance needs two phones and the owner's report.
