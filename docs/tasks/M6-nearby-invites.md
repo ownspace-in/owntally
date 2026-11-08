@@ -19,7 +19,8 @@ Goal (BUILD_PLAN): Nearby transport with a fallback for the same Wi-Fi, the invi
 | T6.7 local link, plain | Done (8 Nov 2026), see below. |
 | T6.8 TLS link | Done (8 Nov 2026), see below. |
 | T6.9 Noise link | Dropped (L6, 8 Nov 2026): see below. |
-| T6.10 to T6.12 | Not started. |
+| T6.10 choosing the link | Done (8 Nov 2026), see below. |
+| T6.11 to T6.12 | Not started. |
 
 ## What already exists
 
@@ -94,4 +95,7 @@ Proposed order. Each task ends with tests first, as in M5.
 
 ### T6.9 Noise link (dropped)
 **T6.9 result (8 Nov 2026): not built, by decision L6.** The check that L3 asked for found the library lacks what L2 needs (see L6): only the NK and XN patterns, and a received static key must already be in a trusted set. Options put to the owner: drop Noise; use the library's NK between members only (joins stay on TLS or plain); add the XX pattern to a copy of the library. The owner chose to drop it. Nothing was added to the build. **For later, if Noise is wanted:** a library with the XX or IK pattern, independent test vectors for those patterns, and a way for a joiner to learn the host's Noise key (for example the ticket carrying it, which changes the ticket format the owner approved).
+
+### T6.10 Choosing the link
+**T6.10 result (8 Nov 2026).** `LocalNode.secureFirstTransportFor(identity)` (WIRE_FORMAT section 8): TLS first, the plain link if TLS does not connect within `tlsAttemptMs` (5 s); a phone that answers with the wrong key is a refusal and gets **no** plain attempt; both kinds arrive in one inbox; `LocalConfig.offerTls` lets a phone offer no TLS (an older app, or a platform without it). A blocking connect cannot be interrupted, so the dial now closes its socket when the caller's time is up (a TLS port that never answers no longer holds the caller for the whole handshake time). **The status says which:** `Link.security` (TLS, plain, or nothing for links that are not local), carried by `SyncResult` and `PeerStatus` and shown on the Sync screen's member line ("2 hrs ago · Encrypted link" or "· Unencrypted link"). **Tests (JVM, real sockets):** sync 7: both support TLS, so both ends say TLS; a phone offering no TLS, a refusing TLS port and a silent TLS port (within the TLS time) each fall back to plain and say so; a wrong key in TLS is refused and Ben's plain port hears nothing; neither kind connecting is unreachable; a whole sync over the chosen link, whose result says how it was carried; an in-memory link reports nothing. Data 2: **two real coordinators over real local links** sync over TLS (both sides' status says so) and over plain when one phone offers no TLS. UI 1: the member line. **Emulator (app 11):** the chosen link is TLS when both offer it and plain when the other does not, through Android's service discovery. **Mutations** (5) each fail a test: plain tried first, no fallback, fallback after a refusal too, the TLS link not saying TLS. **Not yet:** the app does not start a node or a coordinator's local transport (T6.12); a phone found only by the plain name still pays the time of looking for the TLS name first (5 seconds at most, 2 in the tests).
 

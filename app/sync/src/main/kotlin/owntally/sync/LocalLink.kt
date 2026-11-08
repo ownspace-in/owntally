@@ -22,6 +22,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.security.Principal
 import java.security.PrivateKey
@@ -126,6 +127,7 @@ internal class SocketLink(
     override val kind: LinkKind,
     scope: CoroutineScope,
     firstInput: InputStream? = null,
+    override val security: LinkSecurity? = LinkSecurity.PLAIN,
 ) : Link {
     private val inbox = Channel<ByteArray>(Channel.UNLIMITED)
     private val writeLock = Mutex()
@@ -209,6 +211,10 @@ class LocalConfig(
     /** How long each step of the handshake may take (and the connecting itself). */
     val handshakeTimeoutMs: Int = 10_000,
     val findTimeoutMs: Long = 5_000,
+    /** How long the TLS attempt may take (finding the phone, connecting, the handshake) before the plain link is tried (decision L6). */
+    val tlsAttemptMs: Long = 5_000,
+    /** Whether this phone takes TLS links at all. */
+    val offerTls: Boolean = true,
     val bind: InetAddress? = null,
 )
 
@@ -224,7 +230,7 @@ class LocalNode(
     private val config: LocalConfig = LocalConfig(),
     private val random: java.security.SecureRandom = java.security.SecureRandom(),
 ) {
-    private class Listener(val identity: GroupIdentity, val inbox: Channel<Link>, val announced: List<AutoCloseable>, val tls: TlsCertificates.Issued, val tlsServer: ServerSocket, val tlsAccepting: Job)
+    private class Listener(val identity: GroupIdentity, val inbox: Channel<Link>, val announced: List<AutoCloseable>, val tls: TlsCertificates.Issued, val tlsServer: ServerSocket?, val tlsAccepting: Job?)
 
     private val listeners = ConcurrentHashMap<Pair<GroupRoom, PublicKey>, Listener>()
     private var server: ServerSocket? = null
@@ -255,7 +261,7 @@ class LocalNode(
         accepting?.cancel()
         runCatching { server?.close() }
         server = null
-        listeners.values.forEach { l -> l.announced.forEach { runCatching { it.close() } }; l.tlsAccepting.cancel(); runCatching { l.tlsServer.close() }; l.inbox.close() }
+        listeners.values.forEach { l -> l.announced.forEach { runCatching { it.close() } }; l.tlsAccepting?.cancel(); runCatching { l.tlsServer?.close() }; l.inbox.close() }
         listeners.clear()
     }
 
@@ -269,17 +275,17 @@ class LocalNode(
                 // TLS has a port of its own for this identity, so the certificate to show (the one that carries this key) is known without asking
                 // the caller anything: choosing it by the name the caller asks for is not something every platform's TLS lets us do.
                 val tls = TlsCertificates.issue(identity, random)
-                val tlsServer = ServerSocket(0, 50, config.bind)
                 val inbox = Channel<Link>(Channel.UNLIMITED)
-                val accepting = scope.launch(Dispatchers.IO) {
+                val tlsServer = if (config.offerTls) ServerSocket(0, 50, config.bind) else null
+                val accepting = if (tlsServer != null) scope.launch(Dispatchers.IO) {
                     while (isActive) {
                         val socket = try { tlsServer.accept() } catch (e: IOException) { break }
                         launch(Dispatchers.IO) { answerTls(socket, tls, inbox) }
                     }
-                }
-                val handles = listOf(
+                } else null
+                val handles = listOfNotNull(
                     discovery.announce(room, identity.publicKey, plainPort, LinkSecurity.PLAIN),
-                    discovery.announce(room, identity.publicKey, tlsServer.localPort, LinkSecurity.TLS),
+                    tlsServer?.let { discovery.announce(room, identity.publicKey, it.localPort, LinkSecurity.TLS) },
                 )
                 Listener(identity, inbox, handles, tls, tlsServer, accepting)
             }
@@ -287,35 +293,62 @@ class LocalNode(
         }
     }
 
+    /**
+     * The way a phone normally reaches another (decision L6): TLS first; if TLS does not connect within [LocalConfig.tlsAttemptMs] (the other
+     * phone offers none, is not found that way, refuses, or the handshake fails), the plain link. A phone that answers **with the wrong key**
+     * is a refusal, not a failure to connect: no plain attempt follows. The link says which kind it is ([Link.security]).
+     */
+    fun secureFirstTransportFor(identity: GroupIdentity, kind: LinkKind = LinkKind.DIRECT): Transport = object : Transport {
+        private val tls = transportFor(identity, kind, LinkSecurity.TLS)
+        private val plain = transportFor(identity, kind, LinkSecurity.PLAIN)
+
+        override suspend fun connect(room: GroupRoom, peer: PublicKey): Link {
+            val viaTls = try {
+                kotlinx.coroutines.withTimeoutOrNull(config.tlsAttemptMs) { tls.connect(room, peer) }
+            } catch (e: PeerUnreachable) {
+                null
+            }
+            return viaTls ?: plain.connect(room, peer)
+        }
+
+        override fun incoming(room: GroupRoom): Flow<Link> = plain.incoming(room) // both kinds arrive in the same inbox
+    }
+
     private suspend fun dial(identity: GroupIdentity, room: GroupRoom, peer: PublicKey, kind: LinkKind, security: LinkSecurity): Link {
         val address = discovery.find(room, peer, config.findTimeoutMs, security) ?: throw PeerUnreachable(peer)
-        return withContext(Dispatchers.IO) {
+        return suspendCancellableCoroutine { cont ->
             val socket = Socket()
-            try {
-                socket.connect(address, config.handshakeTimeoutMs)
-                socket.soTimeout = config.handshakeTimeoutMs
-                socket.tcpNoDelay = true
-                if (security == LinkSecurity.TLS) return@withContext dialTls(socket, identity, room, peer, kind)
-                val out = socket.getOutputStream()
-                val input = socket.getInputStream().buffered()
-                val hello = LocalHandshake.Hello(LocalHandshake.KIND_PLAIN, room, identity.publicKey, peer, LinkAuth.newNonce(random))
-                Frames.write(out, hello.encode())
-                val reply = Frames.read(input)?.let { LocalHandshake.decodeReply(it) } ?: throw LinkAuthFailed("no proper answer")
-                if (reply.chosen != LocalHandshake.KIND_PLAIN) throw LinkAuthFailed("no kind of link in common")
-                val transcript = LocalHandshake.transcript(hello, reply.chosen, reply.nonce)
-                if (!LinkAuth.verifyServer(peer, transcript, reply.signature)) throw LinkAuthFailed("the other phone does not hold the key it should")
-                Frames.write(out, LocalHandshake.encodeProof(LinkAuth.signAsClient(identity, transcript)))
-                SocketLink(socket, peer, kind, scope, input) as Link
-            } catch (e: CancellationException) {
-                runCatching { socket.close() }
-                throw e
-            } catch (e: LinkAuthFailed) {
-                runCatching { socket.close() }
-                throw e
-            } catch (e: IOException) {
-                runCatching { socket.close() }
-                throw PeerUnreachable(peer, e)
+            // A blocking connect or handshake cannot be interrupted: closing the socket is what makes it give up when the caller's time is up.
+            cont.invokeOnCancellation { runCatching { socket.close() } }
+            scope.launch(Dispatchers.IO) {
+                val result = runCatching { dialBlocking(socket, address, identity, room, peer, kind, security) }
+                if (cont.isActive) cont.resumeWith(result) else result.getOrNull()?.close()
             }
+        }
+    }
+
+    private fun dialBlocking(socket: Socket, address: InetSocketAddress, identity: GroupIdentity, room: GroupRoom, peer: PublicKey, kind: LinkKind, security: LinkSecurity): Link {
+        try {
+            socket.connect(address, config.handshakeTimeoutMs)
+            socket.soTimeout = config.handshakeTimeoutMs
+            socket.tcpNoDelay = true
+            if (security == LinkSecurity.TLS) return dialTls(socket, identity, room, peer, kind)
+            val out = socket.getOutputStream()
+            val input = socket.getInputStream().buffered()
+            val hello = LocalHandshake.Hello(LocalHandshake.KIND_PLAIN, room, identity.publicKey, peer, LinkAuth.newNonce(random))
+            Frames.write(out, hello.encode())
+            val reply = Frames.read(input)?.let { LocalHandshake.decodeReply(it) } ?: throw LinkAuthFailed("no proper answer")
+            if (reply.chosen != LocalHandshake.KIND_PLAIN) throw LinkAuthFailed("no kind of link in common")
+            val transcript = LocalHandshake.transcript(hello, reply.chosen, reply.nonce)
+            if (!LinkAuth.verifyServer(peer, transcript, reply.signature)) throw LinkAuthFailed("the other phone does not hold the key it should")
+            Frames.write(out, LocalHandshake.encodeProof(LinkAuth.signAsClient(identity, transcript)))
+            return SocketLink(socket, peer, kind, scope, input)
+        } catch (e: LinkAuthFailed) {
+            runCatching { socket.close() }
+            throw e
+        } catch (e: IOException) {
+            runCatching { socket.close() }
+            throw PeerUnreachable(peer, e)
         }
     }
 
@@ -356,7 +389,7 @@ class LocalNode(
             ssl.startHandshake()
             val member = ssl.session.peerCertificates.firstOrNull()?.let { (it as? X509Certificate)?.let(TlsCertificates::memberKeyOf) }
             if (member != peer) throw LinkAuthFailed("the other phone does not hold the key it should")
-            return SocketLink(ssl, peer, kind, scope)
+            return SocketLink(ssl, peer, kind, scope, security = LinkSecurity.TLS)
         } catch (e: javax.net.ssl.SSLException) {
             runCatching { ssl.close() }
             throw if (e.cause is LinkAuthFailed || e.message?.contains("owntally") == true) LinkAuthFailed("the other phone does not hold the key it should") else PeerUnreachable(peer, e)
@@ -376,7 +409,7 @@ class LocalNode(
             ssl.soTimeout = config.handshakeTimeoutMs
             ssl.startHandshake()
             val member = (ssl.session.peerCertificates.firstOrNull() as? X509Certificate)?.let(TlsCertificates::memberKeyOf) ?: return ssl.close()
-            val link = SocketLink(ssl, member, LinkKind.DIRECT, scope)
+            val link = SocketLink(ssl, member, LinkKind.DIRECT, scope, security = LinkSecurity.TLS)
             if (inbox.trySend(link).isFailure) ssl.close()
         } catch (e: IOException) {
             runCatching { ssl.close() }

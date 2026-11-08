@@ -93,4 +93,27 @@ class LocalLinkOnDeviceInstrumentedTest {
             nodeA.close(); nodeB.close(); scope.cancel()
         }
     }
+
+    @Test
+    fun theChosenLinkIsTlsWhenBothOfferItAndPlainWhenTheOtherDoesNotAndSaysWhichOnTheAndroidRuntime() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val caller = LocalNode(NsdLocalDiscovery(context), scope, LocalConfig(findTimeoutMs = 15_000, tlsAttemptMs = 30_000))
+        val withTls = LocalNode(NsdLocalDiscovery(context), scope, LocalConfig(findTimeoutMs = 15_000))
+        val withoutTls = LocalNode(NsdLocalDiscovery(context), scope, LocalConfig(findTimeoutMs = 15_000, offerTls = false))
+        val f = KeyDerivation.groupIdentity(seed, 21)
+        val g = KeyDerivation.groupIdentity(seed, 22)
+        val h = KeyDerivation.groupIdentity(seed, 23)
+        try {
+            val inG = withTls.transportFor(g).incoming(room)
+            val inH = withoutTls.transportFor(h).incoming(room)
+            val toG = withTimeout(90_000) { caller.secureFirstTransportFor(f).connect(room, g.publicKey) }
+            assertEquals(LinkSecurity.TLS, toG.security)
+            assertEquals(LinkSecurity.TLS, withTimeout(20_000) { inG.first() }.security)
+            val toH = withTimeout(90_000) { caller.secureFirstTransportFor(f).connect(room, h.publicKey) }
+            assertEquals(LinkSecurity.PLAIN, toH.security)
+            assertEquals(LinkSecurity.PLAIN, withTimeout(20_000) { inH.first() }.security)
+        } finally {
+            caller.close(); withTls.close(); withoutTls.close(); scope.cancel()
+        }
+    }
 }

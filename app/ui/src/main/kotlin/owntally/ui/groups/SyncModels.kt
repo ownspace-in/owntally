@@ -96,6 +96,13 @@ object SyncModels {
         return if (minutes < 120) "$minutes min" else "${(minutes + 30) / 60} hrs"
     }
 
+    /** Which kind of local link carried the last sync (decision L6): the status line says so. */
+    internal fun securityText(s: owntally.sync.LinkSecurity?): String? = when (s) {
+        owntally.sync.LinkSecurity.TLS -> "Encrypted link"
+        owntally.sync.LinkSecurity.PLAIN -> "Unencrypted link"
+        null -> null
+    }
+
     private fun line(key: PublicKey, name: String, p: PeerStatus, now: Long): SyncMemberLine {
         val colour = (key.bytes()[0].toInt() and 0xff) % MembersModels.COLOURS
         fun mk(detail: String, badge: String, tone: BadgeTone) = SyncMemberLine(key, name, name.trim().take(1).uppercase(), colour, detail, badge, tone)
@@ -104,7 +111,7 @@ object SyncModels {
         return when (p.state) {
             PeerState.NEVER -> mk("Not reachable yet", "Not yet", BadgeTone.NEUTRAL)
             PeerState.SYNCING -> mk("Syncing…", "Syncing", BadgeTone.NEUTRAL)
-            PeerState.OK -> mk(listOfNotNull(shared, when_).joinToString(" · "), when (p.kind) {
+            PeerState.OK -> mk(listOfNotNull(shared, when_, securityText(p.security)).joinToString(" · "), when (p.kind) {
                 LinkKind.RELAYED -> "Via relay"
                 LinkKind.NEARBY -> "Nearby"
                 else -> "Direct"

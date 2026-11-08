@@ -47,6 +47,8 @@ data class PeerStatus(
     val nextTrySeconds: Long? = null,
     val notShared: Int = 0,
     val kind: LinkKind? = null,
+    /** How the last link was protected on the network (a local link: TLS or plain), if it says. */
+    val security: owntally.sync.LinkSecurity? = null,
 )
 
 data class SyncStatus(
@@ -257,7 +259,7 @@ class SyncCoordinator(
             run.retry?.cancel()
             run.retry = null
             peerUpdate(g, peer) {
-                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via)
+                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security)
             }
         } else {
             failed(g, peer, run, PeerState.FAILED)
@@ -348,7 +350,7 @@ class SyncCoordinator(
         finished(g, peer, result)
         if (result.outcome == SyncOutcome.COMPLETED && peer in peersOf(g)) {
             peerUpdate(g, peer) {
-                it.copy(state = if (it.state == PeerState.SYNCING) it.state else PeerState.OK, lastSuccessSeconds = now(), notShared = notShared(g, result), kind = link.kind)
+                it.copy(state = if (it.state == PeerState.SYNCING) it.state else PeerState.OK, lastSuccessSeconds = now(), notShared = notShared(g, result), kind = link.kind, security = link.security)
             }
         }
     }

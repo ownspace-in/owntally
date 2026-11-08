@@ -145,4 +145,11 @@ class SyncModelTest {
         val stranger = PublicKey(ByteArray(32) { 9 })
         assertEquals("1 entry from Someone was rejected: not a valid entry · just now", model(problems = listOf(SyncProblem(group, stranger, ProblemKind.MALFORMED, 1, now))).rejected.single())
     }
+
+    @Test fun aLocalLinkSaysWhetherItWasEncryptedOnTheNetwork() {
+        fun detail(security: owntally.sync.LinkSecurity?) = model(mapOf(rohan to ok(7_200).copy(security = security))).members.first { it.name == "Rohan" }.detail
+        assertEquals("2 hrs ago · Encrypted link", detail(owntally.sync.LinkSecurity.TLS))
+        assertEquals("2 hrs ago · Unencrypted link", detail(owntally.sync.LinkSecurity.PLAIN))
+        assertEquals("2 hrs ago", detail(null), "a link that does not say (a relay, for one) shows nothing extra")
+    }
 }
