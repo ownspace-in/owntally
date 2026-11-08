@@ -252,7 +252,7 @@ The creator or the group owner. Shows "This changes balances" when the entry is 
 - Turning on the relay applies to the whole group, and the screen states that the relay sees who connects but never the content.
 
 ### Sync states shown to the user
-Up to date with N members, syncing, waiting for a friend to come online, not reachable directly (offer relay or meet up), relay unreachable (retrying, changes saved on this phone).
+Up to date with N members, syncing, waiting for a friend to come online, not reachable directly, relay unreachable (retrying, changes saved on this phone). Each member row has a chip: Direct, Via relay, Nearby, Syncing, Not yet, Offline (the other phone is not there), Needs relay (direct failed and this phone cannot reach the relay). Offline and Needs relay rows open "Can't reach <name>": why, that the relay is used automatically (no button to turn it on, since the app decides), Try now, Meet and sync nearby, Try again later, and that entries are never lost.
 
 ## Build order
 

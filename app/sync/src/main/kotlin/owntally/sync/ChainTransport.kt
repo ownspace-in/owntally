@@ -18,6 +18,21 @@ import kotlinx.coroutines.withTimeoutOrNull
 import owntally.model.PublicKey
 import kotlin.coroutines.coroutineContext
 
+/** Why a member could not be reached by any way, so the screen can say what is wrong and whose it is. */
+enum class RelayResult {
+    /** The chain has no relay way. */
+    NOT_TRIED,
+
+    /** This phone could not even open the relay (no internet, or the relay is down). */
+    RELAY_DOWN,
+
+    /** The relay was there but the other phone did not answer through it (and not directly): it is offline or somewhere neither way reaches. */
+    PEER_NOT_THERE,
+}
+
+/** No way connected. [relay] says how the relay went. */
+class ChainUnreachable(peer: PublicKey, val relay: RelayResult, cause: Throwable?) : PeerUnreachable(peer, cause)
+
 class ChainConfig(
     /** How long the same-network link gets to connect before the internet is tried (a phone on the same Wi-Fi is not made to wait for it). */
     val localLookMs: Long = 2_000,
@@ -57,45 +72,55 @@ class ChainTransport(
     }
 
     override suspend fun connect(room: GroupRoom, peer: PublicKey): Link {
-        val failures = CopyOnWriteArrayList<Exception>()
+        val failures = CopyOnWriteArrayList<Failure>()
         try {
             return withTimeout(config.connectMs) { attempt(room, peer, failures) }
         } catch (e: TimeoutCancellationException) {
-            throw failures.firstOrNull { it is LinkAuthFailed } ?: PeerUnreachable(peer, e)
+            throw failures.firstOrNull { it.error is LinkAuthFailed }?.error ?: ChainUnreachable(peer, relayResult(failures), e)
         }
     }
 
-    private suspend fun attempt(room: GroupRoom, peer: PublicKey, failures: MutableList<Exception>): Link {
+    private enum class Way { LOCAL, IROH, RELAY }
+    private class Failure(val way: Way, val error: Exception)
+
+    private fun relayResult(failures: List<Failure>): RelayResult {
+        if (relay == null) return RelayResult.NOT_TRIED
+        val f = failures.lastOrNull { it.way == Way.RELAY } ?: return RelayResult.PEER_NOT_THERE
+        // Opening the relay itself failed (a plain I/O error), as opposed to the other phone not answering through it (unreachable or refused).
+        return if (f.error is java.io.IOException && f.error !is PeerUnreachable && f.error !is LinkAuthFailed) RelayResult.RELAY_DOWN else RelayResult.PEER_NOT_THERE
+    }
+
+    private suspend fun attempt(room: GroupRoom, peer: PublicKey, failures: MutableList<Failure>): Link {
         if (local != null) {
             try {
                 withTimeoutOrNull(config.localLookMs) { local.connect(room, peer) }?.let { return it }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                failures += e
+                failures += Failure(Way.LOCAL, e)
             }
         }
         return coroutineScope {
             val winner = CompletableDeferred<Link>()
             val irohDone = CompletableDeferred<Unit>()
 
-            suspend fun race(t: Transport) {
+            suspend fun race(way: Way, t: Transport) {
                 try {
                     val link = t.connect(room, peer)
                     if (!winner.complete(link)) link.close() // somebody else won in the same moment
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    failures += e
+                    failures += Failure(way, e)
                 }
             }
 
-            val irohJob = launch { try { if (iroh != null) race(iroh) } finally { irohDone.complete(Unit) } }
+            val irohJob = launch { try { if (iroh != null) race(Way.IROH, iroh) } finally { irohDone.complete(Unit) } }
             val relayJob = launch {
                 if (relay == null) return@launch
                 // The relay joins after the delay if Iroh has not connected, or at once if Iroh has already given up.
                 withTimeoutOrNull(config.relayDelayMs) { irohDone.await() }
-                if (!winner.isCompleted) race(relay)
+                if (!winner.isCompleted) race(Way.RELAY, relay)
             }
             launch {
                 joinAll(irohJob, relayJob)
@@ -108,8 +133,8 @@ class ChainTransport(
     }
 
     /** What to report when no way connected: a refusal beats "not there", and "not available" is only said when nothing was even tried. */
-    private fun verdict(peer: PublicKey, failures: List<Exception>): Exception =
-        failures.firstOrNull { it is LinkAuthFailed }
-            ?: (if (failures.isNotEmpty() && failures.all { it is TransportUnavailable }) failures.first() else null)
-            ?: PeerUnreachable(peer, failures.firstOrNull())
+    private fun verdict(peer: PublicKey, failures: List<Failure>): Exception =
+        failures.firstOrNull { it.error is LinkAuthFailed }?.error
+            ?: (if (failures.isNotEmpty() && failures.all { it.error is TransportUnavailable }) failures.first().error else null)
+            ?: ChainUnreachable(peer, relayResult(failures), failures.firstOrNull()?.error)
 }

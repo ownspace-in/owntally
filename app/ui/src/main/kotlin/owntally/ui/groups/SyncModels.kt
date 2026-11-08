@@ -22,6 +22,8 @@ data class SyncMemberLine(
     val detail: String,
     val badge: String,
     val tone: BadgeTone,
+    /** The member could not be reached: tapping the line opens "Can't reach" (T7.6). */
+    val explains: Boolean = false,
 )
 
 data class SyncScreenModel(
@@ -91,7 +93,7 @@ object SyncModels {
         ProblemKind.CUT_OFF -> "stopped"
     }
 
-    private fun waitText(seconds: Long): String {
+    internal fun waitText(seconds: Long): String {
         val minutes = maxOf(1L, (seconds + 59) / 60)
         return if (minutes < 120) "$minutes min" else "${(minutes + 30) / 60} hrs"
     }
@@ -105,7 +107,7 @@ object SyncModels {
 
     private fun line(key: PublicKey, name: String, p: PeerStatus, now: Long): SyncMemberLine {
         val colour = (key.bytes()[0].toInt() and 0xff) % MembersModels.COLOURS
-        fun mk(detail: String, badge: String, tone: BadgeTone) = SyncMemberLine(key, name, name.trim().take(1).uppercase(), colour, detail, badge, tone)
+        fun mk(detail: String, badge: String, tone: BadgeTone, explains: Boolean = false) = SyncMemberLine(key, name, name.trim().take(1).uppercase(), colour, detail, badge, tone, explains)
         val shared = if (p.notShared > 0) entries(p.notShared) else null
         val when_ = p.lastSuccessSeconds?.let { RelativeTime.ago(now, it) }
         return when (p.state) {
@@ -116,10 +118,16 @@ object SyncModels {
                 LinkKind.NEARBY -> "Nearby"
                 else -> "Direct"
             }, BadgeTone.GOOD)
-            PeerState.UNREACHABLE, PeerState.FAILED -> mk(
-                listOfNotNull(shared, when_ ?: "Never synced", p.nextTrySeconds?.let { "trying again in ${waitText(it - now)}" }).joinToString(" · "),
-                "Offline", BadgeTone.OFFLINE,
-            )
+            PeerState.UNREACHABLE, PeerState.FAILED -> {
+                val retry = p.nextTrySeconds?.let { "trying again in ${waitText(it - now)}" }
+                // The direct ways did not work and this phone cannot even reach the relay: that is "Needs relay" (a problem on this side),
+                // not "Offline" (the other phone is not there).
+                if (p.relay == owntally.sync.RelayResult.RELAY_DOWN) {
+                    mk(listOfNotNull(shared, when_ ?: "Never synced", "the relay can't be reached from this phone", retry).joinToString(" · "), "Needs relay", BadgeTone.WARN, explains = true)
+                } else {
+                    mk(listOfNotNull(shared, when_ ?: "Never synced", retry).joinToString(" · "), "Offline", BadgeTone.OFFLINE, explains = true)
+                }
+            }
         }
     }
 }

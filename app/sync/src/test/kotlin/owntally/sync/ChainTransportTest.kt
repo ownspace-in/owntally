@@ -146,6 +146,19 @@ class ChainTransportTest {
         assertFailsWith<LinkAuthFailed> { chain(null, iroh, relay).connect(room, peer) }
     }
 
+    private suspend fun why(local: Way?, iroh: Way?, relay: Way?, scope: TestScope): RelayResult =
+        runCatching { scope.chain(local, iroh, relay).connect(room, peer) }.exceptionOrNull().let { (it as ChainUnreachable).relay }
+
+    @Test fun whenNothingConnectsTheChainSaysHowTheRelayWent() = runTest {
+        val io = { java.io.IOException("Cannot reach the relay at wss://relay.ownspace.in/ws") as Exception }
+        assertEquals(RelayResult.RELAY_DOWN, why(null, Way("iroh", LinkKind.DIRECT, 100, unreachable), Way("relay", LinkKind.RELAYED, 100, io), this), "the relay could not even be opened")
+        assertEquals(RelayResult.PEER_NOT_THERE, why(null, Way("iroh", LinkKind.DIRECT, 100, unreachable), Way("relay", LinkKind.RELAYED, 100, unreachable), this), "the relay was there, the phone was not")
+        assertEquals(RelayResult.NOT_TRIED, why(null, Way("iroh", LinkKind.DIRECT, 100, unreachable), null, this), "no relay in the chain")
+        assertEquals(RelayResult.PEER_NOT_THERE, why(Way("l", LinkKind.DIRECT, 10, unreachable), Way("iroh", LinkKind.DIRECT, 100, unreachable), Way("relay", LinkKind.RELAYED, 100, unreachable), this))
+        // The overall limit with the relay never having failed: it is not "the relay is down".
+        assertEquals(RelayResult.PEER_NOT_THERE, why(null, Way("iroh", LinkKind.DIRECT, 600_000), Way("relay", LinkKind.RELAYED, 600_000), this))
+    }
+
     @Test fun aChainOfWaysThatAreNotAvailableSaysNotAvailableAndNotUnreachable() = runTest {
         val unavailable = { TransportUnavailable() as Exception }
         assertFailsWith<TransportUnavailable> { chain(null, Way("iroh", LinkKind.DIRECT, 10, unavailable), Way("relay", LinkKind.RELAYED, 10, unavailable)).connect(room, peer) }

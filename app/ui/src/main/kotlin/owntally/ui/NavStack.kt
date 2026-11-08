@@ -17,6 +17,7 @@ sealed interface Screen {
     data class JoinRequests(val id: GroupId) : Screen
     data class Invite(val id: GroupId) : Screen
     data class Nearby(val id: GroupId) : Screen
+    data class CantReach(val id: GroupId, val member: owntally.model.PublicKey) : Screen
     data object JoinPaste : Screen
     data class Join(val id: GroupId) : Screen
     data class OwnerOffer(val id: GroupId, val member: owntally.model.PublicKey) : Screen
@@ -47,6 +48,7 @@ data class NavStack(val screens: List<Screen> = listOf(Screen.Home)) {
                 is Screen.SettleUp -> it.id == id
                 is Screen.Members -> it.id == id
                 is Screen.Sync -> it.id == id
+                is Screen.CantReach -> it.id == id
                 is Screen.MemberActions -> it.id == id
                 is Screen.RemoveMember -> it.id == id
                 is Screen.OwnerOffer -> it.id == id

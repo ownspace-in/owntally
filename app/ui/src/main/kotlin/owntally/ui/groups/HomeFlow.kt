@@ -89,7 +89,8 @@ fun HomeFlow(
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
-            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
+            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null, onExplain = { ui.nav = ui.nav.push(Screen.CantReach(screen.id, it)) })
+            is Screen.CantReach -> CantReachRoute(sessions, sync, screen.id, screen.member, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
             is Screen.Nearby -> NearbyRoute(sessions, nearby, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
@@ -712,7 +713,7 @@ private fun SettingsRoute(sessions: Sessions, lock: owntally.ui.lock.LockControl
 }
 
 @Composable
-private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit, onNearby: (() -> Unit)?) {
+private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit, onNearby: (() -> Unit)?, onExplain: (owntally.model.PublicKey) -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -726,7 +727,27 @@ private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordi
     val problems by produceState(emptyList<owntally.data.store.SyncProblem>(), id, status) { value = withContext(Dispatchers.IO) { sync.problems(id) } }
     val scope = rememberCoroutineScope()
     val model = remember(view, status, problems) { SyncModels.build(view, status, problems, System.currentTimeMillis() / 1000) }
-    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) }, onNearby = onNearby)
+    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) }, onNearby = onNearby, onExplain = { onExplain(it.key) })
+}
+
+@Composable
+private fun CantReachRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, member: owntally.model.PublicKey, onBack: () -> Unit, onNearby: (() -> Unit)?) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session
+    if (s == null || sync == null) {
+        Box(Modifier.fillMaxSize())
+        return
+    }
+    val view by s.view.collectAsStateWithLifecycle()
+    val status by sync.status(id).collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val now by produceState(System.currentTimeMillis() / 1000, id) {
+        while (true) { kotlinx.coroutines.delay(15_000); value = System.currentTimeMillis() / 1000 }
+    }
+    val model = remember(view, status, now) { CantReachModels.build(view, member, status.peers[member] ?: owntally.data.session.PeerStatus(), now) }
+    CantReachScreen(model, onBack, onTryNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id, member) } } }, onNearby = onNearby)
 }
 
 
