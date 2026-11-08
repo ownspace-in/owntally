@@ -53,7 +53,7 @@ class LocalLinkTest {
     private fun node(): LocalNode = LocalNode(discovery, scope, config).also { nodes += it }
 
     private fun finish() { nodes.forEach { it.close() }; scope.cancel() }
-    private fun <T> run(block: suspend CoroutineScope.() -> T): T = try { runBlocking { withTimeout(30_000) { block() } } } finally { finish() }
+    private fun run(block: suspend CoroutineScope.() -> Unit): Unit = try { runBlocking { withTimeout(30_000) { block() } } } finally { finish() }
 
     // ---- frames -------------------------------------------------------------------------------------------------------------------
 

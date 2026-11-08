@@ -40,7 +40,7 @@ class SecureFirstTest {
     private fun node(offerTls: Boolean = true, tlsMs: Long = 15_000): LocalNode =
         LocalNode(discovery, scope, LocalConfig(handshakeTimeoutMs = 3_000, findTimeoutMs = 300, tlsAttemptMs = tlsMs, offerTls = offerTls, bind = loopback)).also { nodes += it }
 
-    private fun <T> run(block: suspend CoroutineScope.() -> T): T = try { runBlocking { withTimeout(40_000) { block() } } } finally { nodes.forEach { it.close() }; scope.cancel() }
+    private fun run(block: suspend CoroutineScope.() -> Unit): Unit = try { runBlocking { withTimeout(40_000) { block() } } } finally { nodes.forEach { it.close() }; scope.cancel() }
 
     @Test fun whenBothSupportTlsTheLinkIsTlsOnBothEnds() = run {
         val nb = node(); val incoming = nb.transportFor(b).incoming(room)

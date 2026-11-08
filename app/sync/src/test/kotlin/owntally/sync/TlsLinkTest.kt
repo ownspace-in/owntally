@@ -55,7 +55,7 @@ class TlsLinkTest {
     private val config = LocalConfig(handshakeTimeoutMs = 3_000, findTimeoutMs = 500, bind = loopback)
     private val nodes = ArrayList<LocalNode>()
     private fun node(): LocalNode = LocalNode(discovery, scope, config).also { nodes += it }
-    private fun <T> run(block: suspend CoroutineScope.() -> T): T = try { runBlocking { withTimeout(40_000) { block() } } } finally { nodes.forEach { it.close() }; scope.cancel() }
+    private fun run(block: suspend CoroutineScope.() -> Unit): Unit = try { runBlocking { withTimeout(40_000) { block() } } } finally { nodes.forEach { it.close() }; scope.cancel() }
 
     private suspend fun connected(security: LinkSecurity = LinkSecurity.TLS): Triple<Link, Link, LocalNode> {
         val nb = node()

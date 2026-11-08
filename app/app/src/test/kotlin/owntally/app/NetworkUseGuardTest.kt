@@ -24,6 +24,9 @@ class NetworkUseGuardTest {
     )
     private val mayDependOnNetworkLibraries = listOf("sync/build.gradle.kts" to "the WebSocket transport of the relay (compile-only until M7)")
 
+    /** The one Play services library allowed: Nearby Connections (same-room sync). It brings no reporting library, which the next test checks. */
+    private val allowedLibraryLines = listOf("play-services-nearby")
+
     private fun sources(root: File) = root.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "java") && "/src/main/" in it.path.replace('\\', '/') }.toList()
 
     /** The files, as (path relative to the app folder, text), that use the network and are not allowed to. */
@@ -33,7 +36,7 @@ class NetworkUseGuardTest {
 
     fun libraryOffenders(files: List<Pair<String, String>>): List<String> = files
         .filter { (path, _) -> mayDependOnNetworkLibraries.none { (allowed, _) -> path == allowed } }
-        .flatMap { (path, text) -> text.lines().withIndex().filter { libraries.containsMatchIn(it.value) && !it.value.trim().startsWith("//") }.map { "$path:${it.index + 1}: ${it.value.trim()}" } }
+        .flatMap { (path, text) -> text.lines().withIndex().filter { libraries.containsMatchIn(it.value) && !it.value.trim().startsWith("//") && allowedLibraryLines.none { ok -> ok in it.value } }.map { "$path:${it.index + 1}: ${it.value.trim()}" } }
 
     private val appFolder = File("..")
 
@@ -65,6 +68,9 @@ class NetworkUseGuardTest {
         assertEquals(0, offenders(listOf("app/src/main/kotlin/owntally/app/NsdLocalDiscovery.kt" to "NsdManager")).size, "the discovery file may")
         assertEquals(1, libraryOffenders(listOf("ui/build.gradle.kts" to "implementation(\"com.google.firebase:firebase-analytics:1.0\")")).size)
         assertEquals(1, libraryOffenders(listOf("data/build.gradle.kts" to "implementation(\"com.google.mlkit:barcode-scanning:17.0.0\")")).size)
+        assertEquals(0, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"com.google.android.gms:play-services-nearby:19.3.0\")")).size, "Nearby is allowed")
+        assertEquals(1, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"com.google.android.gms:play-services-measurement:21.0.0\")")).size, "no other Play services library")
+        assertEquals(1, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"com.google.android.gms:play-services-mlkit-barcode-scanning:18.0.0\")")).size)
         assertEquals(0, libraryOffenders(listOf("sync/build.gradle.kts" to "compileOnly(\"com.squareup.okhttp3:okhttp:5.5.1\")")).size)
     }
 }

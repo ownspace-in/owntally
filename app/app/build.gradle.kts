@@ -58,6 +58,9 @@ dependencies {
     implementation(project(":app:data"))
     implementation(project(":app:crypto"))
     implementation(project(":app:sync"))
+    // Nearby Connections (same-room sync, M6): Google Play services' client library for it. It adds only ACCESS_NETWORK_STATE to the manifest and no
+    // reporting library (checked on 8 Nov 2026); NetworkUseGuardTest allows this one Play services library and no other.
+    implementation("com.google.android.gms:play-services-nearby:19.3.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))

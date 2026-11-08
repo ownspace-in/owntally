@@ -63,6 +63,11 @@ class AppContainer(private val context: Context) {
             },
         )
     }
+    /**
+     * Nearby for one group (M6, T6.11): built when its screen is opened, started only by Start. Needs Google Play services; a phone without
+     * them is told so on the screen.
+     */
+    val nearby: (owntally.model.GroupId) -> owntally.ui.nearby.NearbyController = { group -> NearbyControllerImpl(context, group, sessions, sync, groups, identity) }
     val debugTools: DebugTools? by lazy { DebugToolsFactory.create(this) }
 
     val firstRun: FirstRun = object : FirstRun {

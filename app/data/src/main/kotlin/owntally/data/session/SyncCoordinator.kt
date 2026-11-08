@@ -212,6 +212,26 @@ class SyncCoordinator(
         }
     }
 
+    /**
+     * Runs a sync over a link somebody else made (Nearby, M6): this phone is the [role] in it. The group's rules (who may have what) and the
+     * status, notices and key duty are the same as for any other sync. Null if the group cannot be opened.
+     */
+    suspend fun syncOverLink(group: GroupId, link: Link, role: SyncRole): SyncResult? {
+        val g = started[group] ?: open(group) ?: return null
+        val store = RepositorySyncStore(g.id, groups)
+        val result = try {
+            SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(link, role)
+        } finally {
+            link.close()
+        }
+        val peer = link.peer
+        finished(g, peer, result)
+        if (result.outcome == SyncOutcome.COMPLETED && peer in peersOf(g)) {
+            peerUpdate(g, peer) { it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security) }
+        }
+        return result
+    }
+
     private fun peersOf(g: Group): Set<PublicKey> = g.session.view.value.state.currentMembers.keys - g.self
 
     private fun syncPeers(g: Group, manual: Boolean): List<Job> = peersOf(g).map { peer -> scope.launch { attempt(g, peer, manual) } }

@@ -29,10 +29,27 @@ class ManifestRulesTest {
      * module and its discovery opens a connection. Later milestones add what they need (Nearby's Bluetooth permissions), each with its own test.
      */
     @Test
-    fun theOnlyPermissionIsInternetForSyncingWithFriends() {
+    fun theOnlyPermissionsAreInternetForSyncingAndWhatNearbyNeeds() {
         val names = (0 until manifest.getElementsByTagName("uses-permission").length)
             .map { (manifest.getElementsByTagName("uses-permission").item(it) as Element).getAttributeNS(ns, "name") }
-        assertEquals(listOf("android.permission.INTERNET"), names)
+        // INTERNET for syncing, and what Nearby Connections documents it needs (T6.11), nothing else.
+        assertEquals(
+            listOf(
+                "android.permission.INTERNET", "android.permission.ACCESS_WIFI_STATE", "android.permission.CHANGE_WIFI_STATE",
+                "android.permission.BLUETOOTH", "android.permission.BLUETOOTH_ADMIN", "android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION",
+                "android.permission.BLUETOOTH_ADVERTISE", "android.permission.BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_SCAN", "android.permission.NEARBY_WIFI_DEVICES",
+            ),
+            names,
+        )
+        // The old permissions stop at the versions that no longer use them, and Bluetooth scanning and nearby devices are never for location.
+        fun perm(name: String) = (0 until manifest.getElementsByTagName("uses-permission").length).map { manifest.getElementsByTagName("uses-permission").item(it) as Element }.first { it.getAttributeNS(ns, "name") == name }
+        assertEquals("30", perm("android.permission.BLUETOOTH").getAttributeNS(ns, "maxSdkVersion"))
+        assertEquals("30", perm("android.permission.BLUETOOTH_ADMIN").getAttributeNS(ns, "maxSdkVersion"))
+        assertEquals("31", perm("android.permission.ACCESS_FINE_LOCATION").getAttributeNS(ns, "maxSdkVersion"))
+        assertEquals("31", perm("android.permission.ACCESS_COARSE_LOCATION").getAttributeNS(ns, "maxSdkVersion"))
+        assertEquals("neverForLocation", perm("android.permission.BLUETOOTH_SCAN").getAttributeNS(ns, "usesPermissionFlags"))
+        assertEquals("neverForLocation", perm("android.permission.NEARBY_WIFI_DEVICES").getAttributeNS(ns, "usesPermissionFlags"))
+        assertTrue(names.none { it.contains("BACKGROUND") || it.contains("CAMERA") || it.contains("CONTACTS") || it.contains("STORAGE") })
         assertEquals(0, manifest.getElementsByTagName("uses-permission-sdk-23").length)
     }
 

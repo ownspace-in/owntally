@@ -16,6 +16,7 @@ sealed interface Screen {
     data class Leave(val id: GroupId) : Screen
     data class JoinRequests(val id: GroupId) : Screen
     data class Invite(val id: GroupId) : Screen
+    data class Nearby(val id: GroupId) : Screen
     data object JoinPaste : Screen
     data class Join(val id: GroupId) : Screen
     data class OwnerOffer(val id: GroupId, val member: owntally.model.PublicKey) : Screen

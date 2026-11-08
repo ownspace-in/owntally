@@ -66,6 +66,7 @@ fun HomeFlow(
     sync: owntally.data.session.SyncCoordinator? = null,
     invites: owntally.data.session.Invites? = null,
     joinGroup: owntally.data.session.JoinGroup? = null,
+    nearby: ((GroupId) -> owntally.ui.nearby.NearbyController)? = null,
 ) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
@@ -88,7 +89,8 @@ fun HomeFlow(
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
-            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back)
+            is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
+            is Screen.Nearby -> NearbyRoute(sessions, nearby, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
             is Screen.Invite -> InviteRoute(sessions, invites, screen.id, onBack = back)
@@ -710,7 +712,7 @@ private fun SettingsRoute(sessions: Sessions, lock: owntally.ui.lock.LockControl
 }
 
 @Composable
-private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit) {
+private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordinator?, id: GroupId, onBack: () -> Unit, onNearby: (() -> Unit)?) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -724,7 +726,7 @@ private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordi
     val problems by produceState(emptyList<owntally.data.store.SyncProblem>(), id, status) { value = withContext(Dispatchers.IO) { sync.problems(id) } }
     val scope = rememberCoroutineScope()
     val model = remember(view, status, problems) { SyncModels.build(view, status, problems, System.currentTimeMillis() / 1000) }
-    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) })
+    SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) }, onNearby = onNearby)
 }
 
 
@@ -876,4 +878,38 @@ private fun JoinRoute(joinGroup: owntally.data.session.JoinGroup?, id: GroupId, 
             )
         }
     }
+}
+
+
+/**
+ * Nearby (T6.11): Start asks for what Nearby needs only after saying why, runs while this screen is open and stops when it is left.
+ * Nothing about Nearby runs before the person taps Start.
+ */
+@Composable
+private fun NearbyRoute(sessions: Sessions, nearby: ((GroupId) -> owntally.ui.nearby.NearbyController)?, id: GroupId, onBack: () -> Unit) {
+    if (nearby == null) { Box(Modifier.fillMaxSize()); return }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val controller = remember(id) { nearby(id) }
+    val session by produceState<GroupSession?>(null, id) { value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null } }
+    val s = session ?: run { Box(Modifier.fillMaxSize()); return }
+    val view by s.view.collectAsStateWithLifecycle()
+    val status by controller.status.collectAsStateWithLifecycle()
+    val sdk = android.os.Build.VERSION.SDK_INT
+    fun granted(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(context, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    var gate by remember(id) { mutableStateOf(if (owntally.ui.nearby.NearbyPermissions.missing(sdk, ::granted).isEmpty()) owntally.ui.nearby.NearbyGate.READY else owntally.ui.nearby.NearbyGate.EXPLAIN) }
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        gate = if (owntally.ui.nearby.NearbyPermissions.missing(sdk, ::granted).isEmpty()) owntally.ui.nearby.NearbyGate.READY else owntally.ui.nearby.NearbyGate.DENIED
+    }
+    androidx.compose.runtime.DisposableEffect(id) { onDispose { controller.stop() } }
+    val names = remember(view) { view.state.currentMembers.filterKeys { it != view.me }.mapValues { it.value.name } }
+    val model = remember(view, status) { owntally.ui.nearby.NearbyModels.build(view.state.name ?: "Group", names, status, controller.availability() == owntally.ui.nearby.NearbyAvailability.NO_PLAY_SERVICES) }
+    owntally.ui.nearby.NearbyScreen(
+        model, gate, owntally.ui.nearby.NearbyPermissions.explanation(sdk),
+        onBack = onBack,
+        onContinue = { launcher.launch(owntally.ui.nearby.NearbyPermissions.request(sdk).toTypedArray()) },
+        onOpenSettings = {
+            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null)))
+        },
+        onStart = { controller.start() }, onStop = { controller.stop() }, onLookAgain = { controller.lookAgain() },
+    )
 }

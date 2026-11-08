@@ -3,6 +3,7 @@ package owntally.app
 import android.content.Context
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -244,6 +245,12 @@ class MembershipEndToEndInstrumentedTest {
             tapDescription("Sync now")
             rule.waitForIdle()
             see("Not syncing yet. Your entries are saved on this phone.")
+            // Nearby: opened from here, and nothing about it runs before the person says why and taps Continue and Start.
+            tapDescription("Nearby")
+            see("Sit near your friends and open this screen on each phone. Phones in the same room find each other and swap notes, with no internet.")
+            rule.onAllNodesWithText("Start").assertCountEquals(0)
+            see("Continue")
+            tapDescription("Back")
             tapDescription("Back")
             see("Choose a group to see who it has reached.")
         } finally {
