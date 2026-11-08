@@ -54,7 +54,7 @@ class JoinGroupTest {
     private var approvedCalls = mutableListOf<GroupId>()
     private val rohanSessions = Sessions(rohanEnv.groups, rohanEnv.secrets, rohanEnv.identity, rohanEnv.clock, rohanEnv.settings)
     private fun rohan(store: owntally.data.store.PendingJoinStore = pendingStore, sessions: Sessions = rohanSessions) =
-        JoinGroup(rohanEnv.groups, rohanEnv.secrets, rohanEnv.identity, store, sessions, rohanEnv.clock, { _, key -> net.transportFor(key) }, { approvedCalls += it }, connectTimeoutMs = 1_000)
+        JoinGroup(rohanEnv.groups, rohanEnv.secrets, rohanEnv.identity, store, sessions, rohanEnv.clock, { _, key -> net.transportFor(key) }, { g, _ -> approvedCalls += g }, connectTimeoutMs = 1_000)
 
     private fun TestScope.hostServes(backend: GroupJoinBackend = backend()): kotlinx.coroutines.Job {
         val incoming = net.transportFor(asha.key).incoming(room) // listening starts now, not when the background job first runs

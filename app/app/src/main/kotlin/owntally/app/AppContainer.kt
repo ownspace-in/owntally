@@ -43,7 +43,7 @@ class AppContainer(private val context: Context) {
     val joinGroup: owntally.data.session.JoinGroup by lazy {
         owntally.data.session.JoinGroup(
             groups, secrets, identity, owntally.data.store.RoomPendingJoinStore(database), sessions, Clock.SYSTEM,
-            { _, _ -> owntally.sync.NoTransport }, onApproved = { sync.start(it) },
+            { _, _ -> owntally.sync.NoTransport }, onApproved = { group, host -> sync.startWith(group, host) },
         )
     }
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
@@ -56,6 +56,11 @@ class AppContainer(private val context: Context) {
             sessions, groups, { _, _ -> owntally.sync.NoTransport },
             owntally.data.session.SyncRecorder(owntally.data.store.RoomSyncProblemLog(database), Clock.SYSTEM), Clock.SYSTEM,
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO),
+            // Only a phone whose person may invite (the owner and admins) answers people who hold an invitation.
+            joinBackend = { id ->
+                if (!invites.canInvite(id)) null
+                else groups.group(id)?.let { identity.groupIdentity(it.keySlot) }?.let { host -> owntally.data.session.GroupJoinBackend(id, host, invites, joinRequests, sessions) }
+            },
         )
     }
     val debugTools: DebugTools? by lazy { DebugToolsFactory.create(this) }

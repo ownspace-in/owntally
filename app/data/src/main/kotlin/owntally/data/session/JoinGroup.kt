@@ -88,8 +88,8 @@ class JoinGroup(
     private val clock: Clock,
     /** The transport for a group, for the key this phone uses in it. */
     private val transportFor: (GroupId, owntally.model.PublicKey) -> Transport,
-    /** Called when the host has approved: start syncing the group. */
-    private val onApproved: (GroupId) -> Unit = {},
+    /** Called when the host has approved: start syncing the group, beginning with the host (who knows the group; this phone knows no one yet). */
+    private val onApproved: (GroupId, owntally.model.PublicKey) -> Unit = { _, _ -> },
     private val connectTimeoutMs: Long = 15_000,
 ) {
     /** The name and number the person gave at first run, offered as the starting point of the join form. */
@@ -213,7 +213,7 @@ class JoinGroup(
                 groups.joinGroup(group, p.keySlot)
                 pending.put(p.copy(state = PendingState.APPROVED))
                 sessions.refresh()
-                onApproved(group)
+                onApproved(group, p.host)
                 CheckResult.Approved
             }
         }

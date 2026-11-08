@@ -111,4 +111,38 @@ class InvitesTest {
         val secret = invite.link.substringAfter('#')
         assertFalse(invite.toString().contains(secret))
     }
+
+    @Test fun everyOpenInviteIsListedNewestFirstAndRevokingOneLeavesTheOthersAndTheListIsEmptyForAPlainMember() {
+        assertEquals(emptyList(), invites().open(group).map { it.link })
+        val first = invites().create(group)!!
+        env.nowSeconds += 60
+        val second = invites().create(group)!!
+        assertEquals(listOf(second.link, first.link), invites().open(group).map { it.link })
+        invites().revoke(group, second)
+        assertEquals(listOf(first.link), invites().open(group).map { it.link })
+        env.nowSeconds += Ticket.LIFETIME_SECONDS
+        assertEquals(emptyList(), invites().open(group).map { it.link }, "expired")
+        val asha = owntally.data.sim.SimDevice.owner(3, "Asha")
+        val ben = owntally.data.sim.SimDevice.joined(3, 1, "Ben", asha)
+        asha.env.groups.envelopes(asha.group).envelopes.forEach { ben.env.groups.appendEnvelope(ben.group, it) }
+        val plain = Invites(InMemoryTicketRecords(), ben.env.groups, ben.env.secrets, ben.env.identity, Sessions(ben.env.groups, ben.env.secrets, ben.env.identity, ben.env.clock, ben.env.settings), ben.env.clock)
+        assertEquals(emptyList(), plain.open(ben.group).map { it.link })
+    }
+
+    @Test fun theRequestsListSaysWhenSomethingChanged() {
+        val sessions = sessions()
+        val requests = JoinRequests(owntally.data.store.InMemoryJoinRequestStore(), sessions, env.clock)
+        val before = requests.changes.value
+        val key = env.identity.groupIdentity(77)!!
+        requests.receive(group, key.publicKey, key.encryptionKey, "Rohan", "98765 43210")
+        assertEquals(before + 1, requests.changes.value)
+        requests.decline(group, key.publicKey)
+        assertEquals(before + 2, requests.changes.value)
+        requests.decline(group, key.publicKey) // already declined: nothing changed
+        assertEquals(before + 2, requests.changes.value)
+        val k2 = env.identity.groupIdentity(78)!!
+        requests.receive(group, k2.publicKey, k2.encryptionKey, "Meera", "98765 43211")
+        requests.approve(group, k2.publicKey, "Meera")
+        assertEquals(before + 4, requests.changes.value)
+    }
 }

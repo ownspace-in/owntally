@@ -101,7 +101,7 @@ fun HomeFlow(
             )
             is Screen.Profile -> ProfileRoute(sessions, screen.id, onBack = back, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) })
             is Screen.Leave -> LeaveRoute(sessions, screen.id, onCancel = back, onLeft = { ui.nav = ui.nav.home() })
-            is Screen.JoinRequests -> JoinRequestsRoute(sessions, joinRequests, screen.id, onBack = back)
+            is Screen.JoinRequests -> JoinRequestsRoute(sessions, joinRequests, invites, screen.id, onBack = back, onNewInvite = { ui.nav = ui.nav.push(Screen.Invite(screen.id)) })
             is Screen.MemberActions -> MemberActionsRoute(sessions, screen.id, screen.member, onClose = back, onRemove = { ui.nav = ui.nav.push(Screen.RemoveMember(screen.id, screen.member)) }, onMakeOwner = { ui.nav = ui.nav.push(Screen.OwnerOffer(screen.id, screen.member)) })
             is Screen.OwnerOffer -> OwnerOfferRoute(sessions, screen.id, screen.member, onClose = back, onChoose = { ui.nav = ui.nav.pop() })
             is Screen.RemoveMember -> RemoveMemberRoute(sessions, screen.id, screen.member, onCancel = back, onRemoved = { ui.nav = ui.nav.pop().pop() })
@@ -402,7 +402,8 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
         return
     }
     val view by s.view.collectAsStateWithLifecycle()
-    val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
+    val requestChanges by (joinRequests?.changes ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsStateWithLifecycle()
+    val waiting by produceState(0, id, view, requestChanges) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
     MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onInvite = if (invites != null) onInvite else null, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null, onMyProfile = onMyProfile, onLeave = onLeave, onRemovedTap = { onRemovedTap(it.key) })
 }
 
@@ -529,7 +530,7 @@ private fun OwnerOfferRoute(sessions: Sessions, id: GroupId, member: owntally.mo
 }
 
 @Composable
-private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit) {
+private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, invites: owntally.data.session.Invites?, id: GroupId, onBack: () -> Unit, onNewInvite: () -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -540,8 +541,12 @@ private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.se
     }
     val view by s.view.collectAsStateWithLifecycle()
     var version by remember { mutableStateOf(0) }
-    val waiting by produceState(emptyList<owntally.data.store.JoinRequest>(), id, view, version) { value = withContext(Dispatchers.IO) { joinRequests.waiting(id) } }
-    val model = remember(view, waiting) { JoinRequestsModels.build(view, waiting, System.currentTimeMillis() / 1000) }
+    val changes by joinRequests.changes.collectAsStateWithLifecycle()
+    val waiting by produceState(emptyList<owntally.data.store.JoinRequest>(), id, view, version, changes) { value = withContext(Dispatchers.IO) { joinRequests.waiting(id) } }
+    val open by produceState(emptyList<OpenInviteInfo>(), id, view, version, changes) {
+        value = withContext(Dispatchers.IO) { invites?.open(id).orEmpty().map { OpenInviteInfo(it.ticketId.joinToString("") { b -> "%02x".format(b) }, it.expiresAtSeconds) } }
+    }
+    val model = remember(view, waiting, open) { JoinRequestsModels.build(view, waiting, System.currentTimeMillis() / 1000, open) }
     val scope = rememberCoroutineScope()
     var approving by remember { mutableStateOf<JoinRequestRow?>(null) }
     if (model == null) {
@@ -553,6 +558,13 @@ private fun JoinRequestsRoute(sessions: Sessions, joinRequests: owntally.data.se
     JoinRequestsScreen(
         model, onBack, onApprove = { approving = it },
         onDecline = { row -> scope.launch { withContext(Dispatchers.IO) { joinRequests.decline(id, row.member) }; version++ } },
+        onRevoke = { row ->
+            scope.launch {
+                withContext(Dispatchers.IO) { invites?.open(id)?.firstOrNull { it.ticketId.joinToString("") { b -> "%02x".format(b) } == row.id }?.let { invites.revoke(id, it) } }
+                version++
+            }
+        },
+        onNewInvite = if (invites != null) onNewInvite else null,
     )
     val target = approving
     if (target != null) {

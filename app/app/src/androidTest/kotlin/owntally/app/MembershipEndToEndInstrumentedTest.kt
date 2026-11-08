@@ -85,7 +85,7 @@ class MembershipEndToEndInstrumentedTest {
             see("Someone in this group already has this name. Try adding an initial, like Rohan V.")
             rule.onNode(hasSetTextAction() and hasAnyAncestor(isDialog())).performTextReplacement("Aarav V")
             rule.onNode(hasText("Approve") and hasAnyAncestor(isDialog())).performClick()
-            see("No one is waiting to join. Invites arrive in a later update.")
+            see("No one is waiting to join.")
             tapDescription("Back")
             see("Goa Trip · 4 people")
 
@@ -151,6 +151,15 @@ class MembershipEndToEndInstrumentedTest {
             (context as OwnTallyApplication).resetContainerForTests()
             assertEquals(first, container().invites.current(group)!!.link)
 
+            // The Join requests screen lists it under OPEN INVITES.
+            tapDescription("Back")
+            see("Goa Trip · 1 person")
+            tap("Join requests")
+            see("OPEN INVITES")
+            see("Invite sent by you")
+            tapDescription("Back")
+            tapDescription("Invite")
+            see("Invite friends")
             tap("Revoke invite")
             see("Invite revoked. Nobody can use it any more.")
             assertEquals(null, container().invites.current(group))

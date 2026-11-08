@@ -58,6 +58,12 @@ class Invites(
         return registry(group)?.open(group)?.firstOrNull()?.let { Invite(it) }
     }
 
+    /** Every invitation that still works, newest first (the list on the Join requests screen). */
+    fun open(group: GroupId): List<Invite> {
+        if (!canInvite(group)) return emptyList()
+        return registry(group)?.open(group)?.map { Invite(it) }.orEmpty()
+    }
+
     /** A new invitation for the group's current key. Null if this person may not invite or the phone has no current key. */
     fun create(group: GroupId): Invite? {
         if (!canInvite(group)) return null

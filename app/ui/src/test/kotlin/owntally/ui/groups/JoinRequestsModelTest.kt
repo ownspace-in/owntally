@@ -43,7 +43,7 @@ class JoinRequestsModelTest {
     @Test fun answeredRequestsAreNotListed() {
         val m = model(me, request(1, "Aarav", "98765 11111", 60, JoinState.APPROVED), request(2, "Naina", "98765 22222", 60, JoinState.DECLINED))!!
         assertEquals(emptyList(), m.rows)
-        assertEquals("No one is waiting to join. Invites arrive in a later update.", m.empty)
+        assertEquals("No one is waiting to join.", m.empty)
         assertEquals("Waiting for you · 0", m.heading)
     }
 
@@ -109,5 +109,25 @@ class JoinRequestsModelTest {
         assertFalse(c.canApprove)
         assertEquals("This group already has $MAX_MEMBERS people, the most it can have. Remove someone first.", c.problem)
         assertTrue(model(me)!!.full)
+    }
+
+    // ---- open invites (T6.6) -----------------------------------------------------------------------------------------------------
+
+    @Test fun openInvitesAreListedSoonestToExpireFirstWithTheTimeLeftAndOverOnesAreLeftOut() {
+        val m = JoinRequestsModels.build(s.view.value, emptyList(), now, listOf(OpenInviteInfo("b", now + 5 * 3_600 + 600), OpenInviteInfo("a", now + 1_800), OpenInviteInfo("gone", now - 1), OpenInviteInfo("now", now)))!!
+        assertEquals("OPEN INVITES", m.openInvitesHeading)
+        assertEquals(listOf("a", "b"), m.openInvites.map { it.id })
+        assertEquals(listOf("Unused · expires in 30 min", "Unused · expires in 5 hrs 10 min"), m.openInvites.map { it.detail })
+        assertEquals("Invite sent by you", m.openInvites.first().title)
+        assertNull(m.noOpenInvites)
+        assertEquals("New invite", m.newInviteLabel)
+    }
+
+    @Test fun withNoOpenInviteTheScreenSaysSoAndTheEmptyRequestsLineNoLongerPromisesALaterUpdate() {
+        val m = JoinRequestsModels.build(s.view.value, emptyList(), now)!!
+        assertEquals(emptyList(), m.openInvites)
+        assertEquals("No open invites.", m.noOpenInvites)
+        assertEquals("No one is waiting to join.", m.empty)
+        assertEquals("No open invites.", JoinRequestsModels.build(s.view.value, emptyList(), now, listOf(OpenInviteInfo("old", now - 10)))!!.noOpenInvites)
     }
 }
