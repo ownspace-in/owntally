@@ -7,15 +7,17 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import owntally.crypto.InMemoryTicketRecords
+import owntally.crypto.Ticket
 import owntally.data.repo.TestEnv
 import owntally.model.GroupId
 
-/** T6.3 on real repositories: tickets of a real group, a "restart" being a new Invites over the same records. */
+/** T6.3 and T6.4 on real repositories: tickets of a real group, a "restart" being a new Invites over the same records. */
 class InvitesTest {
     private val env = TestEnv().also { it.firstRun() }
     private val group = env.groups.createGroup("Goa Trip")
     private val records = InMemoryTicketRecords()
-    private fun invites() = Invites(records, env.groups, env.secrets, env.identity, env.clock)
+    private fun sessions() = Sessions(env.groups, env.secrets, env.identity, env.clock, env.settings)
+    private fun invites() = Invites(records, env.groups, env.secrets, env.identity, sessions(), env.clock)
 
     @Test fun aTicketIssuedForAGroupIsUsableOnceEvenAfterARestart() {
         val ticket = invites().registry(group)!!.issue(group, 1, env.secrets.loadKeyring(group).keyring[1]!!)
@@ -36,5 +38,77 @@ class InvitesTest {
 
     @Test fun aGroupThatIsNotThisPhonesHasNoRegistry() {
         assertNull(invites().registry(GroupId(ByteArray(16) { 1 })))
+    }
+
+    // ---- the invitations the screen shows (T6.4) ------------------------------------------------------------------------------
+
+    @Test fun theOwnerGetsAnInviteWhoseLinkHoldsATicketThatTheirOwnRegistryAccepts() {
+        val invite = invites().create(group)!!
+        assertTrue(invite.link.startsWith("https://joinowntally.ownspace.in/j#"))
+        val ticket = Ticket.fromShared(invite.link)!!
+        assertEquals(env.clock.nowSeconds() + Ticket.LIFETIME_SECONDS, invite.expiresAtSeconds)
+        assertEquals(1L, ticket.epoch)
+        assertTrue(invites().registry(group)!!.accept(ticket))
+    }
+
+    @Test fun anInviteAfterAKeyChangeCarriesTheNewKeyNotTheOldOne() {
+        val s = sessions()
+        assertTrue(s.session(group).rotateKey() is AddResult.Added)
+        val invites = Invites(records, env.groups, env.secrets, env.identity, s, env.clock)
+        val ticket = Ticket.fromShared(invites.create(group)!!.link)!!
+        assertEquals(2L, ticket.epoch)
+        assertEquals(env.secrets.loadKeyring(group).keyring[2L], ticket.groupKey)
+    }
+
+    @Test fun theCurrentInviteIsTheNewestOneThatStillWorksAndSurvivesARestart() {
+        assertNull(invites().current(group), "none yet")
+        val first = invites().create(group)!!
+        env.nowSeconds += 600
+        val second = invites().create(group)!!
+        assertEquals(second.link, invites().current(group)!!.link)
+        assertTrue(first.link != second.link)
+        invites().revoke(group, second)
+        assertEquals(first.link, invites().current(group)!!.link, "the older one is still open")
+    }
+
+    @Test fun anInviteThatWasUsedExpiredOrRevokedIsNotCurrent() {
+        val used = invites().create(group)!!
+        assertTrue(invites().registry(group)!!.accept(Ticket.fromShared(used.link)!!))
+        assertNull(invites().current(group), "used")
+        val expired = invites().create(group)!!
+        env.nowSeconds += Ticket.LIFETIME_SECONDS
+        assertNull(invites().current(group), "expired")
+        val revoked = invites().create(group)!!
+        invites().revoke(group, revoked)
+        assertNull(invites().current(group), "revoked")
+        assertFalse(invites().registry(group)!!.accept(Ticket.fromShared(revoked.link)!!))
+    }
+
+    @Test fun aPlainMemberAndAStrangerCannotCreateOrSeeInvitesButTheOwnerCan() {
+        val asha = owntally.data.sim.SimDevice.owner(3, "Asha")
+        val ben = owntally.data.sim.SimDevice.joined(3, 1, "Ben", asha)
+        fun invitesOf(d: owntally.data.sim.SimDevice) = Invites(InMemoryTicketRecords(), d.env.groups, d.env.secrets, d.env.identity, Sessions(d.env.groups, d.env.secrets, d.env.identity, d.env.clock, d.env.settings), d.env.clock)
+        fun catchUp() { asha.env.groups.envelopes(asha.group).envelopes.forEach { ben.env.groups.appendEnvelope(ben.group, it) }; ben.session.refresh() }
+        catchUp() // Ben's phone learns of his own admission
+        assertTrue(ben.key in ben.session.view.value.state.currentMembers, "Ben is a member in his own view")
+        assertNotNull(invitesOf(asha).create(asha.group), "the owner can")
+        val plain = invitesOf(ben)
+        assertFalse(plain.canInvite(ben.group))
+        assertNull(plain.create(ben.group), "a plain member cannot")
+        assertNull(plain.current(ben.group))
+        assertFalse(invitesOf(asha).canInvite(GroupId(ByteArray(16) { 3 })), "not a group of this phone")
+        assertNull(invitesOf(asha).create(GroupId(ByteArray(16) { 3 })))
+        // Made an admin, he can.
+        assertTrue(asha.session.makeAdmin(ben.key) is AddResult.Added)
+        catchUp()
+        val admin = invitesOf(ben) // a new phone session reads the log again
+        assertTrue(admin.canInvite(ben.group))
+        assertNotNull(admin.create(ben.group), "an admin can")
+    }
+
+    @Test fun anInviteNeverShowsItsSecretInToString() {
+        val invite = invites().create(group)!!
+        val secret = invite.link.substringAfter('#')
+        assertFalse(invite.toString().contains(secret))
     }
 }

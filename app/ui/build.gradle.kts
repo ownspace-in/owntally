@@ -55,6 +55,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     testImplementation(kotlin("test"))
+    // Only to prove in a test that the QR codes we draw can be read by an independent reader (Apache-2.0, not shipped).
+    testImplementation("com.google.zxing:core:3.5.4")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.09.00"))

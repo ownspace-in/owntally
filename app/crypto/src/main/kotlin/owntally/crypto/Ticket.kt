@@ -149,6 +149,9 @@ interface TicketRecords {
 
     /** Forgets records that expired before [nowSeconds]. */
     fun deleteExpired(nowSeconds: Long)
+
+    /** The records of the group that are not used and not expired at [nowSeconds], newest first (a ticket lives 8 hours, so the latest expiry is the newest). */
+    fun open(group: GroupId, nowSeconds: Long): List<TicketRecord>
 }
 
 class InMemoryTicketRecords : TicketRecords {
@@ -167,6 +170,10 @@ class InMemoryTicketRecords : TicketRecords {
     }
 
     @Synchronized override fun deleteExpired(nowSeconds: Long) { rows.values.removeAll { it.expiresAtSeconds <= nowSeconds } }
+
+    @Synchronized
+    override fun open(group: GroupId, nowSeconds: Long): List<TicketRecord> =
+        rows.values.filter { it.groupId == group && !it.used && it.expiresAtSeconds > nowSeconds }.sortedByDescending { it.expiresAtSeconds }
 }
 
 /** The group key of an epoch, from the phone's keyring; null if the phone does not have it. */
@@ -219,6 +226,11 @@ class TicketRegistry(
         if (issued != ticket || ticket.hostId != hostId || ticket.isExpired(clock.nowSeconds())) return false
         return records.markUsed(ticket.ticketId())
     }
+
+    /** The tickets of [group] that still work, newest first (those whose key is available). */
+    @Synchronized
+    fun open(group: GroupId): List<Ticket> =
+        records.open(group, clock.nowSeconds()).filter { it.hostId == hostId }.mapNotNull { find(it.ticketId()) }
 
     /** Cancels an invitation: the ticket stops working. */
     @Synchronized

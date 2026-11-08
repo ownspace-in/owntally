@@ -33,6 +33,9 @@ class AppContainer(private val context: Context) {
 
     val settings: RoomSettingsStore by lazy { RoomSettingsStore(database) }
     val sessions: Sessions by lazy { Sessions(groups, secrets, identity, Clock.SYSTEM, settings) }
+    val invites: owntally.data.session.Invites by lazy {
+        owntally.data.session.Invites(owntally.data.store.RoomTicketRecords(database), groups, secrets, identity, sessions, Clock.SYSTEM)
+    }
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
     /**
      * Syncing with the other members (M5). No real way to reach other phones is built in yet (M6), so every member shows "Not reachable

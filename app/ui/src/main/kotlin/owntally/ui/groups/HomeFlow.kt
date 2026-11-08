@@ -64,6 +64,7 @@ fun HomeFlow(
     lock: owntally.ui.lock.LockController? = null,
     joinRequests: owntally.data.session.JoinRequests? = null,
     sync: owntally.data.session.SyncCoordinator? = null,
+    invites: owntally.data.session.Invites? = null,
 ) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
@@ -86,7 +87,8 @@ fun HomeFlow(
             is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
-            is Screen.Members -> MembersRoute(sessions, joinRequests, screen.id, onBack = back, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
+            is Screen.Invite -> InviteRoute(sessions, invites, screen.id, onBack = back)
+            is Screen.Members -> MembersRoute(sessions, joinRequests, invites, screen.id, onBack = back, onInvite = { ui.nav = ui.nav.push(Screen.Invite(screen.id)) }, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
             is Screen.Cancelled -> CancelledRoute(
                 sessions, screen.id, screen.member, onBack = back,
                 onAddAgain = { model -> ui.addExpense = screen.id to model; ui.nav = ui.nav.push(Screen.AddExpense(screen.id)) },
@@ -375,7 +377,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, id: GroupId, onBack: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit, onMyProfile: () -> Unit, onLeave: () -> Unit, onRemovedTap: (owntally.model.PublicKey) -> Unit) {
+private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session.JoinRequests?, invites: owntally.data.session.Invites?, id: GroupId, onBack: () -> Unit, onInvite: () -> Unit, onMenu: (owntally.model.PublicKey) -> Unit, onJoinRequests: () -> Unit, onMyProfile: () -> Unit, onLeave: () -> Unit, onRemovedTap: (owntally.model.PublicKey) -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -386,7 +388,7 @@ private fun MembersRoute(sessions: Sessions, joinRequests: owntally.data.session
     }
     val view by s.view.collectAsStateWithLifecycle()
     val waiting by produceState(0, id, view) { value = withContext(Dispatchers.IO) { joinRequests?.waiting(id)?.size ?: 0 } }
-    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null, onMyProfile = onMyProfile, onLeave = onLeave, onRemovedTap = { onRemovedTap(it.key) })
+    MembersScreen(remember(view, waiting) { MembersModels.build(view, waiting) }, onBack, onInvite = if (invites != null) onInvite else null, onMenu = { onMenu(it.key) }, onJoinRequests = if (joinRequests != null) onJoinRequests else null, onMyProfile = onMyProfile, onLeave = onLeave, onRemovedTap = { onRemovedTap(it.key) })
 }
 
 @Composable
@@ -696,4 +698,40 @@ private fun SyncRoute(sessions: Sessions, sync: owntally.data.session.SyncCoordi
     val scope = rememberCoroutineScope()
     val model = remember(view, status, problems) { SyncModels.build(view, status, problems, System.currentTimeMillis() / 1000) }
     SyncScreen(model, onBack, onSyncNow = { scope.launch { withContext(Dispatchers.IO) { sync.syncNow(id) } } }, onDismissNotice = { sync.dismissNotice(id) })
+}
+
+
+/**
+ * Invite friends (design/10). Opening the screen shows the newest invite that still works, or makes one when there is none. Share
+ * and Copy hand the link to the system (the clipboard entry is marked sensitive: the link holds the group key).
+ */
+@Composable
+private fun InviteRoute(sessions: Sessions, invites: owntally.data.session.Invites?, id: GroupId, onBack: () -> Unit) {
+    if (invites == null) { Box(Modifier.fillMaxSize()); return }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var invite by remember(id) { mutableStateOf<owntally.data.session.Invite?>(null) }
+    var revoked by remember(id) { mutableStateOf(false) }
+    var loaded by remember(id) { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(id) {
+        invite = withContext(Dispatchers.IO) { invites.current(id) ?: invites.create(id) }
+        loaded = true
+    }
+    val now by produceState(System.currentTimeMillis() / 1000, id) {
+        while (true) { kotlinx.coroutines.delay(15_000); value = System.currentTimeMillis() / 1000 }
+    }
+    val name = remember(id) { sessions.summaries.value.firstOrNull { it.groupId == id }?.name ?: "Group" }
+    if (!loaded) { Box(Modifier.fillMaxSize()); return }
+    val shown = invite
+    val model = InviteModels.build(name, shown?.link, shown?.expiresAtSeconds ?: 0, revoked, now)
+    InviteScreen(
+        model, onBack,
+        onShare = {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, model.shareText)
+            context.startActivity(android.content.Intent.createChooser(send, "Share invite link"))
+        },
+        onCopy = { model.link?.let { owntally.ui.copySensitive(context, "OwnTally invite", it) } },
+        onRevoke = { val i = invite; if (i != null) scope.launch { withContext(Dispatchers.IO) { invites.revoke(id, i) }; revoked = true } },
+        onNew = { scope.launch { invite = withContext(Dispatchers.IO) { invites.create(id) }; revoked = false } },
+    )
 }

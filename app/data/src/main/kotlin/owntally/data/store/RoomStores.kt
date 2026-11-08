@@ -100,6 +100,10 @@ class RoomTicketRecords(db: OwnTallyDatabase) : TicketRecords {
         TicketRecord(it.ticketId, PublicKey(it.hostId), GroupId(it.groupId), it.epoch, it.expiresAt, it.hint, it.used)
     }
 
+    override fun open(group: GroupId, nowSeconds: Long): List<TicketRecord> = dao.openTickets(group.bytes(), nowSeconds).map {
+        TicketRecord(it.ticketId, PublicKey(it.hostId), GroupId(it.groupId), it.epoch, it.expiresAt, it.hint, it.used)
+    }
+
     override fun markUsed(ticketId: ByteArray): Boolean = dao.markIssuedTicketUsed(ticketId) == 1
     override fun deleteExpired(nowSeconds: Long) = dao.deleteExpiredTickets(nowSeconds)
 }

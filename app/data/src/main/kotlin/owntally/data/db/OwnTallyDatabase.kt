@@ -155,6 +155,9 @@ interface OwnTallyDao {
     @Query("UPDATE issued_tickets SET used = 1 WHERE ticket_id = :id AND used = 0")
     fun markIssuedTicketUsed(id: ByteArray): Int
 
+    @Query("SELECT * FROM issued_tickets WHERE group_id = :group AND used = 0 AND expires_at > :now ORDER BY expires_at DESC")
+    fun openTickets(group: ByteArray, now: Long): List<IssuedTicketEntity>
+
     @Query("DELETE FROM issued_tickets WHERE expires_at <= :now")
     fun deleteExpiredTickets(now: Long)
 

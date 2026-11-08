@@ -126,6 +126,44 @@ class MembershipEndToEndInstrumentedTest {
     }
 
     @Test
+    fun theOwnerOpensInviteFriendsFromMembersGetsAnInviteThatSurvivesARestartAndCanBeRevokedAndRenewed() {
+        wipe()
+        try {
+            container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
+            val group = container().sessions.createGroup("Goa Trip", "INR", 0)
+            ActivityScenario.launch(MainActivity::class.java)
+            see("Goa Trip")
+            tap("Goa Trip")
+            see("You are the owner")
+            tapDescription("Members")
+            see("Goa Trip · 1 person")
+            tapDescription("Invite")
+            see("Invite friends")
+            rule.waitUntil(20_000) { rule.onAllNodes(hasText("Works once. Expires in", substring = true)).fetchSemanticsNodes().size == 1 }
+            see("Share invite link")
+            see("For friends in the same room")
+            rule.onNode(hasContentDescription("QR code for the invite")).assertExists()
+            val first = container().invites.current(group)!!.link
+            assertEquals(true, first.startsWith("https://joinowntally.ownspace.in/j#"))
+
+            // The invite is in the database: a new container (as after the app is closed) finds the same one.
+            (context as OwnTallyApplication).resetContainerForTests()
+            assertEquals(first, container().invites.current(group)!!.link)
+
+            tap("Revoke invite")
+            see("Invite revoked. Nobody can use it any more.")
+            assertEquals(null, container().invites.current(group))
+            tap("New invite")
+            rule.waitUntil(20_000) { rule.onAllNodes(hasText("Works once. Expires in", substring = true)).fetchSemanticsNodes().size == 1 }
+            assertEquals(true, container().invites.current(group)!!.link != first)
+            tapDescription("Back")
+            see("Goa Trip · 1 person")
+        } finally {
+            wipe()
+        }
+    }
+
+    @Test
     fun theSyncTabAndScreenSayEveryoneIsNotReachableYetBecauseNoWayToReachThemIsBuiltInYet() {
         wipe()
         try {
