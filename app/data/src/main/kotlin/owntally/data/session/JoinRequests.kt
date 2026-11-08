@@ -33,10 +33,14 @@ class JoinRequests(private val store: JoinRequestStore, private val sessions: Se
     @Synchronized
     fun receive(group: GroupId, member: PublicKey, encryptionKey: EncryptionKey, name: String, phone: String): ReceiveResult {
         val earlier = store.get(group, member)
-        if (earlier?.state == JoinState.APPROVED && member in sessions.session(group).view.value.state.currentMembers) return ReceiveResult.AlreadyMember
+        // Anyone already in the group (admitted before, or a phone restored from the recovery phrase) needs no approval (DESIGN.md "Recovery").
+        if (member in sessions.session(group).view.value.state.currentMembers) return ReceiveResult.AlreadyMember
         store.put(JoinRequest(group, member, encryptionKey, name, phone, clock.nowSeconds(), JoinState.WAITING))
         return if (earlier?.state == JoinState.WAITING) ReceiveResult.Updated else ReceiveResult.New
     }
+
+    /** What this phone knows of the request from [member]: null if there is none. */
+    fun stateOf(group: GroupId, member: PublicKey): JoinState? = store.get(group, member)?.state
 
     fun waiting(group: GroupId): List<JoinRequest> = store.list(group).filter { it.state == JoinState.WAITING }
 

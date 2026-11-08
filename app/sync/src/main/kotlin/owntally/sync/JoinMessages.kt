@@ -14,6 +14,8 @@ object JoinLimits {
     const val MAX_NAME_BYTES = 160 // 40 letters of up to 4 bytes
     const val MAX_PHONE_BYTES = 64
     const val MAX_SEALED_BYTES = 1024
+    const val MAX_GROUP_NAME_BYTES = 240
+
 }
 
 /** What the host knows of a request, told to the person who made it. */
@@ -66,6 +68,41 @@ class JoinRequestBody(val joinerKey: PublicKey, val encryptionKey: EncryptionKey
     }
 }
 
+/** What the host tells a person holding its ticket about the group (decision J1, 8 Nov 2026). */
+class GroupPreview(val groupName: String, val ownerName: String, val memberCount: Int) {
+    fun encode(): ByteArray {
+        val g = groupName.toByteArray(Charsets.UTF_8)
+        val o = ownerName.toByteArray(Charsets.UTF_8)
+        require(g.size <= JoinLimits.MAX_GROUP_NAME_BYTES && o.size <= JoinLimits.MAX_NAME_BYTES && memberCount in 0..65_535) { "preview too large" }
+        return ByteBuffer.allocate(2 + g.size + 2 + o.size + 2).putShort(g.size.toShort()).put(g).putShort(o.size.toShort()).put(o).putShort(memberCount.toShort()).array()
+    }
+
+    companion object {
+        fun decode(bytes: ByteArray): GroupPreview? {
+            try {
+                val b = ByteBuffer.wrap(bytes)
+                fun text(max: Int): String? {
+                    if (b.remaining() < 2) return null
+                    val len = b.short.toInt() and 0xffff
+                    if (len > max || b.remaining() < len) return null
+                    val raw = ByteArray(len).also { b.get(it) }
+                    return try {
+                        Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(raw)).toString()
+                    } catch (e: CharacterCodingException) {
+                        null
+                    }
+                }
+                val g = text(JoinLimits.MAX_GROUP_NAME_BYTES) ?: return null
+                val o = text(JoinLimits.MAX_NAME_BYTES) ?: return null
+                if (b.remaining() != 2) return null
+                return GroupPreview(g, o, b.short.toInt() and 0xffff)
+            } catch (e: IllegalArgumentException) {
+                return null
+            }
+        }
+    }
+}
+
 sealed class JoinMessage {
     /** The joiner opens: the group's room and the ticket's id (not the ticket: the group key never leaves the joiner's phone). */
     class Hello(val room: GroupRoom, ticketId: ByteArray) : JoinMessage() {
@@ -78,6 +115,15 @@ sealed class JoinMessage {
         val nonce: ByteArray = nonce.copyOf()
         val signature: ByteArray = signature.copyOf()
         init { require(this.nonce.size == JoinLimits.NONCE_SIZE && this.signature.size == JoinLimits.SIGNATURE_SIZE) { "wrong sizes" } }
+    }
+
+    /** "Tell me about the group", sent after the host's proof was checked. Answered with [Preview] for a ticket that still works, with `Reply(false)` otherwise. */
+    data object PreviewRequest : JoinMessage()
+
+    /** The group's name, owner and member count, sealed with the ticket's group key (so only a holder of the ticket can read it). */
+    class Preview(sealed: ByteArray) : JoinMessage() {
+        val sealed: ByteArray = sealed.copyOf()
+        init { require(this.sealed.size in 1..JoinLimits.MAX_SEALED_BYTES) { "a sealed preview is 1 to ${JoinLimits.MAX_SEALED_BYTES} bytes" } }
     }
 
     /** The request, sealed with the ticket's group key: the [JoinRequestBody] and the joiner's signature of it. */
@@ -112,6 +158,8 @@ object JoinCodec {
     private const val T_STATUS_CHALLENGE = 21
     private const val T_STATUS_PROOF = 22
     private const val T_STATUS_REPLY = 23
+    private const val T_PREVIEW_REQUEST = 24
+    private const val T_PREVIEW = 25
 
     /** True if the bytes start like a join message (so the receiver can hand them to the join handler rather than the sync engine). */
     fun isJoin(bytes: ByteArray): Boolean =
@@ -129,6 +177,8 @@ object JoinCodec {
             is JoinMessage.StatusChallenge -> { out.write(T_STATUS_CHALLENGE); out.write(m.nonce) }
             is JoinMessage.StatusProof -> { out.write(T_STATUS_PROOF); out.write(m.signature) }
             is JoinMessage.StatusReply -> { out.write(T_STATUS_REPLY); out.write(m.status.code) }
+            JoinMessage.PreviewRequest -> out.write(T_PREVIEW_REQUEST)
+            is JoinMessage.Preview -> { out.write(T_PREVIEW); out.write(ByteBuffer.allocate(2).putShort(m.sealed.size.toShort()).array()); out.write(m.sealed) }
         }
         return out.toByteArray()
     }
@@ -152,6 +202,12 @@ object JoinCodec {
                 T_STATUS_CHALLENGE -> take(JoinLimits.NONCE_SIZE)?.let { JoinMessage.StatusChallenge(it) }
                 T_STATUS_PROOF -> take(JoinLimits.SIGNATURE_SIZE)?.let { JoinMessage.StatusProof(it) }
                 T_STATUS_REPLY -> take(1)?.let { c -> JoinStatus.fromCode(c[0].toInt() and 0xff)?.let { JoinMessage.StatusReply(it) } }
+                T_PREVIEW_REQUEST -> JoinMessage.PreviewRequest
+                T_PREVIEW -> {
+                    val len = take(2)?.let { ((it[0].toInt() and 0xff) shl 8) or (it[1].toInt() and 0xff) }
+                    val sealed = len?.let { take(it) }
+                    if (sealed == null) null else JoinMessage.Preview(sealed)
+                }
                 else -> null
             }
             if (m != null && b.hasRemaining()) null else m

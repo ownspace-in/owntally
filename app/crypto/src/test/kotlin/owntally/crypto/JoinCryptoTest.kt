@@ -80,4 +80,17 @@ class JoinCryptoTest {
         assertEquals(JoinCrypto.NONCE_SIZE, a.size)
         assertNotEquals(a.toList(), JoinCrypto.newNonce().toList())
     }
+
+    @Test fun aSealedPreviewOpensOnlyWithTheKeyTicketHostAndNonceAndIsNotARequest() {
+        val plain = "Goa Trip".toByteArray()
+        val sealed = JoinCrypto.sealPreview(key, ticketId, host.publicKey, nonce, plain)
+        assertContentEquals(plain, JoinCrypto.openPreview(key, ticketId, host.publicKey, nonce, sealed))
+        assertNull(JoinCrypto.openPreview(GroupKey(ByteArray(32) { 1 }), ticketId, host.publicKey, nonce, sealed), "another key")
+        assertNull(JoinCrypto.openPreview(key, ByteArray(16) { 6 }, host.publicKey, nonce, sealed), "another ticket")
+        assertNull(JoinCrypto.openPreview(key, ticketId, other.publicKey, nonce, sealed), "another host")
+        assertNull(JoinCrypto.openPreview(key, ticketId, host.publicKey, ByteArray(32), sealed), "another connection")
+        assertNull(JoinCrypto.openRequest(key, ticketId, host.publicKey, nonce, sealed), "a preview is not a request")
+        assertNull(JoinCrypto.openPreview(key, ticketId, host.publicKey, nonce, JoinCrypto.sealRequest(key, ticketId, host.publicKey, nonce, plain)), "a request is not a preview")
+        assertNull(JoinCrypto.openPreview(key, ticketId, host.publicKey, nonce, ByteArray(3)))
+    }
 }

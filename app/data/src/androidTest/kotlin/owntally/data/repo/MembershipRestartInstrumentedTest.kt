@@ -43,7 +43,7 @@ class MembershipRestartInstrumentedTest {
     private class Stack(val db: OwnTallyDatabase, val identity: IdentityRepository, val groups: GroupRepository, val secrets: BoxedSecretStore)
 
     private fun open(): Stack {
-        val db = Room.databaseBuilder(context, OwnTallyDatabase::class.java, dbName).addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4).build()
+        val db = Room.databaseBuilder(context, OwnTallyDatabase::class.java, dbName).addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).build()
         val secrets = BoxedSecretStore(KeystoreSecretBox.create(alias), FileBlobStore(secretsDir))
         val identity = IdentityRepository(secrets, RoomSettingsStore(db))
         return Stack(db, identity, GroupRepository(secrets, RoomEventStore(db), identity, Clock.SYSTEM, SecureRandom()), secrets)

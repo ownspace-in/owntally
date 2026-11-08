@@ -5,6 +5,7 @@ import owntally.data.db.GroupEntity
 import owntally.data.db.JoinRequestEntity
 import owntally.data.db.IssuedTicketEntity
 import owntally.data.db.OwnTallyDatabase
+import owntally.data.db.PendingJoinEntity
 import owntally.data.db.SyncProblemEntity
 import owntally.data.db.SettingEntity
 import owntally.crypto.TicketRecord
@@ -106,4 +107,21 @@ class RoomTicketRecords(db: OwnTallyDatabase) : TicketRecords {
 
     override fun markUsed(ticketId: ByteArray): Boolean = dao.markIssuedTicketUsed(ticketId) == 1
     override fun deleteExpired(nowSeconds: Long) = dao.deleteExpiredTickets(nowSeconds)
+}
+
+/** [PendingJoinStore] on the Room database: an invitation that is waiting for approval survives the app being closed. */
+class RoomPendingJoinStore(db: OwnTallyDatabase) : PendingJoinStore {
+    private val dao = db.dao()
+
+    private fun PendingJoinEntity.toModel() = PendingJoin(
+        GroupId(groupId), PublicKey(hostId), ticketId, keySlot, epoch, expiresAt, name, phone, PendingState.entries[state], groupName, ownerName, memberCount, openedAt,
+    )
+
+    override fun put(p: PendingJoin) = dao.putPendingJoin(
+        PendingJoinEntity(p.group.bytes(), p.host.bytes(), p.ticketId, p.keySlot, p.epoch, p.expiresAtSeconds, p.name, p.phone, p.state.ordinal, p.groupName, p.ownerName, p.memberCount, p.openedAtSeconds),
+    )
+
+    override fun get(group: GroupId) = dao.pendingJoin(group.bytes())?.toModel()
+    override fun all() = dao.pendingJoins().map { it.toModel() }
+    override fun delete(group: GroupId) = dao.deletePendingJoin(group.bytes())
 }

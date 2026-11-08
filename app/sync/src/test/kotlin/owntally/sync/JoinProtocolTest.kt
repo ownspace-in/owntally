@@ -41,6 +41,7 @@ class JoinProtocolTest {
         override fun consume(ticket: Ticket) = leaky || registry.accept(ticket)
         override fun submit(request: JoinRequestBody): Boolean { if (accepts) submitted += request; return accepts }
         override fun statusOf(joinerKey: PublicKey) = statuses[joinerKey] ?: JoinStatus.UNKNOWN
+        override fun preview() = GroupPreview("Goa Trip", "Asha", 5)
     }
 
     private fun ticket() = registry.issue(group, 1, key)
@@ -215,5 +216,78 @@ class JoinProtocolTest {
             }
         }
         assertNotNull(registry.find(t.ticketId()))
+    }
+
+    private suspend fun preview(t: Ticket, backend: Backend, client: JoinClient = JoinClient(t, joiner, "Aarav", "1")): JoinPreviewResult {
+        val (a, b) = links()
+        return coroutineScope {
+            val served = launch { JoinHost(backend, room).serve(b) }
+            val r = client.preview(a)
+            a.close()
+            served.join()
+            r
+        }
+    }
+
+    @Test fun anInviteShowsTheGroupsNameOwnerAndCountWithoutUsingTheTicketUp() = runTest {
+        val backend = Backend(); val t = ticket()
+        val r = preview(t, backend)
+        assertNull(r.outcome)
+        assertEquals("Goa Trip", r.preview!!.groupName); assertEquals("Asha", r.preview!!.ownerName); assertEquals(5, r.preview!!.memberCount)
+        assertNotNull(registry.find(t.ticketId()), "asking is not using")
+        assertEquals(0, backend.submitted.size)
+        assertEquals(JoinOutcome.REQUESTED, join(t, backend), "and the ticket still works afterwards")
+    }
+
+    @Test fun aPreviewIsRefusedForAnExpiredUsedOrUnknownTicketAndNeverLeaksTheGroup() = runTest {
+        val backend = Backend()
+        val used = ticket(); assertEquals(JoinOutcome.REQUESTED, join(used, backend))
+        assertEquals(JoinOutcome.REFUSED, preview(used, backend).outcome)
+        val unknown = Ticket(ByteArray(16) { 3 }, host.publicKey, group, 1, key, now + 1000, "")
+        assertEquals(JoinOutcome.REFUSED, preview(unknown, backend).outcome)
+        val expired = ticket(); now += Ticket.LIFETIME_SECONDS + 1
+        assertEquals(JoinOutcome.REFUSED, preview(expired, backend).outcome)
+        // Someone who knows the ticket id but not the key gets a sealed blob they cannot open, and learns nothing.
+        val fresh = ticket()
+        val withoutKey = Ticket(fresh.ticketId(), host.publicKey, group, 1, GroupKey(ByteArray(32) { 99 }), fresh.expiresAtSeconds, "")
+        val r = preview(withoutKey, backend)
+        assertNull(r.preview); assertEquals(JoinOutcome.REFUSED, r.outcome)
+    }
+
+    @Test fun aPreviewFromAPeerThatIsNotTheHostIsNotBelieved() = runTest {
+        val t = ticket()
+        val r = preview(t, Backend(host = intruder))
+        assertEquals(JoinOutcome.HOST_NOT_VERIFIED, r.outcome)
+        assertNull(r.preview)
+    }
+
+    @Test fun afterAPreviewTheSameConnectionCanMakeTheRequest() = runTest {
+        val backend = Backend(); val t = ticket()
+        val (a, b) = links()
+        coroutineScope {
+            val served = launch { JoinHost(backend, room).serve(b) }
+            a.send(JoinCodec.encode(JoinMessage.Hello(room, t.ticketId())))
+            val c = JoinCodec.decode(a.received.first()) as JoinMessage.Challenge
+            a.send(JoinCodec.encode(JoinMessage.PreviewRequest))
+            assertTrue(JoinCodec.decode(a.received.first()) is JoinMessage.Preview)
+            val body = JoinRequestBody(joiner.publicKey, joiner.encryptionKey, "Aarav", "1").encode()
+            val sig = JoinCrypto.signRequest(joiner, group, host.publicKey, c.nonce, body)
+            a.send(JoinCodec.encode(JoinMessage.Request(JoinCrypto.sealRequest(key, t.ticketId(), host.publicKey, c.nonce, body + sig))))
+            assertEquals(JoinMessage.Reply(true), JoinCodec.decode(a.received.first()))
+            served.join()
+        }
+        assertEquals(1, backend.submitted.size)
+    }
+
+    @Test fun thePreviewMessagesAndTextRoundTripStrictly() {
+        val p = GroupPreview("Goa Trip \u0939", "Asha", 5)
+        val back = GroupPreview.decode(p.encode())!!
+        assertEquals("Goa Trip \u0939", back.groupName); assertEquals(5, back.memberCount)
+        assertNull(GroupPreview.decode(p.encode() + 0)); assertNull(GroupPreview.decode(p.encode().copyOf(p.encode().size - 1))); assertNull(GroupPreview.decode(ByteArray(0)))
+        for (m in listOf(JoinMessage.PreviewRequest, JoinMessage.Preview(ByteArray(40) { 1 }))) {
+            val b = JoinCodec.encode(m)
+            assertEquals(b.toList(), JoinCodec.encode(JoinCodec.decode(b)!!).toList())
+            assertNull(JoinCodec.decode(b + 0))
+        }
     }
 }

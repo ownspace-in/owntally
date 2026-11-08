@@ -71,7 +71,10 @@ fun StoredOnlyHereChip() {
 }
 
 @Composable
-fun GroupsScreen(model: GroupsListModel, onOpen: (GroupCardModel) -> Unit, onCreate: () -> Unit) {
+fun GroupsScreen(
+    model: GroupsListModel, onOpen: (GroupCardModel) -> Unit, onCreate: () -> Unit,
+    invitations: List<PendingCardModel> = emptyList(), onOpenInvitation: (PendingCardModel) -> Unit = {}, onJoin: (() -> Unit)? = null,
+) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 16.dp, 20.dp, 112.dp)) {
             item {
@@ -84,6 +87,12 @@ fun GroupsScreen(model: GroupsListModel, onOpen: (GroupCardModel) -> Unit, onCre
                 Text("GROUPS", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
                 Spacer(Modifier.height(10.dp))
             }
+            if (invitations.isNotEmpty()) {
+                items(invitations, key = { "invite-" + it.group.toHex() }) { card ->
+                    InvitationCard(card) { onOpenInvitation(card) }
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
             if (model.cards.isEmpty()) {
                 item {
                     Text("No groups yet. Make one to start splitting expenses with friends.", style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
@@ -93,8 +102,32 @@ fun GroupsScreen(model: GroupsListModel, onOpen: (GroupCardModel) -> Unit, onCre
                 GroupCard(card) { onOpen(card) }
                 Spacer(Modifier.height(10.dp))
             }
+            if (onJoin != null) {
+                item {
+                    Spacer(Modifier.height(6.dp))
+                    Text("Have an invite? Join a group", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green, modifier = Modifier.clickable(onClick = onJoin).padding(8.dp).semantics { role = SemanticsRole.Button })
+                }
+            }
         }
         NewGroupButton(onCreate, Modifier.align(Alignment.BottomEnd).padding(20.dp))
+    }
+}
+
+/** A group this person asked to join and is not in yet. */
+@Composable
+private fun InvitationCard(card: PendingCardModel, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp)).clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(48.dp).background(OwnTallyColors.GroupPastels[0], RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+            Text(card.initials, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(card.title, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+            Text(card.status, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+        }
     }
 }
 

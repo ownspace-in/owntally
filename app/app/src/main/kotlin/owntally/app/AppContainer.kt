@@ -36,6 +36,16 @@ class AppContainer(private val context: Context) {
     val invites: owntally.data.session.Invites by lazy {
         owntally.data.session.Invites(owntally.data.store.RoomTicketRecords(database), groups, secrets, identity, sessions, Clock.SYSTEM)
     }
+    /**
+     * Joining groups (M6). No way to reach other phones is built in yet, so the host can never be reached and every invitation says so
+     * ("not reachable yet"); the screens and the stored state work as they will with real connections.
+     */
+    val joinGroup: owntally.data.session.JoinGroup by lazy {
+        owntally.data.session.JoinGroup(
+            groups, secrets, identity, owntally.data.store.RoomPendingJoinStore(database), sessions, Clock.SYSTEM,
+            { _, _ -> owntally.sync.NoTransport }, onApproved = { sync.start(it) },
+        )
+    }
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
     /**
      * Syncing with the other members (M5). No real way to reach other phones is built in yet (M6), so every member shows "Not reachable

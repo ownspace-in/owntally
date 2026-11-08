@@ -26,6 +26,7 @@ object JoinCrypto {
     private val REQUEST = "owntally/v1/join-request".toByteArray()
     private val STATUS = "owntally/v1/join-status".toByteArray()
     private val SEALED = "owntally/v1/join-sealed".toByteArray()
+    private val PREVIEW = "owntally/v1/join-preview".toByteArray()
 
     fun newNonce(random: SecureRandom = SecureRandom()): ByteArray = ByteArray(NONCE_SIZE).also { random.nextBytes(it) }
 
@@ -87,6 +88,27 @@ object JoinCrypto {
         val k = key.bytes()
         return try {
             XChaCha20Poly1305(k).decrypt(sealed, associated(ticketId, hostId, nonce))
+        } catch (e: GeneralSecurityException) {
+            null
+        } finally {
+            k.fill(0)
+        }
+    }
+
+    /** The host's description of the group (name, owner, member count), sealed with the ticket's group key and bound like a request but with its own label, so one can never be taken for the other. */
+    fun sealPreview(key: GroupKey, ticketId: ByteArray, hostId: PublicKey, nonce: ByteArray, plaintext: ByteArray): ByteArray {
+        val k = key.bytes()
+        return try {
+            XChaCha20Poly1305(k).encrypt(plaintext, data(PREVIEW, ticketId, hostId.bytes(), nonce))
+        } finally {
+            k.fill(0)
+        }
+    }
+
+    fun openPreview(key: GroupKey, ticketId: ByteArray, hostId: PublicKey, nonce: ByteArray, sealed: ByteArray): ByteArray? {
+        val k = key.bytes()
+        return try {
+            XChaCha20Poly1305(k).decrypt(sealed, data(PREVIEW, ticketId, hostId.bytes(), nonce))
         } catch (e: GeneralSecurityException) {
             null
         } finally {

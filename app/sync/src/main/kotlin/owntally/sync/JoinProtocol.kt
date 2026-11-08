@@ -30,6 +30,9 @@ interface JoinHostBackend {
     fun submit(request: JoinRequestBody): Boolean
 
     fun statusOf(joinerKey: PublicKey): JoinStatus
+
+    /** What the group looks like to someone invited (decision J1): its name, the owner's name and how many people are in it. */
+    fun preview(): GroupPreview
 }
 
 /**
@@ -76,7 +79,16 @@ class JoinHost(
                 if (first.room != room) return
                 val nonce = JoinCrypto.newNonce(random)
                 if (!send(link, JoinMessage.Challenge(nonce, JoinCrypto.signHost(backend.host, backend.group, first.ticketId, nonce)))) return
-                val request = next(inbox) as? JoinMessage.Request ?: return
+                var message = next(inbox)
+                if (message is JoinMessage.PreviewRequest) {
+                    // Only for a ticket that still works; asking does not use it up. Anything else is the same refusal as everywhere.
+                    val ticket = backend.issued(first.ticketId)
+                    val sealed = ticket?.let { JoinCrypto.sealPreview(it.groupKey, first.ticketId, backend.host.publicKey, nonce, backend.preview().encode()) }
+                    if (!send(link, if (sealed != null) JoinMessage.Preview(sealed) else JoinMessage.Reply(false))) return
+                    if (sealed == null) return
+                    message = next(inbox)
+                }
+                val request = message as? JoinMessage.Request ?: return
                 send(link, JoinMessage.Reply(accept(first.ticketId, nonce, request.sealed)))
             }
             is JoinMessage.StatusHello -> {
@@ -119,6 +131,9 @@ enum class JoinOutcome {
 }
 
 class JoinStatusResult(val outcome: JoinOutcome?, val status: JoinStatus?)
+
+/** What opening an invite found out: the group's description, or why not ([outcome] is REFUSED for a ticket that no longer works). */
+class JoinPreviewResult(val outcome: JoinOutcome?, val preview: GroupPreview?)
 
 /**
  * The joiner's side. The group key is used only to seal the request; it is never sent. The request is sent only after the host has
@@ -175,6 +190,21 @@ class JoinClient(
         }
     } catch (e: Ended) {
         e.outcome
+    }
+
+    /** Asks the host, after it has proved its key, what the group looks like (J1). Nothing is used up. */
+    suspend fun preview(link: Link): JoinPreviewResult = try {
+        conversation(link) { send, next ->
+            send(JoinMessage.Hello(room, ticket.ticketId()))
+            val challenge = next() as? JoinMessage.Challenge ?: throw Ended(JoinOutcome.REFUSED)
+            if (!JoinCrypto.verifyHost(ticket.hostId, ticket.groupId, ticket.ticketId(), challenge.nonce, challenge.signature)) throw Ended(JoinOutcome.HOST_NOT_VERIFIED)
+            send(JoinMessage.PreviewRequest)
+            val reply = next() as? JoinMessage.Preview ?: throw Ended(JoinOutcome.REFUSED)
+            val plain = JoinCrypto.openPreview(ticket.groupKey, ticket.ticketId(), ticket.hostId, challenge.nonce, reply.sealed) ?: throw Ended(JoinOutcome.REFUSED)
+            JoinPreviewResult(null, GroupPreview.decode(plain) ?: throw Ended(JoinOutcome.REFUSED))
+        }
+    } catch (e: Ended) {
+        JoinPreviewResult(e.outcome, null)
     }
 
     /**

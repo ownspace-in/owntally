@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.waitUntilExactlyOneExists
 import androidx.test.core.app.ActivityScenario
@@ -158,6 +159,51 @@ class MembershipEndToEndInstrumentedTest {
             assertEquals(true, container().invites.current(group)!!.link != first)
             tapDescription("Back")
             see("Goa Trip · 1 person")
+        } finally {
+            wipe()
+        }
+    }
+
+    @Test
+    fun aPersonPastesAnInviteSeesTheFormAsksToJoinAndTheInvitationSurvivesARestartUntilDiscarded() {
+        wipe()
+        try {
+            container().identity.let { it.completeFirstRun(it.newPhrase(), "Rohan", "98765 43210") }
+            // An invite for a group on some other phone (made up here: there is no other phone to reach until M6's real connections).
+            val ticket = owntally.crypto.Ticket(
+                ByteArray(16) { 1 }, owntally.model.PublicKey(ByteArray(32) { 2 }), owntally.model.GroupId(ByteArray(16) { 3 }), 1,
+                owntally.crypto.GroupKey(ByteArray(32) { 4 }), System.currentTimeMillis() / 1000 + 8 * 3600, "",
+            )
+            val link = "https://joinowntally.ownspace.in/j#" + ticket.encode()
+            ActivityScenario.launch(MainActivity::class.java)
+            see("Have an invite? Join a group")
+            tap("Have an invite? Join a group")
+            see("Paste the invite link or code a friend sent you.")
+            rule.onNode(hasContentDescription("Invite link or code")).performTextInput("not an invite")
+            tap("Continue")
+            see("That doesn't look like an OwnTally invite. Paste the whole link or code.")
+            rule.onNode(hasContentDescription("Invite link or code")).performTextReplacement(link)
+            tap("Continue")
+
+            // Nobody can be reached: the form says so, with the name and number from first run already filled in.
+            see("You were invited")
+            see("A group")
+            see("The person who invited you isn't reachable right now, so we can't show the group yet. You can still ask to join.")
+            tap("Request to join")
+            see("The phone of the person who invited you isn't reachable. Ask them to open OwnTally, then tap Retry.")
+            tapDescription("Back")
+
+            // The invitation is on the Groups list and in the database: a new container finds it.
+            see("Invitation")
+            see("Not sent yet")
+            (context as OwnTallyApplication).resetContainerForTests()
+            assertEquals(1, container().joinGroup.pending().size)
+            tap("Invitation")
+            see("You were invited")
+            tap("Not for me")
+            see("Have an invite? Join a group")
+            rule.waitUntil(20_000) { rule.onAllNodes(hasText("Not sent yet")).fetchSemanticsNodes().isEmpty() }
+            assertEquals(0, container().joinGroup.pending().size)
         } finally {
             wipe()
         }

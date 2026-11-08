@@ -34,7 +34,7 @@ class DatabaseFileInstrumentedTest {
         context.deleteDatabase("$name-migration")
     }
 
-    private fun open() = Room.databaseBuilder(context, OwnTallyDatabase::class.java, name).addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4).build()
+    private fun open() = Room.databaseBuilder(context, OwnTallyDatabase::class.java, name).addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).build()
 
     @Test
     fun aDatabaseIsMadeFromNothingAndTheDataIsStillThereAfterClosingAndOpeningAgain() {
@@ -68,8 +68,8 @@ class DatabaseFileInstrumentedTest {
             old.execSQL("INSERT INTO settings (`key`, `value`) VALUES ('next_slot', '4')")
             old.close()
         }
-        helper.runMigrationsAndValidate("$name-migration", 3, true, OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4).close()
-        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4).build().also { db ->
+        helper.runMigrationsAndValidate("$name-migration", 5, true, OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_1_2, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).build().also { db ->
             assertEquals(listOf(GroupRow(GroupId(group), 3, 77)), RoomEventStore(db).groups())
             assertEquals(1, RoomEventStore(db).envelopes(GroupId(group)).size)
             assertEquals("4", RoomSettingsStore(db).get("next_slot"))
@@ -102,8 +102,8 @@ class DatabaseFileInstrumentedTest {
             old.execSQL("INSERT INTO join_requests (group_id, member_key, encryption_key, name, phone, received_at, state) VALUES (?, ?, ?, 'Ben', '98765 00001', 60, 0)", arrayOf<Any>(group, ByteArray(32) { 1 }, ByteArray(32) { 2 }))
             old.close()
         }
-        helper.runMigrationsAndValidate("$name-migration", 4, true, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4).close()
-        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4).build().also { db ->
+        helper.runMigrationsAndValidate("$name-migration", 5, true, OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_2_3, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).build().also { db ->
             assertEquals(listOf(GroupRow(GroupId(group), 1, 50)), RoomEventStore(db).groups())
             assertEquals(1, RoomJoinRequestStore(db).list(GroupId(group)).size, "the join request survived")
             val log = RoomSyncProblemLog(db)
@@ -124,8 +124,8 @@ class DatabaseFileInstrumentedTest {
             old.execSQL("INSERT INTO sync_problems (group_id, peer, kind, count, at_seconds) VALUES (?, ?, 0, 1, 41)", arrayOf<Any>(group, ByteArray(32) { 1 }))
             old.close()
         }
-        helper.runMigrationsAndValidate("$name-migration", 4, true, OwnTallyDatabase.MIGRATION_3_4).close()
-        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_3_4).build().also { db ->
+        helper.runMigrationsAndValidate("$name-migration", 5, true, OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_3_4, OwnTallyDatabase.MIGRATION_4_5).build().also { db ->
             assertEquals(listOf(GroupRow(GroupId(group), 2, 40)), RoomEventStore(db).groups())
             assertEquals(1, RoomSyncProblemLog(db).recent(GroupId(group), 10).size, "the problem log survived")
             val tickets = RoomTicketRecords(db)
@@ -160,6 +160,30 @@ class DatabaseFileInstrumentedTest {
             assertEquals(false, registry(db).accept(ticket), "used before the second restart, still used")
             val raw = db.openHelper.readableDatabase.query("SELECT * FROM issued_tickets").use { c -> (0 until c.columnCount).map { c.getColumnName(it) } }
             assertEquals(listOf("ticket_id", "host_id", "group_id", "epoch", "expires_at", "hint", "used"), raw, "no key column")
+            db.close()
+        }
+    }
+
+    @Test
+    fun aVersionFourFileKeepsItsDataAndGetsTheEmptyPendingJoinTableWhenMigratedToFive() {
+        val group = ByteArray(16) { 3 }
+        helper.createDatabase("$name-migration", 4).also { old ->
+            old.execSQL("INSERT INTO groups (group_id, key_slot, created_at) VALUES (?, 1, 30)", arrayOf<Any>(group))
+            old.close()
+        }
+        helper.runMigrationsAndValidate("$name-migration", 5, true, OwnTallyDatabase.MIGRATION_4_5).close()
+        Room.databaseBuilder(context, OwnTallyDatabase::class.java, "$name-migration").addMigrations(OwnTallyDatabase.MIGRATION_4_5).build().also { db ->
+            assertEquals(listOf(GroupRow(GroupId(group), 1, 30)), RoomEventStore(db).groups())
+            val pending = RoomPendingJoinStore(db)
+            assertEquals(emptyList(), pending.all())
+            val other = GroupId(ByteArray(16) { 9 })
+            pending.put(PendingJoin(other, PublicKey(ByteArray(32) { 2 }), ByteArray(16) { 4 }, 7, 1, 5_000, "Rohan", "98765 43210", PendingState.WAITING, "Goa Trip", "Asha", 5, 100))
+            val back = pending.get(other)!!
+            assertEquals(PendingState.WAITING, back.state); assertEquals("Goa Trip", back.groupName); assertEquals(5, back.memberCount); assertEquals(7L, back.keySlot)
+            pending.put(back.copy(state = PendingState.APPROVED))
+            assertEquals(PendingState.APPROVED, pending.get(other)!!.state)
+            pending.delete(other)
+            assertEquals(null, pending.get(other))
             db.close()
         }
     }

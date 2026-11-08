@@ -49,7 +49,7 @@ object InviteModels {
         else -> InviteModel(groupName, QrEncoder.encode(link), link, "Works once. Expires in ${timeLeft(expiresAtSeconds - nowSeconds)}.", true, true, true)
     }
 
-    private fun timeLeft(seconds: Long): String {
+    internal fun timeLeft(seconds: Long): String {
         val minutes = seconds / 60
         val h = minutes / 60
         val m = minutes % 60

@@ -92,6 +92,24 @@ class IssuedTicketEntity(
     val used: Boolean,
 )
 
+/** An invitation this phone opened and what became of it (M6, T6.5). No group key here: it is kept with the other keys. */
+@Entity(tableName = "pending_joins")
+class PendingJoinEntity(
+    @PrimaryKey @ColumnInfo(name = "group_id", typeAffinity = ColumnInfo.BLOB) val groupId: ByteArray,
+    @ColumnInfo(name = "host_id", typeAffinity = ColumnInfo.BLOB) val hostId: ByteArray,
+    @ColumnInfo(name = "ticket_id", typeAffinity = ColumnInfo.BLOB) val ticketId: ByteArray,
+    @ColumnInfo(name = "key_slot") val keySlot: Long,
+    val epoch: Long,
+    @ColumnInfo(name = "expires_at") val expiresAt: Long,
+    val name: String,
+    val phone: String,
+    val state: Int,
+    @ColumnInfo(name = "group_name") val groupName: String,
+    @ColumnInfo(name = "owner_name") val ownerName: String,
+    @ColumnInfo(name = "member_count") val memberCount: Int,
+    @ColumnInfo(name = "opened_at") val openedAt: Long,
+)
+
 @Entity(tableName = "settings")
 class SettingEntity(@PrimaryKey @ColumnInfo(name = "key") val key: String, @ColumnInfo(name = "value") val value: String)
 
@@ -161,6 +179,18 @@ interface OwnTallyDao {
     @Query("DELETE FROM issued_tickets WHERE expires_at <= :now")
     fun deleteExpiredTickets(now: Long)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun putPendingJoin(p: PendingJoinEntity)
+
+    @Query("SELECT * FROM pending_joins WHERE group_id = :group")
+    fun pendingJoin(group: ByteArray): PendingJoinEntity?
+
+    @Query("SELECT * FROM pending_joins ORDER BY opened_at")
+    fun pendingJoins(): List<PendingJoinEntity>
+
+    @Query("DELETE FROM pending_joins WHERE group_id = :group")
+    fun deletePendingJoin(group: ByteArray)
+
     @Query("SELECT value FROM settings WHERE `key` = :key")
     fun setting(key: String): String?
 
@@ -168,12 +198,23 @@ interface OwnTallyDao {
     fun deleteSetting(key: String)
 }
 
-@Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class, JoinRequestEntity::class, SyncProblemEntity::class, IssuedTicketEntity::class], version = 4, exportSchema = true)
+@Database(entities = [GroupEntity::class, EventEntity::class, SettingEntity::class, JoinRequestEntity::class, SyncProblemEntity::class, IssuedTicketEntity::class, PendingJoinEntity::class], version = 5, exportSchema = true)
 abstract class OwnTallyDatabase : RoomDatabase() {
     abstract fun dao(): OwnTallyDao
 
     companion object {
         const val FILE_NAME = "owntally.db"
+
+        /** Version 5 adds the invitations this phone opened to join groups (M6, T6.5); nothing else changes. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_joins` (`group_id` BLOB NOT NULL, `host_id` BLOB NOT NULL, `ticket_id` BLOB NOT NULL, `key_slot` INTEGER NOT NULL, " +
+                        "`epoch` INTEGER NOT NULL, `expires_at` INTEGER NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `state` INTEGER NOT NULL, " +
+                        "`group_name` TEXT NOT NULL, `owner_name` TEXT NOT NULL, `member_count` INTEGER NOT NULL, `opened_at` INTEGER NOT NULL, PRIMARY KEY(`group_id`))",
+                )
+            }
+        }
 
         /** Version 4 adds the host's record of issued invitation tickets (M6, T6.3); nothing else changes. */
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -214,7 +255,7 @@ abstract class OwnTallyDatabase : RoomDatabase() {
          * The database in the app's private storage (never backed up, see the manifest rules). There is deliberately no
          * `fallbackToDestructiveMigration`: a missing migration must be an error, never a silent loss of the person's events.
          */
-        fun open(context: Context): OwnTallyDatabase = Room.databaseBuilder(context.applicationContext, OwnTallyDatabase::class.java, FILE_NAME).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+        fun open(context: Context): OwnTallyDatabase = Room.databaseBuilder(context.applicationContext, OwnTallyDatabase::class.java, FILE_NAME).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
 
         fun inMemory(context: Context): OwnTallyDatabase = Room.inMemoryDatabaseBuilder(context.applicationContext, OwnTallyDatabase::class.java).build()
     }

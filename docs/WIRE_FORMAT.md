@@ -170,6 +170,10 @@ Status: **draft for the M6 plan (docs/tasks/M6-nearby-invites.md).** A person wh
 | 21 | `StatusChallenge` (host) | nonce `bytes(32)` |
 | 22 | `StatusProof` (joiner) | signature `bytes(64)` |
 | 23 | `StatusReply` (host) | `u8`: 0 unknown, 1 pending, 2 approved, 3 declined |
+| 24 | `PreviewRequest` (joiner, after the host's proof) | empty |
+| 25 | `Preview` (host) | `u16` length, sealed preview (decision J1) |
 
 The sealed request holds `joinerKey bytes(32) | encryptionKey bytes(32) | u16 name length, name | u16 phone length, phone | signature bytes(64)` (name at most 160 bytes, phone at most 64, UTF-8). The host answers a `Hello` with a `Challenge` for any ticket id, so a wrong id is not told apart until the reply. A silent peer is given up on after 30 seconds. The status answer is a hint: the proof of being admitted is that the host lets this phone sync.
+
+The sealed preview holds `u16 length, group name | u16 length, owner's name | u16 member count` (UTF-8, name at most 240 bytes). It is sealed like the request but under its own label. The host answers a `PreviewRequest` with a `Preview` only for a ticket that still works, and asking does not use the ticket up; for any other ticket it answers `Reply(false)`. The same connection may go on to send the `Request`. Someone who knows only a ticket id gets a sealed blob they cannot open.
 
