@@ -155,3 +155,21 @@ fp(c) = first 16 bytes of SHA-256( 'OTFP1' | fp(c-1) | c u64 | n u8 | h(1) ... h
 ### Test vectors
 
 `app/sync/src/test/resources/fixtures/sync-vectors.json` holds valid messages, invalid byte sequences (with the refusal), and fingerprint chains, with exact hex, made by an independent encoder written from this section (`app/sync/src/test/tools/sync_vectors.py`) before the Kotlin codec.
+
+## 7. Join messages (M6, T6.2)
+
+Status: **draft for the M6 plan (docs/tasks/M6-nearby-invites.md).** A person who holds a ticket (CRYPTO.md section 7) connects to the host named in it and asks to join. These messages use the same start as the sync messages (`'OS'`, version 1) with types from 16, so the first message tells a join from a sync (`JoinCodec.isJoin`). Decoding is strict: anything that is not exactly what the encoder makes is refused, and trailing bytes are an error.
+
+| type | message | content |
+|---|---|---|
+| 16 | `Hello` (joiner) | room `bytes(16)`, ticketId `bytes(16)` (never the ticket: the group key stays on the joiner's phone) |
+| 17 | `Challenge` (host) | nonce `bytes(32)` (fresh for this connection), signature `bytes(64)` (the host's, CRYPTO.md section 7a) |
+| 18 | `Request` (joiner) | `u16` length, sealed request |
+| 19 | `Reply` (host) | `u8`: 1 kept, 0 not kept (the same for every reason) |
+| 20 | `StatusHello` (joiner, later connection) | room `bytes(16)`, joiner key `bytes(32)` |
+| 21 | `StatusChallenge` (host) | nonce `bytes(32)` |
+| 22 | `StatusProof` (joiner) | signature `bytes(64)` |
+| 23 | `StatusReply` (host) | `u8`: 0 unknown, 1 pending, 2 approved, 3 declined |
+
+The sealed request holds `joinerKey bytes(32) | encryptionKey bytes(32) | u16 name length, name | u16 phone length, phone | signature bytes(64)` (name at most 160 bytes, phone at most 64, UTF-8). The host answers a `Hello` with a `Challenge` for any ticket id, so a wrong id is not told apart until the reply. A silent peer is given up on after 30 seconds. The status answer is a hint: the proof of being admitted is that the host lets this phone sync.
+

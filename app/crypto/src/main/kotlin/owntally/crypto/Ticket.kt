@@ -141,6 +141,11 @@ class TicketRegistry(private val hostId: PublicKey, private val clock: Clock = C
         return ticket
     }
 
+    /** The ticket this host issued with this id, if it has not been used or expired; asking does not use it up. */
+    @Synchronized
+    fun find(ticketId: ByteArray): Ticket? =
+        outstanding[ticketId.joinToString("") { "%02x".format(it) }]?.takeUnless { it.isExpired(clock.nowSeconds()) }
+
     /** True exactly once for a ticket this host issued, if it has not expired. */
     @Synchronized
     fun accept(ticket: Ticket): Boolean {

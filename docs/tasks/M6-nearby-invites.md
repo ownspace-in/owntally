@@ -11,7 +11,8 @@ Goal (BUILD_PLAN): Nearby transport with a fallback for the same Wi-Fi, the invi
 | Task | Status |
 |---|---|
 | T6.1 plan and decisions | In progress: L1 to L3 decided, open questions below. |
-| T6.2 to T6.12 | Not started. |
+| T6.2 join handshake | Done (8 Nov 2026), see below. |
+| T6.3 to T6.12 | Not started. |
 
 ## What already exists
 
@@ -53,3 +54,9 @@ Proposed order. Each task ends with tests first, as in M5.
 
 1. ~~Noise library~~ and ~~QR libraries~~: decided in L3. Still to confirm in T6.9: the pattern support and the owner's acceptance of an unaudited library.
 2. **Who tests on real phones.** Nearby and local discovery cannot be tested on the emulator; the acceptance needs two phones and the owner's report.
+
+## Results
+
+### T6.2 Join handshake
+**T6.2 result (8 Nov 2026).** Pure protocol, no screens and no transport: `JoinCrypto` (`app/crypto`), `JoinMessages.kt` and `JoinProtocol.kt` (`app/sync`), `TicketRegistry.find`. Messages and proofs are in WIRE_FORMAT.md section 7 and CRYPTO.md section 7a. The joiner sends the ticket id (not the ticket); the host answers with a fresh nonce and its signature; the joiner checks it against the host key in the ticket and only then sends the request, sealed with the ticket's group key and signed with its own key; the host opens it, checks the signature, uses the ticket up and keeps the request. Every refusal looks the same. A later connection can ask "what became of my request?" with a signed proof. **Tests (JVM, 15 + 6):** a good ticket is kept as a request and used up once; expired, unknown and used tickets are refused alike; a peer that is not the host named in the ticket is never sent the request and the real ticket stays usable; a request copied to another connection is refused and does not burn the ticket; someone who knows the ticket id but not the group key cannot use the ticket up; a request naming a key its sender does not hold is refused and the ticket is kept; two joiners with one ticket at once: one is kept; a host that cannot keep a request says the same refusal; the status answers only the holder of the key; silent peers time out; garbage and another group's room get no answer; strict message decoding including 2,000 random inputs; each proof is bound to its purpose, ticket, group, host and nonce. **Mutations** (six) each fail a test: no joiner-signature check, ticket used up before the key proof, host proof not checked, ticket never used up, status proof not checked, wrong room answered; the nonce left out of the sealed request's context fails the crypto test but not the protocol test, because the joiner's signature also covers the nonce (two layers on purpose). **Not yet:** independent test vectors for these proofs (to add before hand back); the host's backend (T6.6) and persisting tickets (T6.3); the joiner-side expiry check is the caller's (T6.5).
+

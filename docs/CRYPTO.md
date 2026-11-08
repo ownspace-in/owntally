@@ -81,6 +81,16 @@ version u8 (1) | ticketId bytes(16) | hostId key | groupId bytes(16) | epoch u32
 - Expiry: 8 hours after creation, checked by the host and by the joiner. (The host is exact; the joiner allows 60 seconds of clock difference.) Single use: the host remembers each `ticketId` it has accepted and refuses a repeat. The registry lives on the host phone, so a ticket works only while the host is reachable.
 - Expired, reused, malformed or wrongly checked tickets are rejected without revealing which.
 
+### 7a. The join handshake (M6, T6.2)
+
+Four proofs, all from Tink (Ed25519 and XChaCha20-Poly1305), each with its own label so a signature made for one purpose is not accepted for another. Every one covers the group and a nonce the host chose for this one connection, so none can be replayed on another connection.
+- **Host proof:** `Ed25519(hostKey, "owntally/v1/join-host" | groupId | ticketId | nonce)`. The joiner checks it against the host key in the ticket before it sends anything it cares about.
+- **Sealed request:** `XChaCha20-Poly1305(groupKey)` with associated data `"owntally/v1/join-sealed" | ticketId | hostKey | nonce`. Only someone who holds the ticket's group key can make one the host opens; the host opens it with the key of the ticket it issued under that id. A request made for one connection does not open on another.
+- **Joiner signature:** `Ed25519(joinerKey, "owntally/v1/join-request" | groupId | hostKey | nonce | body)`, inside the sealed request, so the host knows the joiner holds the key it names.
+- **Status proof:** `Ed25519(joinerKey, "owntally/v1/join-status" | groupId | hostKey | nonce)`, so only the holder of the key can ask what became of the request.
+
+The host uses the ticket up only after the request opened, the joiner's signature held and the request was well formed; a request that fails any of these leaves the ticket usable. A made-up or replayed request therefore cannot burn someone's invitation. Expired, used and unknown tickets are answered alike. Not yet independent test vectors (the other proofs have them in `crypto_vectors.py`): to add before M6 is handed back.
+
 ## 8. Never in logs
 
 Key and phrase types print as `[redacted]` in `toString`. Their bytes are copied out only by explicit calls. A test searches the output of every public type's `toString` for the secret bytes in hex and Base64.
