@@ -92,6 +92,10 @@ Four proofs, all from Tink (Ed25519 and XChaCha20-Poly1305), each with its own l
 
 The host uses the ticket up only after the request opened, the joiner's signature held and the request was well formed; a request that fails any of these leaves the ticket usable. A made-up or replayed request therefore cannot burn someone's invitation. Expired, used and unknown tickets are answered alike. Not yet independent test vectors (the other proofs have them in `crypto_vectors.py`): to add before M6 is handed back.
 
+### 7b. The local link handshake (M6, T6.7)
+
+Ed25519 from Tink. Each side signs `label | transcript`, with the labels `"owntally/v1/link-server"` and `"owntally/v1/link-client"` (a server proof is never a client proof), where the transcript is the caller's `Hello` (room, both keys, the caller's nonce), the version, the chosen kind and the answerer's nonce (WIRE_FORMAT.md section 8). So a proof is bound to this pair of phones, this room and this one connection: a recorded handshake cannot be replayed (the answerer's nonce is new each time), and one conversation's answer cannot be passed off as another's. **This is the plain link of decision L2: nothing on it is encrypted beyond the envelopes.** Someone on the network can read who is syncing with whom, counters and sizes, and can relay the connection; they cannot read an entry, forge one, or get in as a member. The TLS and Noise links (T6.8, T6.9) add secrecy of that metadata.
+
 ## 8. Never in logs
 
 Key and phrase types print as `[redacted]` in `toString`. Their bytes are copied out only by explicit calls. A test searches the output of every public type's `toString` for the secret bytes in hex and Base64.

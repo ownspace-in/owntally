@@ -23,10 +23,16 @@ class ManifestRulesTest {
         assertEquals("in.ownspace.owntally", BuildConfig.APPLICATION_ID)
     }
 
+    /**
+     * Owner decision L5 (8 Nov 2026): INTERNET, because a phone cannot open a socket to another phone on the same Wi-Fi without it, and
+     * nothing else. It is for syncing with the other members only: `NetworkUseGuardTest` fails the build if any code outside the sync
+     * module and its discovery opens a connection. Later milestones add what they need (Nearby's Bluetooth permissions), each with its own test.
+     */
     @Test
-    fun noPermissionIsRequestedYet() {
-        // Later milestones add what they need (camera, Bluetooth, Nearby, network for sync), each with its own test.
-        assertEquals(0, manifest.getElementsByTagName("uses-permission").length)
+    fun theOnlyPermissionIsInternetForSyncingWithFriends() {
+        val names = (0 until manifest.getElementsByTagName("uses-permission").length)
+            .map { (manifest.getElementsByTagName("uses-permission").item(it) as Element).getAttributeNS(ns, "name") }
+        assertEquals(listOf("android.permission.INTERNET"), names)
         assertEquals(0, manifest.getElementsByTagName("uses-permission-sdk-23").length)
     }
 
@@ -80,15 +86,5 @@ class ManifestRulesTest {
         assertEquals("true", activity.getAttributeNS(ns, "exported"))
         assertEquals(1, activity.getElementsByTagName("intent-filter").length)
         assertEquals(0, manifest.getElementsByTagName("service").length + manifest.getElementsByTagName("receiver").length + manifest.getElementsByTagName("provider").length)
-    }
-
-    @Test
-    fun noNetworkCodeInTheAppModules() {
-        val forbidden = Regex("""java\.net\.|javax\.net\.|okhttp3|HttpURLConnection|android\.net\.http|java\.nio\.channels|\bSocket\b|INTERNET""")
-        val roots = listOf("src/main", "../ui/src/main", "../data/src/main").map(::File)
-        val sources = roots.flatMap { r -> r.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "xml") }.toList() }
-        assertTrue(sources.size >= 3, "expected to find the app sources, found ${sources.size}")
-        val offenders = sources.flatMap { f -> f.readLines().filter { forbidden.containsMatchIn(it) }.map { "${f.name}: ${it.trim()}" } }
-        assertEquals(emptyList(), offenders)
     }
 }

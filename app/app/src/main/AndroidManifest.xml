@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No permission is requested yet. Later milestones add what they need, each with a test. -->
+    <!-- Only to sync with the other members of a group, phone to phone (owner decision L5, 8 Nov 2026). NetworkUseGuardTest keeps every other part of the app off the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".OwnTallyApplication"

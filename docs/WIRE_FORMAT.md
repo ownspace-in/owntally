@@ -177,3 +177,16 @@ The sealed request holds `joinerKey bytes(32) | encryptionKey bytes(32) | u16 na
 
 The sealed preview holds `u16 length, group name | u16 length, owner's name | u16 member count` (UTF-8, name at most 240 bytes). It is sealed like the request but under its own label. The host answers a `PreviewRequest` with a `Preview` only for a ticket that still works, and asking does not use the ticket up; for any other ticket it answers `Reply(false)`. The same connection may go on to send the `Request`. Someone who knows only a ticket id gets a sealed blob they cannot open.
 
+## 8. The local link (M6, T6.7)
+
+Status: **draft for the M6 plan (decisions L1 and L2).** Two phones on the same network connect over TCP. Every message (the sync and join messages above) travels as a **frame**: a four-byte big-endian length, then the bytes; a length over 1,048,576 (or negative) is an error and the connection is closed. A frame cut off in the middle is an error, never a short message.
+
+**Handshake (plain link).** Three frames before anything else, so each side shows it holds its key:
+- Caller to answerer, `Hello`: `'OL'`, version `u8` (1), kinds `u8` (bit 0: plain), room `bytes(16)`, caller key `bytes(32)`, key called `bytes(32)`, nonce `bytes(32)`.
+- Answerer to caller, `Reply`: `'OL'`, version, chosen kind `u8`, nonce `bytes(32)`, signature `bytes(64)`.
+- Caller to answerer, `Proof`: `'OL'`, version, signature `bytes(64)`.
+
+The answerer routes by the room and key called; if it has no such listener, or anything is wrong, it closes without a word. Both signatures (CRYPTO.md section 7b) cover the transcript: the `Hello`, the version, the chosen kind and the answerer's nonce. The caller checks the answerer's signature against the key it meant to reach; the answerer checks the caller's against the key it claims. Only then is the connection handed on. What the group allows that key to have is the sync engine's rule (decision S2).
+
+**Finding the other phone.** A phone announces itself with Android's own service discovery as `_owntally._tcp` under the name `LocalNames.serviceName(room, key)`: 20 characters (lower case letters and 2 to 7) from the first 13 bytes of SHA-256(`"owntally/v1/local"`, room, key). Someone who knows the room and the key can work out the name and look for it; to anyone else it says nothing about the group or the person.
+
