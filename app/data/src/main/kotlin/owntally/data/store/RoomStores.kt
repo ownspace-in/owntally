@@ -3,9 +3,12 @@ package owntally.data.store
 import owntally.data.db.EventEntity
 import owntally.data.db.GroupEntity
 import owntally.data.db.JoinRequestEntity
+import owntally.data.db.IssuedTicketEntity
 import owntally.data.db.OwnTallyDatabase
 import owntally.data.db.SyncProblemEntity
 import owntally.data.db.SettingEntity
+import owntally.crypto.TicketRecord
+import owntally.crypto.TicketRecords
 import owntally.model.EncryptionKey
 import owntally.model.GroupId
 import owntally.model.PublicKey
@@ -84,4 +87,19 @@ class RoomSyncProblemLog(db: OwnTallyDatabase, private val maxPerGroup: Int = In
         dao.syncProblems(group.bytes(), limit).map { SyncProblem(GroupId(it.groupId), PublicKey(it.peer), ProblemKind.entries[it.kind], it.count, it.atSeconds) }
 
     override fun clear(group: GroupId) = dao.clearSyncProblems(group.bytes())
+}
+
+/** [TicketRecords] on the Room database: issued tickets and which are used survive a restart. */
+class RoomTicketRecords(db: OwnTallyDatabase) : TicketRecords {
+    private val dao = db.dao()
+
+    override fun put(record: TicketRecord) =
+        dao.putIssuedTicket(IssuedTicketEntity(record.ticketId(), record.hostId.bytes(), record.groupId.bytes(), record.epoch, record.expiresAtSeconds, record.hint, record.used))
+
+    override fun get(ticketId: ByteArray): TicketRecord? = dao.issuedTicket(ticketId)?.let {
+        TicketRecord(it.ticketId, PublicKey(it.hostId), GroupId(it.groupId), it.epoch, it.expiresAt, it.hint, it.used)
+    }
+
+    override fun markUsed(ticketId: ByteArray): Boolean = dao.markIssuedTicketUsed(ticketId) == 1
+    override fun deleteExpired(nowSeconds: Long) = dao.deleteExpiredTickets(nowSeconds)
 }
