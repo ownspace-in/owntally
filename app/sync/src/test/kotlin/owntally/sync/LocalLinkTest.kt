@@ -21,7 +21,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -97,6 +99,15 @@ class LocalLinkTest {
         assertNotEquals(name, LocalNames.serviceName(GroupRoom.fromGroupId(ByteArray(16) { 9 }), a.publicKey))
         val hexKey = a.publicKey.bytes().joinToString("") { "%02x".format(it) }
         assertFalse(name in hexKey || hexKey.startsWith(name.take(6)))
+    }
+
+    @Test fun theTlsLinkIsFoundUnderItsOwnNameAndStillSaysNothing() {
+        val plain = LocalNames.serviceName(room, a.publicKey)
+        val tls = LocalNames.serviceName(room, a.publicKey, LinkSecurity.TLS)
+        assertEquals(20, tls.length)
+        assertNotEquals(plain, tls)
+        assertEquals(tls, LocalNames.serviceName(room, a.publicKey, LinkSecurity.TLS))
+        assertNotEquals(tls, LocalNames.serviceName(room, b.publicKey, LinkSecurity.TLS))
     }
 
     // ---- the link -----------------------------------------------------------------------------------------------------------------
@@ -313,5 +324,26 @@ class LocalLinkTest {
         assertFalse(forwarded.await(), "Asha sent no proof")
         assertNoLink(incoming, "Mallory did not get into Ben's phone as Asha")
         mitm.close()
+    }
+
+    @Test fun aMessageSentInTheSameBreathAsTheProofIsNotLostToTheHandshakesBuffer() = run {
+        val nb = node(); val incoming = nb.transportFor(b).incoming(room)
+        Socket(loopback, nb.port).use { s ->
+            val hello = LocalHandshake.Hello(LocalHandshake.KIND_PLAIN, room, a.publicKey, b.publicKey, LinkAuth.newNonce())
+            Frames.write(s.getOutputStream(), hello.encode())
+            val reply = LocalHandshake.decodeReply(Frames.read(s.getInputStream().buffered())!!)!!
+            val proof = LocalHandshake.encodeProof(LinkAuth.signAsClient(a, LocalHandshake.transcript(hello, reply.chosen, reply.nonce)))
+            // The proof and the first three messages in one write, so they reach the answerer together.
+            s.getOutputStream().write(frames(proof, byteArrayOf(1), byteArrayOf(2), byteArrayOf(3)))
+            s.getOutputStream().flush()
+            val link = withTimeout(5_000) { incoming.first() }
+            assertEquals(listOf<Byte>(1, 2, 3), withTimeout(5_000) { link.received.toList2(3) }.map { it[0] })
+        }
+    }
+
+    private suspend fun kotlinx.coroutines.flow.Flow<ByteArray>.toList2(n: Int): List<ByteArray> {
+        val out = ArrayList<ByteArray>()
+        this.take(n).collect { out += it }
+        return out
     }
 }

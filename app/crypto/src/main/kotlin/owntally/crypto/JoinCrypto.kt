@@ -46,7 +46,7 @@ object JoinCrypto {
         }
     }
 
-    private fun verify(key: PublicKey, message: ByteArray, signature: ByteArray): Boolean = try {
+    private fun verify(key: PublicKey, message: ByteArray, signature: ByteArray): Boolean = if (WeakKeys.isWeak(key.bytes())) false else try {
         Ed25519Verify(key.bytes()).verify(signature, message)
         true
     } catch (e: GeneralSecurityException) {

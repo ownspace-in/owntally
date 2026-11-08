@@ -9,6 +9,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import owntally.model.PublicKey
 import owntally.sync.GroupRoom
+import owntally.sync.LinkSecurity
 import owntally.sync.LocalDiscovery
 import owntally.sync.LocalNames
 
@@ -20,8 +21,8 @@ import owntally.sync.LocalNames
 class NsdLocalDiscovery(context: Context) : LocalDiscovery {
     private val nsd: NsdManager = context.applicationContext.getSystemService(NsdManager::class.java)
 
-    override fun announce(room: GroupRoom, self: PublicKey, port: Int): AutoCloseable {
-        val info = NsdServiceInfo().apply { serviceName = LocalNames.serviceName(room, self); serviceType = TYPE; setPort(port) }
+    override fun announce(room: GroupRoom, self: PublicKey, port: Int, security: LinkSecurity): AutoCloseable {
+        val info = NsdServiceInfo().apply { serviceName = LocalNames.serviceName(room, self, security); serviceType = TYPE; setPort(port) }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(info: NsdServiceInfo) = Unit
             override fun onRegistrationFailed(info: NsdServiceInfo, errorCode: Int) = Unit
@@ -32,8 +33,8 @@ class NsdLocalDiscovery(context: Context) : LocalDiscovery {
         return AutoCloseable { runCatching { nsd.unregisterService(listener) } }
     }
 
-    override suspend fun find(room: GroupRoom, peer: PublicKey, timeoutMs: Long): InetSocketAddress? {
-        val wanted = LocalNames.serviceName(room, peer)
+    override suspend fun find(room: GroupRoom, peer: PublicKey, timeoutMs: Long, security: LinkSecurity): InetSocketAddress? {
+        val wanted = LocalNames.serviceName(room, peer, security)
         return withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine { cont ->
                 var done = false

@@ -16,6 +16,7 @@ object LinkAuth {
     const val NONCE_SIZE = 32
     private val SERVER = "owntally/v1/link-server".toByteArray()
     private val CLIENT = "owntally/v1/link-client".toByteArray()
+    private val TLS = "owntally/v1/tls-binding".toByteArray()
 
     fun newNonce(random: SecureRandom = SecureRandom()): ByteArray = ByteArray(NONCE_SIZE).also { random.nextBytes(it) }
 
@@ -35,7 +36,7 @@ object LinkAuth {
         }
     }
 
-    private fun verify(key: PublicKey, message: ByteArray, signature: ByteArray): Boolean = try {
+    private fun verify(key: PublicKey, message: ByteArray, signature: ByteArray): Boolean = if (WeakKeys.isWeak(key.bytes())) false else try {
         Ed25519Verify(key.bytes()).verify(signature, message)
         true
     } catch (e: GeneralSecurityException) {
@@ -47,4 +48,12 @@ object LinkAuth {
     fun verifyServer(key: PublicKey, transcript: ByteArray, signature: ByteArray): Boolean = verify(key, data(SERVER, transcript), signature)
     fun signAsClient(identity: GroupIdentity, transcript: ByteArray): ByteArray = sign(identity, data(CLIENT, transcript))
     fun verifyClient(key: PublicKey, transcript: ByteArray, signature: ByteArray): Boolean = verify(key, data(CLIENT, transcript), signature)
+
+    /**
+     * Ties a TLS certificate's key to a member's key (T6.8): the member signs the certificate's public key (its SubjectPublicKeyInfo bytes).
+     * A phone that is shown such a certificate and checks this signature against the key it meant to reach knows the other end of the TLS
+     * session holds that member's key.
+     */
+    fun signTlsBinding(identity: GroupIdentity, certificateKey: ByteArray): ByteArray = sign(identity, data(TLS, certificateKey))
+    fun verifyTlsBinding(key: PublicKey, certificateKey: ByteArray, signature: ByteArray): Boolean = verify(key, data(TLS, certificateKey), signature)
 }

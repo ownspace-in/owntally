@@ -30,4 +30,15 @@ class LinkAuthTest {
         assertEquals(32, LinkAuth.newNonce().size)
         assertNotEquals(LinkAuth.newNonce().toList(), LinkAuth.newNonce().toList())
     }
+
+    @Test fun aTlsBindingCoversTheCertificateKeyAndOnlyThatMembersKeyAndIsNotAHandshakeProof() {
+        val spki = ByteArray(91) { (it * 3).toByte() }
+        val sig = LinkAuth.signTlsBinding(a, spki)
+        assertTrue(LinkAuth.verifyTlsBinding(a.publicKey, spki, sig))
+        assertFalse(LinkAuth.verifyTlsBinding(b.publicKey, spki, sig), "another member")
+        assertFalse(LinkAuth.verifyTlsBinding(a.publicKey, spki.copyOf().also { it[10] = 1 }, sig), "another certificate key")
+        assertFalse(LinkAuth.verifyTlsBinding(a.publicKey, spki, ByteArray(5)), "short, no throw")
+        assertFalse(LinkAuth.verifyServer(a.publicKey, spki, sig), "a binding is not a server proof")
+        assertFalse(LinkAuth.verifyTlsBinding(a.publicKey, transcript, LinkAuth.signAsServer(a, transcript)), "nor the other way")
+    }
 }

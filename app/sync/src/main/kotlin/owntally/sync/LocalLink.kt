@@ -23,6 +23,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.security.Principal
+import java.security.PrivateKey
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509ExtendedKeyManager
+import javax.net.ssl.X509ExtendedTrustManager
 import owntally.crypto.GroupIdentity
 import owntally.crypto.LinkAuth
 import owntally.model.PublicKey
@@ -63,11 +71,11 @@ object Frames {
 
 /** How a phone on the same network finds another (decision L1). Names are opaque: see [LocalNames]. */
 interface LocalDiscovery {
-    /** Makes this phone findable as (room, key) at [port] until the handle is closed. */
-    fun announce(room: GroupRoom, self: PublicKey, port: Int): AutoCloseable
+    /** Makes this phone findable as (room, key) for links of kind [security] at [port] until the handle is closed. */
+    fun announce(room: GroupRoom, self: PublicKey, port: Int, security: LinkSecurity = LinkSecurity.PLAIN): AutoCloseable
 
-    /** Where the phone (room, peer) is on this network, or null if it was not found within [timeoutMs]. */
-    suspend fun find(room: GroupRoom, peer: PublicKey, timeoutMs: Long): InetSocketAddress?
+    /** Where the phone (room, peer) takes links of kind [security] on this network, or null if it was not found within [timeoutMs]. */
+    suspend fun find(room: GroupRoom, peer: PublicKey, timeoutMs: Long, security: LinkSecurity = LinkSecurity.PLAIN): InetSocketAddress?
 }
 
 object LocalNames {
@@ -77,8 +85,9 @@ object LocalNames {
      * The name a phone is announced under: 20 letters and digits made from the room and the key. Someone who knows both can work it out and
      * look for it; to anyone else on the network it says nothing about the group or the person.
      */
-    fun serviceName(room: GroupRoom, key: PublicKey): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest("owntally/v1/local".toByteArray() + room.id + key.bytes())
+    fun serviceName(room: GroupRoom, key: PublicKey, security: LinkSecurity = LinkSecurity.PLAIN): String {
+        val label = if (security == LinkSecurity.PLAIN) "owntally/v1/local" else "owntally/v1/local-tls"
+        val digest = MessageDigest.getInstance("SHA-256").digest(label.toByteArray() + room.id + key.bytes())
         val sb = StringBuilder()
         var buffer = 0
         var bits = 0
@@ -95,16 +104,16 @@ object LocalNames {
 class InMemoryLocalDiscovery : LocalDiscovery {
     private val table = ConcurrentHashMap<String, InetSocketAddress>()
 
-    override fun announce(room: GroupRoom, self: PublicKey, port: Int): AutoCloseable {
-        val name = LocalNames.serviceName(room, self)
+    override fun announce(room: GroupRoom, self: PublicKey, port: Int, security: LinkSecurity): AutoCloseable {
+        val name = LocalNames.serviceName(room, self, security)
         table[name] = InetSocketAddress(InetAddress.getLoopbackAddress(), port)
         return AutoCloseable { table.remove(name) }
     }
 
-    override suspend fun find(room: GroupRoom, peer: PublicKey, timeoutMs: Long): InetSocketAddress? = table[LocalNames.serviceName(room, peer)]
+    override suspend fun find(room: GroupRoom, peer: PublicKey, timeoutMs: Long, security: LinkSecurity): InetSocketAddress? = table[LocalNames.serviceName(room, peer, security)]
 
     /** Points a name at another address (a phone that answers where another should be). */
-    fun point(room: GroupRoom, key: PublicKey, to: InetSocketAddress) { table[LocalNames.serviceName(room, key)] = to }
+    fun point(room: GroupRoom, key: PublicKey, to: InetSocketAddress, security: LinkSecurity = LinkSecurity.PLAIN) { table[LocalNames.serviceName(room, key, security)] = to }
 }
 
 /** The other phone could not prove it holds the key it connected as (or the key we expected). */
@@ -116,6 +125,7 @@ internal class SocketLink(
     override val peer: PublicKey,
     override val kind: LinkKind,
     scope: CoroutineScope,
+    firstInput: InputStream? = null,
 ) : Link {
     private val inbox = Channel<ByteArray>(Channel.UNLIMITED)
     private val writeLock = Mutex()
@@ -123,7 +133,7 @@ internal class SocketLink(
 
     init {
         socket.soTimeout = 0
-        val input = socket.getInputStream().buffered()
+        val input = (firstInput ?: socket.getInputStream()).buffered()
         reader = scope.launch(Dispatchers.IO) {
             try {
                 while (isActive) inbox.send(Frames.read(input) ?: break)
@@ -192,6 +202,9 @@ internal object LocalHandshake {
     }
 }
 
+/** How a local link is protected on the network (decision L2): the plain link, or TLS 1.3 (T6.8). Noise follows in T6.9. */
+enum class LinkSecurity { PLAIN, TLS }
+
 class LocalConfig(
     /** How long each step of the handshake may take (and the connecting itself). */
     val handshakeTimeoutMs: Int = 10_000,
@@ -211,12 +224,16 @@ class LocalNode(
     private val config: LocalConfig = LocalConfig(),
     private val random: java.security.SecureRandom = java.security.SecureRandom(),
 ) {
-    private class Listener(val identity: GroupIdentity, val inbox: Channel<Link>, val announced: AutoCloseable)
+    private class Listener(val identity: GroupIdentity, val inbox: Channel<Link>, val announced: List<AutoCloseable>, val tls: TlsCertificates.Issued, val tlsServer: ServerSocket, val tlsAccepting: Job)
 
     private val listeners = ConcurrentHashMap<Pair<GroupRoom, PublicKey>, Listener>()
     private var server: ServerSocket? = null
     private var accepting: Job? = null
+
     val port: Int get() = server?.localPort ?: -1
+
+    /** The port where this phone takes TLS links for (room, key): one for each, so the certificate to show is known from the port alone. */
+    fun tlsPortOf(room: GroupRoom, key: PublicKey): Int = listeners[room to key]?.tlsServer?.localPort ?: -1
 
     /** Opens the port. Call once, before any [transportFor] is used to listen. */
     @Synchronized
@@ -238,28 +255,47 @@ class LocalNode(
         accepting?.cancel()
         runCatching { server?.close() }
         server = null
-        listeners.values.forEach { runCatching { it.announced.close() }; it.inbox.close() }
+        listeners.values.forEach { l -> l.announced.forEach { runCatching { it.close() } }; l.tlsAccepting.cancel(); runCatching { l.tlsServer.close() }; l.inbox.close() }
         listeners.clear()
     }
 
-    fun transportFor(identity: GroupIdentity, kind: LinkKind = LinkKind.DIRECT): Transport = object : Transport {
-        override suspend fun connect(room: GroupRoom, peer: PublicKey): Link = dial(identity, room, peer, kind)
+    fun transportFor(identity: GroupIdentity, kind: LinkKind = LinkKind.DIRECT, security: LinkSecurity = LinkSecurity.PLAIN): Transport = object : Transport {
+        override suspend fun connect(room: GroupRoom, peer: PublicKey): Link = dial(identity, room, peer, kind, security)
 
         override fun incoming(room: GroupRoom): Flow<Link> {
             val key = room to identity.publicKey
-            val l = listeners.computeIfAbsent(key) { Listener(identity, Channel(Channel.UNLIMITED), discovery.announce(room, identity.publicKey, start())) }
+            val l = listeners.computeIfAbsent(key) {
+                val plainPort = start()
+                // TLS has a port of its own for this identity, so the certificate to show (the one that carries this key) is known without asking
+                // the caller anything: choosing it by the name the caller asks for is not something every platform's TLS lets us do.
+                val tls = TlsCertificates.issue(identity, random)
+                val tlsServer = ServerSocket(0, 50, config.bind)
+                val inbox = Channel<Link>(Channel.UNLIMITED)
+                val accepting = scope.launch(Dispatchers.IO) {
+                    while (isActive) {
+                        val socket = try { tlsServer.accept() } catch (e: IOException) { break }
+                        launch(Dispatchers.IO) { answerTls(socket, tls, inbox) }
+                    }
+                }
+                val handles = listOf(
+                    discovery.announce(room, identity.publicKey, plainPort, LinkSecurity.PLAIN),
+                    discovery.announce(room, identity.publicKey, tlsServer.localPort, LinkSecurity.TLS),
+                )
+                Listener(identity, inbox, handles, tls, tlsServer, accepting)
+            }
             return l.inbox.receiveAsFlow()
         }
     }
 
-    private suspend fun dial(identity: GroupIdentity, room: GroupRoom, peer: PublicKey, kind: LinkKind): Link {
-        val address = discovery.find(room, peer, config.findTimeoutMs) ?: throw PeerUnreachable(peer)
+    private suspend fun dial(identity: GroupIdentity, room: GroupRoom, peer: PublicKey, kind: LinkKind, security: LinkSecurity): Link {
+        val address = discovery.find(room, peer, config.findTimeoutMs, security) ?: throw PeerUnreachable(peer)
         return withContext(Dispatchers.IO) {
             val socket = Socket()
             try {
                 socket.connect(address, config.handshakeTimeoutMs)
                 socket.soTimeout = config.handshakeTimeoutMs
                 socket.tcpNoDelay = true
+                if (security == LinkSecurity.TLS) return@withContext dialTls(socket, identity, room, peer, kind)
                 val out = socket.getOutputStream()
                 val input = socket.getInputStream().buffered()
                 val hello = LocalHandshake.Hello(LocalHandshake.KIND_PLAIN, room, identity.publicKey, peer, LinkAuth.newNonce(random))
@@ -269,7 +305,7 @@ class LocalNode(
                 val transcript = LocalHandshake.transcript(hello, reply.chosen, reply.nonce)
                 if (!LinkAuth.verifyServer(peer, transcript, reply.signature)) throw LinkAuthFailed("the other phone does not hold the key it should")
                 Frames.write(out, LocalHandshake.encodeProof(LinkAuth.signAsClient(identity, transcript)))
-                SocketLink(socket, peer, kind, scope) as Link
+                SocketLink(socket, peer, kind, scope, input) as Link
             } catch (e: CancellationException) {
                 runCatching { socket.close() }
                 throw e
@@ -278,7 +314,7 @@ class LocalNode(
                 throw e
             } catch (e: IOException) {
                 runCatching { socket.close() }
-                throw PeerUnreachable(peer)
+                throw PeerUnreachable(peer, e)
             }
         }
     }
@@ -298,10 +334,85 @@ class LocalNode(
             Frames.write(out, LocalHandshake.encodeReply(LocalHandshake.KIND_PLAIN, nonce, LinkAuth.signAsServer(listener.identity, transcript)))
             val proof = Frames.read(input)?.let { LocalHandshake.decodeProof(it) } ?: return socket.close()
             if (!LinkAuth.verifyClient(hello.from, transcript, proof)) return socket.close()
-            val link = SocketLink(socket, hello.from, LinkKind.DIRECT, scope)
+            val link = SocketLink(socket, hello.from, LinkKind.DIRECT, scope, input) // the stream the handshake read through: it may hold bytes already
             if (listener.inbox.trySend(link).isFailure) socket.close()
         } catch (e: IOException) {
             runCatching { socket.close() }
         }
     }
+
+    // ---- TLS (T6.8) ------------------------------------------------------------------------------------------------------------------
+
+    private fun dialTls(socket: Socket, identity: GroupIdentity, room: GroupRoom, peer: PublicKey, kind: LinkKind): Link {
+        val own = TlsCertificates.issue(identity, random)
+        val context = SSLContext.getInstance("TLS").apply {
+            init(arrayOf(SingleKeyManager(own)), arrayOf<TrustManager>(MemberTrust(expected = peer)), random)
+        }
+        val ssl = context.socketFactory.createSocket(socket, socket.inetAddress.hostAddress, socket.port, true) as SSLSocket
+        try {
+            ssl.useClientMode = true
+            ssl.enabledProtocols = arrayOf("TLSv1.3")
+            ssl.soTimeout = config.handshakeTimeoutMs
+            ssl.startHandshake()
+            val member = ssl.session.peerCertificates.firstOrNull()?.let { (it as? X509Certificate)?.let(TlsCertificates::memberKeyOf) }
+            if (member != peer) throw LinkAuthFailed("the other phone does not hold the key it should")
+            return SocketLink(ssl, peer, kind, scope)
+        } catch (e: javax.net.ssl.SSLException) {
+            runCatching { ssl.close() }
+            throw if (e.cause is LinkAuthFailed || e.message?.contains("owntally") == true) LinkAuthFailed("the other phone does not hold the key it should") else PeerUnreachable(peer, e)
+        }
+    }
+
+    private fun answerTls(socket: Socket, own: TlsCertificates.Issued, inbox: Channel<Link>) {
+        socket.tcpNoDelay = true
+        val context = SSLContext.getInstance("TLS").apply {
+            init(arrayOf(SingleKeyManager(own)), arrayOf<TrustManager>(MemberTrust(expected = null)), random)
+        }
+        val ssl = context.socketFactory.createSocket(socket, null, socket.port, true) as SSLSocket
+        try {
+            ssl.useClientMode = false
+            ssl.needClientAuth = true
+            ssl.enabledProtocols = arrayOf("TLSv1.3")
+            ssl.soTimeout = config.handshakeTimeoutMs
+            ssl.startHandshake()
+            val member = (ssl.session.peerCertificates.firstOrNull() as? X509Certificate)?.let(TlsCertificates::memberKeyOf) ?: return ssl.close()
+            val link = SocketLink(ssl, member, LinkKind.DIRECT, scope)
+            if (inbox.trySend(link).isFailure) ssl.close()
+        } catch (e: IOException) {
+            runCatching { ssl.close() }
+        }
+    }
+
+    /** The one certificate and key a connection shows: this phone's for the identity the connection is for. */
+    private class SingleKeyManager(private val own: TlsCertificates.Issued) : X509ExtendedKeyManager() {
+        override fun chooseClientAlias(keyType: Array<out String>?, issuers: Array<out Principal>?, socket: Socket?): String = "own"
+        override fun chooseServerAlias(keyType: String?, issuers: Array<out Principal>?, socket: Socket?): String = "own"
+        override fun chooseEngineServerAlias(keyType: String?, issuers: Array<out Principal>?, engine: javax.net.ssl.SSLEngine?): String = "own"
+        override fun chooseEngineClientAlias(keyType: Array<out String>?, issuers: Array<out Principal>?, engine: javax.net.ssl.SSLEngine?): String = "own"
+        override fun getCertificateChain(alias: String?): Array<X509Certificate> = arrayOf(own.certificate)
+        override fun getPrivateKey(alias: String?): PrivateKey = own.keyPair.private
+        override fun getClientAliases(keyType: String?, issuers: Array<out Principal>?): Array<String> = arrayOf("own")
+        override fun getServerAliases(keyType: String?, issuers: Array<out Principal>?): Array<String> = arrayOf("own")
+    }
+
+    /**
+     * Accepts a certificate only if its member signed its key (and, for a caller, it is the key it meant to reach). Dates are not checked:
+     * phones' clocks differ, and the certificate is fresh for each node anyway.
+     */
+    private class MemberTrust(private val expected: PublicKey?) : X509ExtendedTrustManager() {
+        private fun check(chain: Array<out X509Certificate>?) {
+            val cert = chain?.singleOrNull() ?: throw java.security.cert.CertificateException("owntally: one certificate expected")
+            val member = TlsCertificates.memberKeyOf(cert) ?: throw java.security.cert.CertificateException("owntally: no member key bound to this certificate")
+            if (expected != null && member != expected) throw java.security.cert.CertificateException("owntally: not the member that was called")
+        }
+
+        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) = check(chain)
+        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) = check(chain)
+        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: javax.net.ssl.SSLEngine?) = check(chain)
+        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: javax.net.ssl.SSLEngine?) = check(chain)
+        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = check(chain)
+        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) = check(chain)
+        override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+    }
+
 }

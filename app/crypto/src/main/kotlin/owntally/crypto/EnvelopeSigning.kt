@@ -27,7 +27,7 @@ object EnvelopeSigning {
     }
 
     /** True only if the signature is a valid signature by the envelope's author. Never throws on bad input. */
-    fun verify(envelope: Envelope): Boolean = try {
+    fun verify(envelope: Envelope): Boolean = if (WeakKeys.isWeak(envelope.author.bytes())) false else try {
         Ed25519Verify(envelope.author.bytes()).verify(envelope.signature(), PREFIX + envelope.signedPart())
         true
     } catch (e: GeneralSecurityException) {

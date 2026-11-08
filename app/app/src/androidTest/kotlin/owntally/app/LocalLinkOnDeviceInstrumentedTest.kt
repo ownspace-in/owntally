@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import owntally.crypto.KeyDerivation
 import owntally.crypto.MasterSeed
 import owntally.sync.GroupRoom
+import owntally.sync.LinkSecurity
 import owntally.sync.LocalConfig
 import owntally.sync.LocalNames
 import owntally.sync.LocalNode
@@ -65,6 +66,28 @@ class LocalLinkOnDeviceInstrumentedTest {
             link.send(byteArrayOf(1, 2, 3))
             assertContentEquals(byteArrayOf(1, 2, 3), withTimeout(10_000) { other.received.first() })
             other.send(ByteArray(300_000) { it.toByte() })
+            assertEquals(300_000, withTimeout(10_000) { link.received.first() }.size)
+        } finally {
+            nodeA.close(); nodeB.close(); scope.cancel()
+        }
+    }
+
+    @Test
+    fun twoNodesTalkInsideTls13OnTheAndroidRuntimeTooWithCertificatesThatCarryTheMembersKeys() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val nodeA = LocalNode(NsdLocalDiscovery(context), scope, LocalConfig(findTimeoutMs = 20_000))
+        val nodeB = LocalNode(NsdLocalDiscovery(context), scope, LocalConfig(findTimeoutMs = 20_000))
+        val d = KeyDerivation.groupIdentity(seed, 11)
+        val e = KeyDerivation.groupIdentity(seed, 12)
+        try {
+            val incoming = nodeB.transportFor(e).incoming(room)
+            val link = withTimeout(60_000) { nodeA.transportFor(d, security = LinkSecurity.TLS).connect(room, e.publicKey) }
+            val other = withTimeout(20_000) { incoming.first() }
+            assertEquals(e.publicKey, link.peer)
+            assertEquals(d.publicKey, other.peer)
+            link.send(byteArrayOf(4, 5, 6))
+            assertContentEquals(byteArrayOf(4, 5, 6), withTimeout(10_000) { other.received.first() })
+            other.send(ByteArray(300_000) { (it * 3).toByte() })
             assertEquals(300_000, withTimeout(10_000) { link.received.first() }.size)
         } finally {
             nodeA.close(); nodeB.close(); scope.cancel()

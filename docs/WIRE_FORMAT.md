@@ -190,3 +190,5 @@ The answerer routes by the room and key called; if it has no such listener, or a
 
 **Finding the other phone.** A phone announces itself with Android's own service discovery as `_owntally._tcp` under the name `LocalNames.serviceName(room, key)`: 20 characters (lower case letters and 2 to 7) from the first 13 bytes of SHA-256(`"owntally/v1/local"`, room, key). Someone who knows the room and the key can work out the name and look for it; to anyone else it says nothing about the group or the person.
 
+**TLS link (T6.8, decision L2).** A phone also takes TLS 1.3 connections, on a port of its own for each (room, key) it answers for, announced under its own name (`LocalNames.serviceName(room, key, TLS)`: the same recipe with the label `"owntally/v1/local-tls"`). Inside TLS the messages are the same frames. Each side shows a self-made certificate (CRYPTO.md section 7c) and asks for the other's; only TLS 1.3 is accepted. The caller checks the answerer's certificate carries the key it meant to reach; the answerer takes the caller's key from the caller's certificate. There is no `Hello` and no routing frame: the port tells the answerer which key it is answering for.
+
