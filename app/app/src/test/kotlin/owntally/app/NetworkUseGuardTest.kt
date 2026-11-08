@@ -15,7 +15,7 @@ class NetworkUseGuardTest {
         """java\.net\.(Socket|ServerSocket|DatagramSocket|MulticastSocket|URL|URLConnection|HttpURLConnection|http)\b|javax\.net\.|java\.nio\.channels|\bSocket\b|HttpsURLConnection|\bURL\(|okhttp3|retrofit|io\.ktor|""" +
             """android\.net\.(nsd|wifi|http)|NsdManager|WifiManager|ConnectivityManager|WebView|android\.webkit|InetSocketAddress|InetAddress\.getBy""",
     )
-    private val libraries = Regex("""okhttp|retrofit|ktor|firebase|crashlytics|analytics|mlkit|play-services|sentry|datadog|segment|amplitude|mixpanel|appsflyer|adjust""", RegexOption.IGNORE_CASE)
+    private val libraries = Regex("""okhttp|retrofit|ktor|iroh|firebase|crashlytics|analytics|mlkit|play-services|sentry|datadog|segment|amplitude|mixpanel|appsflyer|adjust""", RegexOption.IGNORE_CASE)
 
     /** What may use the network, and why. A path here is relative to the project's `app` folder. */
     private val mayUseNetwork = listOf(
@@ -25,7 +25,7 @@ class NetworkUseGuardTest {
     private val mayDependOnNetworkLibraries = listOf("sync/build.gradle.kts" to "the WebSocket transport of the relay (OkHttp 4.12, decision W1)")
 
     /** The one Play services library allowed: Nearby Connections (same-room sync). It brings no reporting library, which the next test checks. */
-    private val allowedLibraryLines = listOf("play-services-nearby")
+    private val allowedLibraryLines = listOf("play-services-nearby", "computer.iroh:iroh-android")
 
     private fun sources(root: File) = root.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "java") && "/src/main/" in it.path.replace('\\', '/') }.toList()
 
@@ -69,6 +69,8 @@ class NetworkUseGuardTest {
         assertEquals(1, libraryOffenders(listOf("ui/build.gradle.kts" to "implementation(\"com.google.firebase:firebase-analytics:1.0\")")).size)
         assertEquals(1, libraryOffenders(listOf("data/build.gradle.kts" to "implementation(\"com.google.mlkit:barcode-scanning:17.0.0\")")).size)
         assertEquals(0, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"com.google.android.gms:play-services-nearby:19.3.0\")")).size, "Nearby is allowed")
+        assertEquals(0, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"computer.iroh:iroh-android:1.1.0\")")).size, "Iroh is allowed (decision I1)")
+        assertEquals(1, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"computer.iroh:iroh-services:1.0.0\")")).size, "but not its services client, which pushes metrics")
         assertEquals(1, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"com.google.android.gms:play-services-measurement:21.0.0\")")).size, "no other Play services library")
         assertEquals(1, libraryOffenders(listOf("app/build.gradle.kts" to "implementation(\"com.google.android.gms:play-services-mlkit-barcode-scanning:18.0.0\")")).size)
         assertEquals(0, libraryOffenders(listOf("sync/build.gradle.kts" to "compileOnly(\"com.squareup.okhttp3:okhttp:5.5.1\")")).size)
