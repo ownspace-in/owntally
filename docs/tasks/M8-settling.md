@@ -11,7 +11,8 @@ Goal (BUILD_PLAN): I paid, Received, Not received and reasons, reminders through
 | Task | Status |
 |---|---|
 | T8.1 plan and decisions | Done (9 Nov 2026): P1 to P6 decided. |
-| T8.2 to T8.8 | Not started. |
+| T8.2 the payment list and the wire change | Done (9 Nov 2026), see below. |
+| T8.3 to T8.8 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -27,7 +28,7 @@ Goal (BUILD_PLAN): I paid, Received, Not received and reasons, reminders through
 - **P3 (9 Nov 2026): a payment recorded twice is noticed, with one tap to fix.** If the payer and the receiver each recorded the same payment (same two people, same amount) before they synced, the receiver sees "This looks like the same payment recorded twice" and a button that stops the payer's entry counting (it becomes a dispute with a new reason, DUPLICATE: see the wire change below; the payer sees "Rohan recorded the same payment, so yours no longer counts"). Nothing is deleted and the balances come right at once.
 
 - **P4 (9 Nov 2026): the wire format gains dispute reason 3, duplicate** (approved). Details below.
-- **P5 (9 Nov 2026): a payment may be more than the plan says is owed.** The amount box has no cap at the planned amount (the limit of 100,000,000 whole units of the core stays). Consequence to show plainly: if Meera records ₹1,400 against a planned ₹1,350, Rohan then owes her ₹50 and the plan shows that new payment, so the plan can change direction; the box says "This is more than the plan asks for. The extra will show as owed back to you."
+- **P5 (9 Nov 2026): a payment may be more than the plan says is owed.** The amount box has no cap at the planned amount (the limit of 100,000,000 whole units of the core stays). Consequence to show plainly: if Meera records ₹1,400 against a planned ₹1,350, Meera is then owed ₹50 by the group and the plan has someone who still owes pay her (not necessarily Rohan), so the plan can change; the box says "This is more than the plan asks for. The extra will show as owed back to you by the group."
 - **P6 (9 Nov 2026): the reminder says the name and the amount only**, never the group name: "Hi <name>, OwnTally says you owe me <amount>. Pay however suits you, then mark it as paid in the app."
 
 ## The wire change P4 makes
@@ -56,4 +57,4 @@ None at the moment. The two-phone check (mark on one phone, confirm on the other
 
 ## Results
 
-(To be written as each task is done.)
+**T8.2 result (9 Nov 2026).** **Wire change (P4):** `DisputeReason.DUPLICATE` (code 3); WIRE_FORMAT.md (event 8 and the strict-decoding rule: reasons 0 to 3) and PROTOCOL.md updated; the independent Python vector generator makes a `payment-disputed-duplicate` vector and a `bad-dispute-reason-four` invalid one (the first code after the last known), and `wire-vectors.json` was regenerated from it; the Kotlin codec encodes and decodes the vector byte for byte. **The list (`settleOverview(state)`, plain Kotlin in `core-model`):** `toMake` (the plan), `waiting` (marked by the payer, not confirmed), `disputed` (with the reason), `confirmed`, and `duplicates` (a waiting payer entry paired with a confirmed entry for the same two people and the same amount; each confirmed entry excuses one waiting entry, the earliest first, so every phone finds the same pairs); payments with someone removed or left are left out; every list is in event-id order. **Tests (14):** the plan with nothing recorded; a marked payment waits and leaves the plan; a part payment leaves the rest; **a payment above the plan makes the payer owed the extra by someone who still owes** (P5: not always the receiver; the P5 text is corrected); a confirmed one is counted not listed; a receiver-recorded one is confirmed from the start; a disputed one returns to the plan with its reason; a dispute later confirmed is confirmed; a payment recorded by both sides is found as a duplicate (and the balances show why); not a duplicate with another amount, another payer or another receiver; one receiver entry excuses only one payer entry; after the duplicate dispute nothing is left to fix and the balances are right; removed people's payments are hidden; the same lists whatever order the events arrive in. **Mutations (5)** each fail a test: matching without the amount, without the receiver (found by review: a test was added), one confirmed entry excusing many, removed people not hidden, no ordering. **Not yet:** nothing in the app uses the list (T8.4).

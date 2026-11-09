@@ -42,7 +42,7 @@ Every event has:
 | `ExpenseDeleted` | `expense: EventId` |
 | `SettlementRecorded` | `from`, `to`, `amount` |
 | `SettlementConfirmed` | `settlement: EventId` |
-| `PaymentDisputed` | `settlement: EventId`, `reason` (one of `NOTHING_RECEIVED`, `DIFFERENT_AMOUNT`, `NOT_CHECKED`) |
+| `PaymentDisputed` | `settlement: EventId`, `reason` (one of `NOTHING_RECEIVED`, `DIFFERENT_AMOUNT`, `NOT_CHECKED`, `DUPLICATE`) |
 | `AdminAdded` / `AdminRemoved` | `member` |
 | `OwnershipOffered` | `to` |
 | `OwnershipOfferCancelled` | none |
@@ -144,7 +144,7 @@ Events are signed and sent as bytes (milestone M2). Proposed: deterministic CBOR
 5. **A removed key can never rejoin.** A person who wants back in must join with a new key and is a new member.
 6. **Admins cannot remove other admins.** Only the owner can. DESIGN.md says "owner or any admin removes members"; this draft reads that as members, not admins. **Superseded on 4 Nov 2026: admins cannot remove anyone; only the owner removes members and changes the key. Admins approve joins and invite.**
 7. **Group size is limited to 20**, matching the relay spike's room limit.
-8. **`PaymentDisputed` has fixed reasons** (matching the three choices in the mockup). Free text is not stored.
+8. **`PaymentDisputed` has fixed reasons** (the three choices in the mockup, and `DUPLICATE`, added in M8: the receiver says the payer's entry is the same payment as one the receiver recorded; it stops counting like any dispute). Free text is not stored.
 9. **Admin takeover when the owner is unreachable is not included** (owner decision).
 10. **`GroupCreated` carries the group id and name**, and the creator's name and phone come from a second event.
 11. **Exact splits on removal differ from DESIGN.md.** DESIGN.md said the others' shares stay as entered. The owner chose on 3 Nov 2026 to re-split the removed share among the remaining participants, so the payer is repaid in full. DESIGN.md is updated.

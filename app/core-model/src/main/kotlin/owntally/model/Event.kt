@@ -1,7 +1,10 @@
 package owntally.model
 
 enum class DisputeReason(val code: Int) {
-    NOTHING_RECEIVED(0), DIFFERENT_AMOUNT(1), NOT_CHECKED(2);
+    NOTHING_RECEIVED(0), DIFFERENT_AMOUNT(1), NOT_CHECKED(2),
+
+    /** The same payment was recorded twice (by its payer and by its receiver): this entry stops counting (M8, decision P4). */
+    DUPLICATE(3);
 
     companion object {
         fun fromCode(code: Int) = values().firstOrNull { it.code == code }
