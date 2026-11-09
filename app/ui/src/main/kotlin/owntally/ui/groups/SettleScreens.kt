@@ -23,6 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -34,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import owntally.ui.components.Glyph
 import owntally.ui.components.GlyphIcon
 import owntally.ui.components.Notice
+import owntally.model.Money
+import owntally.model.format.MoneyFormat
 import owntally.ui.theme.OwnTallyColors
 
 private val cardShape = RoundedCornerShape(24.dp)
@@ -52,56 +58,139 @@ private fun BackHeader(title: String, subtitle: String?, onBack: () -> Unit) {
     }
 }
 
-/** A button that is drawn switched off: not yet able to do anything, and says so to screen readers. */
-@Composable
-private fun OffButton(text: String, modifier: Modifier, filled: Boolean) {
-    Box(
-        modifier.height(48.dp)
-            .background(if (filled) OwnTallyColors.Border else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(24.dp))
-            .border(BorderStroke(1.dp, OwnTallyColors.Border), RoundedCornerShape(24.dp))
-            .semantics(mergeDescendants = true) { disabled(); role = Role.Button },
-        contentAlignment = Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextHint) }
+/** What a person tapped on Settle up (M8). The route does the work, so the screen stays a picture of the model. */
+sealed interface SettleAction {
+    data class Copy(val row: PaymentRow) : SettleAction
+    data class Call(val row: PaymentRow) : SettleAction
+    data class IPaid(val row: PaymentRow) : SettleAction
+    data class Reminder(val row: PaymentRow) : SettleAction
+    data class MarkReceived(val row: PaymentRow) : SettleAction
+    data class Confirm(val id: owntally.model.EventId) : SettleAction
+    data class NotReceived(val row: WaitingRow) : SettleAction
+    data class CancelDuplicate(val id: owntally.model.EventId) : SettleAction
 }
 
 @Composable
-fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit) {
+private fun ActionButton(text: String, modifier: Modifier, filled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+    val colour = if (danger) OwnTallyColors.Red else OwnTallyColors.Green
+    Box(
+        modifier.height(48.dp)
+            .background(if (filled) colour else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(24.dp))
+            .border(BorderStroke(1.dp, colour), RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) { Text(text, style = MaterialTheme.typography.labelLarge, color = if (filled) OwnTallyColors.OnDark else colour) }
+}
+
+@Composable
+private fun PersonLine(title: String, subtitle: String?, amount: String, amountColour: androidx.compose.ui.graphics.Color, colourIndex: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
+            Text(title.take(1), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+        }
+        Text(amount, style = MaterialTheme.typography.titleLarge, color = amountColour)
+    }
+}
+
+@Composable
+private fun CardBox(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(OwnTallyColors.Card, cardShape).border(BorderStroke(1.dp, OwnTallyColors.CardBorder), cardShape).padding(16.dp)) { content() }
+    Spacer(Modifier.height(12.dp))
+}
+
+/**
+ * Settle up (design/04): the plan with what each person can do on it (M8), payments waiting to be confirmed, payments the receiver did not
+ * accept, and the receiver's fix for a payment recorded twice. [onAction] is told what was tapped. [notReceivedAvailable] shows Not received
+ * (it opens the screen of design/15).
+ */
+@Composable
+fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAction) -> Unit = {}, notReceivedAvailable: Boolean = true) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp, 8.dp, 20.dp, 24.dp)) {
         item {
             BackHeader("Settle up", model.subtitle, onBack)
             Spacer(Modifier.height(12.dp))
             Text(SettleUpModel.INTRO, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
             Spacer(Modifier.height(20.dp))
-            Text("PAYMENTS TO MAKE", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
+            for (d in model.duplicates) {
+                Column(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, cardShape).padding(16.dp)) {
+                    Text(d.message, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
+                    Spacer(Modifier.height(12.dp))
+                    ActionButton(d.buttonLabel, Modifier.fillMaxWidth(), filled = true) { onAction(SettleAction.CancelDuplicate(d.payerEntry)) }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            if (model.payments.isNotEmpty()) {
+                Text("PAYMENTS TO MAKE", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+        items(model.payments, key = { "pay" + it.from.toHex() + it.to.toHex() }) { p ->
+            CardBox {
+                PersonLine(p.title, p.phone, p.amount, if (p.role == PaymentRole.FROM_ME) OwnTallyColors.Red else OwnTallyColors.Green, if (p.role == PaymentRole.FROM_ME) 1 else 3)
+                val top = p.actions.filter { it == PaymentAction.COPY_NUMBER || it == PaymentAction.CALL || it == PaymentAction.SEND_REMINDER }
+                val main = p.actions.filter { it == PaymentAction.I_PAID || it == PaymentAction.MARK_RECEIVED }
+                if (p.actions.isNotEmpty()) Spacer(Modifier.height(12.dp))
+                if (p.role == PaymentRole.TO_ME) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ActionButton("Send reminder", Modifier.weight(1f), filled = false) { onAction(SettleAction.Reminder(p)) }
+                        ActionButton("Mark received", Modifier.weight(1f), filled = true) { onAction(SettleAction.MarkReceived(p)) }
+                    }
+                } else if (p.role == PaymentRole.FROM_ME) {
+                    if (top.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (PaymentAction.COPY_NUMBER in top) ActionButton("Copy number", Modifier.weight(1f), filled = false) { onAction(SettleAction.Copy(p)) }
+                            if (PaymentAction.CALL in top) ActionButton("Call", Modifier.weight(1f), filled = false) { onAction(SettleAction.Call(p)) }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    if (main.isNotEmpty()) ActionButton("I paid", Modifier.fillMaxWidth(), filled = true) { onAction(SettleAction.IPaid(p)) }
+                }
+            }
+        }
+        if (model.waiting.isNotEmpty()) item {
+            Spacer(Modifier.height(8.dp))
+            Text("WAITING FOR CONFIRMATION", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
             Spacer(Modifier.height(10.dp))
         }
-        items(model.payments, key = { it.from.toHex() + it.to.toHex() }) { p ->
-            Column(Modifier.fillMaxWidth().background(OwnTallyColors.Card, cardShape).border(BorderStroke(1.dp, OwnTallyColors.CardBorder), cardShape).padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[if (p.role == PaymentRole.FROM_ME) 1 else 3], CircleShape), contentAlignment = Alignment.Center) {
-                        Text(p.title.take(1), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(p.title, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
-                        if (p.phone != null) Text(p.phone, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
-                    }
-                    Text(p.amount, style = MaterialTheme.typography.titleLarge, color = if (p.role == PaymentRole.FROM_ME) OwnTallyColors.Red else OwnTallyColors.Green)
+        items(model.waiting, key = { "wait" + it.id.author.toHex() + it.id.counter }) { w ->
+            CardBox {
+                PersonLine(w.title, null, w.amount, OwnTallyColors.Green, 3)
+                Spacer(Modifier.height(12.dp))
+                Box(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, RoundedCornerShape(16.dp)).padding(12.dp)) {
+                    Text(w.message, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
                 }
-                val labels = when (p.role) {
-                    PaymentRole.FROM_ME -> "Pay" to "I paid"
-                    PaymentRole.TO_ME -> "Send reminder" to "Mark received"
-                    PaymentRole.BETWEEN_OTHERS -> null
-                }
-                if (labels != null) {
+                if (w.canRespond) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OffButton(labels.first, Modifier.weight(1f), filled = false)
-                        OffButton(labels.second, Modifier.weight(1f), filled = true)
+                        if (notReceivedAvailable) ActionButton("Not received", Modifier.weight(1f), filled = false, danger = true) { onAction(SettleAction.NotReceived(w)) }
+                        ActionButton("Confirm received", Modifier.weight(1f), filled = true) { onAction(SettleAction.Confirm(w.id)) }
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+        }
+        if (model.disputed.isNotEmpty()) item {
+            Spacer(Modifier.height(8.dp))
+            Text("NOT ACCEPTED", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
+            Spacer(Modifier.height(10.dp))
+        }
+        items(model.disputed, key = { "disp" + it.id.author.toHex() + it.id.counter }) { d ->
+            CardBox {
+                PersonLine(d.title, null, d.amount, OwnTallyColors.TextSecondary, 3)
+                Spacer(Modifier.height(12.dp))
+                Box(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, RoundedCornerShape(16.dp)).padding(12.dp)) {
+                    Text(d.message, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
+                }
+                if (d.canConfirm) {
+                    Spacer(Modifier.height(12.dp))
+                    ActionButton("Confirm received", Modifier.fillMaxWidth(), filled = true) { onAction(SettleAction.Confirm(d.id)) }
+                }
+            }
         }
         item {
             if (model.footer.isNotEmpty()) {
@@ -112,9 +201,35 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
             }
-            Notice(SettleUpModel.ACTIONS_NOTE, background = OwnTallyColors.InfoBackground, content = OwnTallyColors.Green)
+            Notice(SettleUpModel.NOTE, background = OwnTallyColors.InfoBackground, content = OwnTallyColors.Green)
         }
     }
+}
+
+/** I paid and Mark received open this: the amount, filled with what the plan asks for and free to change (decisions P2 and P5). */
+@Composable
+fun AmountDialog(title: String, planned: Money, onCancel: () -> Unit, onConfirm: (Money) -> Unit) {
+    var typed by remember { mutableStateOf(MoneyFormat.editable(planned)) }
+    val check = remember(typed) { AmountBoxState.check(typed, planned) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text("Change it if the amount was different.", style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = typed, onValueChange = { typed = it.take(16) }, singleLine = true, isError = check.error != null,
+                    prefix = { Text("₹") },
+                    supportingText = { val m = check.error ?: check.warning; if (m != null) Text(m) },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Amount" },
+                )
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { check.money?.let(onConfirm) }, enabled = check.canConfirm) { Text("Save") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
 }
 
 @Composable

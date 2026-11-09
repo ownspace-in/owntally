@@ -174,7 +174,7 @@ class ScreenImagesInstrumentedTest {
         val b = PublicKey(ByteArray(32) { 2 })
         val c = PublicKey(ByteArray(32) { 3 })
         fun row(from: PublicKey, to: PublicKey, paise: Long, title: String, phone: String, role: owntally.ui.groups.PaymentRole) =
-            owntally.ui.groups.PaymentRow(from, to, Money(paise), MoneyFormat.format(Money(paise)), title, phone, role)
+            owntally.ui.groups.PaymentRow(from, to, Money(paise), MoneyFormat.format(Money(paise)), title, phone, role, "", emptyList())
         rule.setContent {
             OwnTallyTheme {
                 owntally.ui.groups.SettleUpScreen(

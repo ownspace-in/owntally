@@ -391,7 +391,56 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
     }
     val s = session ?: return Box(Modifier.fillMaxSize())
     val view by s.view.collectAsStateWithLifecycle()
-    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var amountFor by remember { mutableStateOf<SettleAction?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    fun write(call: () -> owntally.data.session.AddResult) {
+        scope.launch { message = SettleMessages.of(withContext(Dispatchers.IO) { call() }) }
+    }
+    val model = remember(view) { SettleUpModel.build(view) }
+    Column(Modifier.fillMaxSize()) {
+        if (message != null) {
+            Box(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp)) {
+                owntally.ui.components.Notice(message!!, modifier = Modifier.clickable { message = null })
+            }
+        }
+        Box(Modifier.weight(1f)) {
+            SettleUpScreen(
+                model, onBack,
+                notReceivedAvailable = false,
+                onAction = { action ->
+                    message = null
+                    when (action) {
+                        is SettleAction.Copy -> action.row.phone?.let { owntally.ui.copySensitive(context, "Phone number", it) }
+                        is SettleAction.Call -> action.row.phone?.let {
+                            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse(PhoneLinks.telUri(it)))) }
+                            catch (e: android.content.ActivityNotFoundException) { message = "This phone has no app to make calls." }
+                        }
+                        is SettleAction.Reminder -> {
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(android.content.Intent.EXTRA_TEXT, SettleUpModel.reminderText(action.row.otherName, action.row.amount))
+                            try { context.startActivity(android.content.Intent.createChooser(send, "Send reminder")) }
+                            catch (e: android.content.ActivityNotFoundException) { message = "This phone has no app to send a message with." }
+                        }
+                        is SettleAction.IPaid, is SettleAction.MarkReceived -> amountFor = action
+                        is SettleAction.Confirm -> write { s.confirm(action.id) }
+                        is SettleAction.CancelDuplicate -> write { s.cancelDuplicate(action.id) }
+                        is SettleAction.NotReceived -> Unit
+                    }
+                },
+            )
+        }
+    }
+    when (val a = amountFor) {
+        is SettleAction.IPaid -> AmountDialog("I paid ${a.row.otherName}", a.row.money, onCancel = { amountFor = null }, onConfirm = { amount ->
+            amountFor = null; write { s.markPaid(a.row.to, amount) }
+        })
+        is SettleAction.MarkReceived -> AmountDialog("Received from ${a.row.otherName}", a.row.money, onCancel = { amountFor = null }, onConfirm = { amount ->
+            amountFor = null; write { s.markReceived(a.row.from, amount) }
+        })
+        else -> Unit
+    }
 }
 
 @Composable
