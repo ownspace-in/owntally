@@ -36,7 +36,7 @@ import owntally.ui.theme.OwnTallyColors
  * latest run that dropped entries and the note listing the latest dropped entries. Nearby (M6) and the relay card (the app decides) are not drawn.
  */
 @Composable
-fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit, onDismissNotice: () -> Unit, onNearby: (() -> Unit)? = null) {
+fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit, onDismissNotice: () -> Unit, onNearby: (() -> Unit)? = null, onExplain: (SyncMemberLine) -> Unit = {}) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -90,7 +90,7 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
                 Column(Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp))) {
                     model.members.forEachIndexed { i, m ->
                         if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = OwnTallyColors.CardBorder)
-                        MemberSyncRow(m)
+                        MemberSyncRow(m, if (m.explains) ({ onExplain(m) }) else null)
                     }
                 }
             }
@@ -110,8 +110,9 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
 }
 
 @Composable
-private fun MemberSyncRow(m: SyncMemberLine) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun MemberSyncRow(m: SyncMemberLine, onOpen: (() -> Unit)?) {
+    val tap = if (onOpen != null) Modifier.clickable(onClick = onOpen).semantics { role = SemanticsRole.Button } else Modifier
+    Row(Modifier.fillMaxWidth().then(tap).padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[m.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
             Text(m.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
         }

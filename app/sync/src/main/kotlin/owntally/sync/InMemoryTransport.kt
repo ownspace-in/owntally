@@ -28,7 +28,7 @@ class InMemoryNetwork {
     }
 }
 
-class PeerUnreachable(peer: PublicKey, cause: Throwable? = null) : Exception("Cannot reach $peer", cause)
+open class PeerUnreachable(peer: PublicKey, cause: Throwable? = null) : Exception("Cannot reach $peer", cause)
 
 private class MemoryLink(
     override val peer: PublicKey,

@@ -161,12 +161,13 @@ class MembersScreenImagesInstrumentedTest {
     @Test
     fun saveTheSyncScreen() {
         rule.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        fun line(n: Int, name: String, detail: String, badge: String, tone: BadgeTone) = SyncMemberLine(key(n), name, name.take(1), n % MembersModels.COLOURS, detail, badge, tone)
+        fun line(n: Int, name: String, detail: String, badge: String, tone: BadgeTone, explains: Boolean = false) = SyncMemberLine(key(n), name, name.take(1), n % MembersModels.COLOURS, detail, badge, tone, explains)
         val model = SyncScreenModel(
             "Goa Trip", SyncHeadline.WAITING, "Waiting for a friend to come online. 3 entries are saved on this phone and will be sent.",
             listOf(
                 line(1, "Rohan", "2 hrs ago", "Direct", BadgeTone.GOOD), line(2, "Meera", "2 hrs ago", "Via relay", BadgeTone.GOOD),
-                line(3, "Kabir", "3 entries not shared · 3 days ago · trying again in 30 min", "Offline", BadgeTone.OFFLINE),
+                line(3, "Kabir", "3 entries not shared · 3 days ago · trying again in 30 min", "Offline", BadgeTone.OFFLINE, explains = true),
+                line(5, "Dev", "Never synced · the relay can't be reached from this phone · trying again in 2 min", "Needs relay", BadgeTone.WARN, explains = true),
                 line(4, "Isha", "Not reachable yet", "Not yet", BadgeTone.NEUTRAL),
             ),
             "Some entries from Isha were rejected.",

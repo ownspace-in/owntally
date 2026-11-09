@@ -10,6 +10,9 @@
 # AGP 9, minor and major updates of the Kotlin and Android toolchain and of the libraries that need the new Kotlin are not proposed
 # (patch updates are). Remove these entries when that migration is done.
 #
+# OkHttp stays on 4.12 (decision W1, 8 Nov 2026): 5.x needs compile SDK 37 and so the AGP 9 migration. The rule above (no major updates) already
+# keeps 5.x from being proposed.
+#
 # Tink's version lives in gradle/libs.versions.toml, which Dependabot reads.
 version: 2
 

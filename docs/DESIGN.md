@@ -80,7 +80,9 @@ A relay forwards encrypted bytes between two phones that cannot reach each other
 - When even the relay cannot connect, the app says so and offers: meet up (Nearby) or try again later.
 - All members use the same relay: our own at `https://relay.ownspace.in`. (A custom relay address, and the "Hosting your own relay" steps below, are not part of the app for now; kept for later.)
 - Both phones connect outbound to the relay, which forwards by public id. Hole punching runs in parallel; if it works, traffic moves to the direct link and the relay drops out.
-- The relay sees public ids, IP addresses, timing and data volume. It never sees content.
+- The relay sees public ids, IP addresses, timing and data volume. It never sees content: a link through it is encrypted end to end between the two phones (TLS, with each phone proving its group key), so even our relay cannot read it or change it.
+- Phones also find each other with Iroh (decision I1), which uses n0's public discovery service as well as our relay. **n0, a third party, learns each phone's member key for the group, its IP address and when it is online.** It never sees content. The privacy text shown to people (M10) must say this in plain words, next to what our relay learns.
+- Limits (measured, docs/tasks/M7-internet-sync.md T7.9): a group of 20 fits the relay's room size exactly, and a big history crosses quickly, but the relay allows only 30 new connections a minute from one address, which phones sharing a mobile carrier's address can hit together. The owner may raise it (relay README).
 - A phone is a poor relay: it needs a public address and Android sleeps background apps. Recommend a small VPS, a home Raspberry Pi, or the public relay. Phones act as the connection point only for same-room sync.
 
 ## Encryption
@@ -252,7 +254,10 @@ The creator or the group owner. Shows "This changes balances" when the entry is 
 - Turning on the relay applies to the whole group, and the screen states that the relay sees who connects but never the content.
 
 ### Sync states shown to the user
-Up to date with N members, syncing, waiting for a friend to come online, not reachable directly (offer relay or meet up), relay unreachable (retrying, changes saved on this phone).
+Up to date with N members, syncing, waiting for a friend to come online, not reachable directly, relay unreachable (retrying, changes saved on this phone). Each member row has a chip: Direct, Via relay, Nearby, Syncing, Not yet, Offline (the other phone is not there), Needs relay (direct failed and this phone cannot reach the relay). Offline and Needs relay rows open "Can't reach <name>": why, that the relay is used automatically (no button to turn it on, since the app decides), Try now, Meet and sync nearby, Try again later, and that entries are never lost.
+
+### Background sync
+Decision B1 (8 Nov 2026). While the app is closed, Android's WorkManager runs one pass about every 15 minutes (the shortest Android allows; it picks the real time and may delay it much longer when the phone is in Doze or low on battery): every group is tried once, then any leave still to be delivered. It runs only with a network connection, never while the app is in front (the app then syncs by itself), and never before the phone is set up. It stops itself after 8 minutes. Limits, said plainly: there is no mailbox, so the other phone must be online at about the same time for anything to move; the job helps less than it sounds. A pass that fails is not retried at once; the next run is soon enough, and the entries stay on the phone. The job adds three normal Android permissions (keep awake while it runs, know whether the network is up, run again after a restart); no question is asked of the person.
 
 ## Build order
 

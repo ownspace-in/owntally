@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -81,6 +82,48 @@ class RealRelayTest {
             b.close()
             scope.cancel()
             relay.destroy()
+        }
+    }
+
+    @Test
+    fun aSecureLinkThroughTheRealRelayRunsAWholeSyncWithoutBeingCutOffForSendingTooFast() {
+        assumeTrue(System.getenv("RELAY_BIN") != null, "RELAY_BIN is not set")
+        val port = ServerSocket(0).use { it.localPort }
+        val relay = startRelay(port)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val url = "ws://127.0.0.1:$port/ws"
+        val seed = owntally.crypto.MasterSeed(ByteArray(64) { 8 })
+        val ida = owntally.crypto.KeyDerivation.groupIdentity(seed, 0)
+        val idb = owntally.crypto.KeyDerivation.groupIdentity(seed, 1)
+        val group = owntally.model.GroupId(ByteArray(16) { 3 })
+        val ra = WebSocketTransport(ida.publicKey, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val rb = WebSocketTransport(idb.publicKey, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val ta = SecureOverCarrier(ra, ida, scope)
+        val tb = SecureOverCarrier(rb, idb, scope)
+        fun env(n: Int, c: Long): ByteArray = owntally.crypto.EnvelopeSigning.sign(owntally.crypto.KeyDerivation.groupIdentity(seed, 100L + n), 1, group, 1, c, ByteArray(24), ByteArray(300) { (c + it).toByte() }).encode()
+        val sa = InMemorySyncStore(group).also { st -> (1L..1500L).forEach { st.offer(env(1, it)) } }
+        val sb = InMemorySyncStore(group).also { st -> (1L..800L).forEach { st.offer(env(2, it)) } }
+        try {
+            runBlocking {
+                withTimeout(120_000) {
+                    val incoming = tb.incoming(room)
+                    rb.status(room).first { it == RelayStatus.OPEN }
+                    val ab = ta.connect(room, idb.publicKey)
+                    val ba = incoming.first()
+                    assertEquals(idb.publicKey, ab.peer); assertEquals(ida.publicKey, ba.peer)
+                    assertEquals(LinkKind.RELAYED, ab.kind)
+                    coroutineScope {
+                        val x = this.async { SyncEngine(room, sa).run(ab, SyncRole.INITIATOR) }
+                        val y = this.async { SyncEngine(room, sb).run(ba, SyncRole.RESPONDER) }
+                        assertEquals(SyncOutcome.COMPLETED, x.await().outcome)
+                        assertEquals(SyncOutcome.COMPLETED, y.await().outcome)
+                    }
+                    assertEquals(sa.summary(), sb.summary())
+                    assertEquals(2, sa.summary().entries.size)
+                }
+            }
+        } finally {
+            ra.close(); rb.close(); scope.cancel(); relay.destroy()
         }
     }
 }

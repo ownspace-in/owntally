@@ -19,6 +19,12 @@ class GroupIdentity internal constructor(
     val encryptionKey: EncryptionKey,
 ) {
     internal fun signingSeed(): ByteArray = signSeed.copyOf()
+
+    /**
+     * The member's signing seed, given to Iroh as its secret key so that a phone's Iroh endpoint id is its member key (decision I2, 8 Nov
+     * 2026). The one place that may call this is `IrohPortImpl` (a test fails the build if any other file does).
+     */
+    fun irohSecretKey(): ByteArray = signSeed.copyOf()
     internal fun encryptionPrivateKey(): ByteArray = encryptionPrivate.copyOf()
 
     override fun equals(other: Any?) = other is GroupIdentity && slot == other.slot && publicKey == other.publicKey && encryptionKey == other.encryptionKey

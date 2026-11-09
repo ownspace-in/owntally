@@ -3,6 +3,12 @@ package owntally.app
 import android.app.Application
 
 class OwnTallyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        BackgroundSync.schedule(this)
+    }
+
+
     @Volatile
     private var current: AppContainer? = null
 

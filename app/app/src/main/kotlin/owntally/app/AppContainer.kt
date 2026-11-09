@@ -60,9 +60,29 @@ class AppContainer(private val context: Context) {
         return identity.groupIdentity(slot)?.takeIf { it.publicKey == key }
     }
 
-    /** TLS first and the plain link if TLS does not connect (decision L6); nothing if the phone has no key for the group. */
-    private fun transportOf(group: owntally.model.GroupId, key: owntally.model.PublicKey): owntally.sync.Transport =
-        identityOf(group, key)?.let { localNode.secureFirstTransportFor(it) } ?: owntally.sync.NoTransport
+    /**
+     * Every way to reach the other members with the key this phone uses in the group (M7): the same network (TLS first and the plain link if TLS
+     * does not connect, decision L6), then Iroh and our relay. Made once for each key and kept while the app syncs, because Iroh's endpoint and the
+     * relay's sockets must not be opened again for every call. Nothing if the phone has no key for the group.
+     */
+    private fun transportOf(group: owntally.model.GroupId, key: owntally.model.PublicKey): owntally.sync.Transport {
+        val id = identityOf(group, key) ?: return owntally.sync.NoTransport
+        val local = localNode.secureFirstTransportFor(id)
+        if (!internetEnabled) return local
+        return ways.computeIfAbsent(key) { InternetWays(context, id, networkScope, local) }.transport
+    }
+
+    private val ways = java.util.concurrent.ConcurrentHashMap<owntally.model.PublicKey, InternetWays>()
+
+    /** Closes Iroh's endpoints and the relay's sockets (they are made again when next needed). */
+    private fun stopInternet() {
+        val stopping = ways.values.toList()
+        ways.clear()
+        if (stopping.isNotEmpty()) networkScope.launch { stopping.forEach { it.stop() } }
+    }
+
+    /** For tests that must not reach the internet (the screens with pretend friends): only the same network is used. */
+    @Volatile var internetEnabled: Boolean = true
 
     /** For tests that do not want a phone looking for friends on the network while they run (the sync screens with pretend friends). */
     @Volatile var syncOnStart: Boolean = true
@@ -81,13 +101,33 @@ class AppContainer(private val context: Context) {
         }
     }
 
-    /** Stops all of it when the app leaves the front: the groups' coordinators and the port. (The background pass of M6 will call `runOnce`.) */
+    /** Stops all of it when the app leaves the front: the groups' coordinators and the port. (The background job calls `backgroundPass`.) */
     @Synchronized
     fun endSyncing() {
         following?.cancel(); following = null
         for (g in sessions.summaries.value) sync.stop(g.groupId)
         localNode.close()
+        stopInternet()
     }
+
+    /**
+     * One background pass (decision B1, M7): every group once, then the leaves still to be delivered, then done. It does nothing while the app is
+     * in front (the coordinators there are already syncing), before the person has set the phone up, or when the stored keys cannot be read.
+     * Returns whether a pass ran. Android picks when (about every 15 minutes at best), so the time given is short of what Android allows a job.
+     */
+    suspend fun backgroundPass(timeoutMs: Long = BACKGROUND_PASS_MS): Boolean {
+        if (following?.isActive == true) return false
+        val ready = try { identity.state() == IdentityState.READY } catch (e: SecretStoreException) { false }
+        if (!ready) return false
+        try {
+            kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { sync.runOnce() }
+        } finally {
+            localNode.close()
+            if (following?.isActive != true) stopInternet() // unless the app came to the front meanwhile: it is using them
+        }
+        return true
+    }
+
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
     /** Syncing with the other members (M5), now over real connections (M6): the Sync screen and its "Sync now" read this. */
     val sync: owntally.data.session.SyncCoordinator by lazy {
@@ -123,5 +163,10 @@ class AppContainer(private val context: Context) {
         }
     } catch (e: SecretStoreException) {
         AppStart.StorageUnavailable
+    }
+
+    companion object {
+        /** A job that runs for more than about 10 minutes is stopped by Android; this leaves room for the pass to end cleanly. */
+        const val BACKGROUND_PASS_MS = 8 * 60_000L
     }
 }

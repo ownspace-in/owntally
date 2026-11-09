@@ -18,7 +18,10 @@ import org.junit.runner.RunWith
 import owntally.crypto.KeyDerivation
 import owntally.crypto.MasterSeed
 import owntally.sync.GroupRoom
+import owntally.sync.InMemoryNetwork
+import owntally.sync.LinkKind
 import owntally.sync.LinkSecurity
+import owntally.sync.SecureOverCarrier
 import owntally.sync.LocalConfig
 import owntally.sync.LocalNames
 import owntally.sync.LocalNode
@@ -114,6 +117,28 @@ class LocalLinkOnDeviceInstrumentedTest {
             assertEquals(LinkSecurity.PLAIN, withTimeout(20_000) { inH.first() }.security)
         } finally {
             caller.close(); withTls.close(); withoutTls.close(); scope.cancel()
+        }
+    }
+
+    @Test
+    fun aLinkThroughACarrierThatProvesNothingRunsTlsEndToEndOnTheAndroidRuntimeToo() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val net = InMemoryNetwork()
+        val p = KeyDerivation.groupIdentity(seed, 31)
+        val q = KeyDerivation.groupIdentity(seed, 32)
+        try {
+            val tq = SecureOverCarrier(net.transportFor(q.publicKey, LinkKind.RELAYED), q, scope, maxFrame = 5_000)
+            val incoming = tq.incoming(room)
+            val link = withTimeout(30_000) { SecureOverCarrier(net.transportFor(p.publicKey, LinkKind.RELAYED), p, scope, maxFrame = 5_000).connect(room, q.publicKey) }
+            val other = withTimeout(20_000) { incoming.first() }
+            assertEquals(q.publicKey, link.peer); assertEquals(p.publicKey, other.peer)
+            assertEquals(LinkKind.RELAYED, link.kind); assertEquals(LinkSecurity.TLS, link.security)
+            link.send(byteArrayOf(8, 8))
+            assertContentEquals(byteArrayOf(8, 8), withTimeout(10_000) { other.received.first() })
+            other.send(ByteArray(120_000) { (it * 5).toByte() })
+            assertEquals(120_000, withTimeout(30_000) { link.received.first() }.size)
+        } finally {
+            scope.cancel()
         }
     }
 }

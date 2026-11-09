@@ -31,7 +31,9 @@ class ManifestRulesTest {
     @Test
     fun theOnlyPermissionsAreInternetForSyncingAndWhatNearbyNeeds() {
         val names = (0 until manifest.getElementsByTagName("uses-permission").length)
-            .map { (manifest.getElementsByTagName("uses-permission").item(it) as Element).getAttributeNS(ns, "name") }
+            .map { manifest.getElementsByTagName("uses-permission").item(it) as Element }
+            .filter { it.getAttributeNS("http://schemas.android.com/tools", "node") != "remove" } // asks for none: it takes a library's out
+            .map { it.getAttributeNS(ns, "name") }
         // INTERNET for syncing, and what Nearby Connections documents it needs (T6.11), nothing else.
         assertEquals(
             listOf(
@@ -51,6 +53,34 @@ class ManifestRulesTest {
         assertEquals("neverForLocation", perm("android.permission.NEARBY_WIFI_DEVICES").getAttributeNS(ns, "usesPermissionFlags"))
         assertTrue(names.none { it.contains("BACKGROUND") || it.contains("CAMERA") || it.contains("CONTACTS") || it.contains("STORAGE") })
         assertEquals(0, manifest.getElementsByTagName("uses-permission-sdk-23").length)
+    }
+
+    /**
+     * What a phone really gets is the merged manifest: libraries add their own permissions and components. The list is exact, so a new library that
+     * asks for something fails here until the owner has agreed to it. All are "normal" permissions (no question is asked), except the Bluetooth,
+     * Nearby and location ones that Nearby's screen asks about first.
+     */
+    @Test
+    fun theMergedManifestAsksForNothingMoreThanTheListedPermissions() {
+        val merged = parse("build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml")
+        val names = (0 until merged.getElementsByTagName("uses-permission").length).map { (merged.getElementsByTagName("uses-permission").item(it) as Element).getAttributeNS(ns, "name") }.toSet()
+        assertEquals(
+            setOf(
+                "android.permission.INTERNET", "android.permission.ACCESS_WIFI_STATE", "android.permission.CHANGE_WIFI_STATE",
+                "android.permission.BLUETOOTH", "android.permission.BLUETOOTH_ADMIN", "android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION",
+                "android.permission.BLUETOOTH_ADVERTISE", "android.permission.BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_SCAN", "android.permission.NEARBY_WIFI_DEVICES",
+                // Nearby Connections and the background job (WorkManager): knowing whether the network is up, keeping the phone awake while the job runs, and
+                // being scheduled again after a restart.
+                "android.permission.ACCESS_NETWORK_STATE", "android.permission.WAKE_LOCK", "android.permission.RECEIVE_BOOT_COMPLETED",
+                // The lock screen's fingerprint and face check (the biometric library).
+                "android.permission.USE_BIOMETRIC", "android.permission.USE_FINGERPRINT",
+                // Protects the app's own receivers from other apps (added by AndroidX), held by this app only.
+                "in.ownspace.owntally.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+            ),
+            names,
+        )
+        val services = (0 until merged.getElementsByTagName("service").length).map { (merged.getElementsByTagName("service").item(it) as Element).getAttributeNS(ns, "name") }
+        assertTrue(services.none { it.contains("Foreground") }, "no foreground service: the app never runs foreground work ($services)")
     }
 
     @Test
@@ -102,6 +132,17 @@ class ManifestRulesTest {
         val activity = activities.item(0) as Element
         assertEquals("true", activity.getAttributeNS(ns, "exported"))
         assertEquals(1, activity.getElementsByTagName("intent-filter").length)
-        assertEquals(0, manifest.getElementsByTagName("service").length + manifest.getElementsByTagName("receiver").length + manifest.getElementsByTagName("provider").length)
+        fun own(tag: String) = (0 until manifest.getElementsByTagName(tag).length).map { manifest.getElementsByTagName(tag).item(it) as Element }.filter { it.getAttributeNS("http://schemas.android.com/tools", "node") != "remove" }
+        assertEquals(0, own("service").size + own("receiver").size + own("provider").size, "this app declares no component of its own besides the activity; libraries bring theirs")
+    }
+
+    /** In the merged manifest, whatever else is exported (WorkManager's job service, Nearby's callback, the profile installer) is open only to the system or to Google's own apps. */
+    @Test
+    fun everyExportedComponentOtherThanTheLauncherActivityIsProtectedByAPermission() {
+        val merged = parse("build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml")
+        val unprotected = listOf("activity", "service", "receiver", "provider").flatMap { tag ->
+            (0 until merged.getElementsByTagName(tag).length).map { merged.getElementsByTagName(tag).item(it) as Element }
+        }.filter { it.getAttributeNS(ns, "exported") == "true" && it.getAttributeNS(ns, "permission").isEmpty() }.map { it.getAttributeNS(ns, "name") }
+        assertEquals(listOf("owntally.app.MainActivity"), unprotected)
     }
 }

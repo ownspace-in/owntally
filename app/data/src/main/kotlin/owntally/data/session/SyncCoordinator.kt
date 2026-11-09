@@ -49,6 +49,8 @@ data class PeerStatus(
     val kind: LinkKind? = null,
     /** How the last link was protected on the network (a local link: TLS or plain), if it says. */
     val security: owntally.sync.LinkSecurity? = null,
+    /** When the member could not be reached: how the relay went, so the screen can say whose problem it is (null if not known or not applicable). */
+    val relay: owntally.sync.RelayResult? = null,
 )
 
 data class SyncStatus(
@@ -166,6 +168,13 @@ class SyncCoordinator(
         syncPeers(g, manual = true).joinAll()
     }
 
+    /** "Try now" for one member, on the screen that explains why they cannot be reached: ignores the waiting time, returns when the try is over. */
+    suspend fun syncNow(group: GroupId, peer: PublicKey) {
+        val g = started[group] ?: open(group) ?: return
+        if (peer !in peersOf(g)) return
+        scope.launch { attempt(g, peer, manual = true) }.join()
+    }
+
     private var delivery: Job? = null
 
     /** While running, tries to deliver the leave of every group this person left, now and every few minutes, until a member has it. */
@@ -227,7 +236,7 @@ class SyncCoordinator(
         val peer = link.peer
         finished(g, peer, result)
         if (result.outcome == SyncOutcome.COMPLETED && peer in peersOf(g)) {
-            peerUpdate(g, peer) { it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security) }
+            peerUpdate(g, peer) { it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security, relay = null) }
         }
         return result
     }
@@ -268,7 +277,7 @@ class SyncCoordinator(
             peerUpdate(g, peer) { it.copy(state = PeerState.NEVER) }
             return
         } catch (e: PeerUnreachable) {
-            failed(g, peer, run, PeerState.UNREACHABLE)
+            failed(g, peer, run, PeerState.UNREACHABLE, (e as? owntally.sync.ChainUnreachable)?.relay)
             return
         } catch (e: Exception) {
             failed(g, peer, run, PeerState.FAILED)
@@ -279,7 +288,7 @@ class SyncCoordinator(
             run.retry?.cancel()
             run.retry = null
             peerUpdate(g, peer) {
-                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security)
+                it.copy(state = PeerState.OK, failures = 0, lastSuccessSeconds = now(), nextTrySeconds = null, notShared = notShared(g, result), kind = result.via, security = result.security, relay = null)
             }
         } else {
             failed(g, peer, run, PeerState.FAILED)
@@ -305,12 +314,12 @@ class SyncCoordinator(
     }
 
     /** The peer could not be reached or the sync did not finish: wait 1, then 5, then 30 minutes (and again 30) before trying again. */
-    private fun failed(g: Group, peer: PublicKey, run: PeerRun, state: PeerState) {
+    private fun failed(g: Group, peer: PublicKey, run: PeerRun, state: PeerState, relay: owntally.sync.RelayResult? = null) {
         var delayMs = 0L
         peerUpdate(g, peer) {
             val failures = it.failures + 1
             delayMs = config.retryDelaysMs[minOf(failures - 1, config.retryDelaysMs.size - 1)]
-            it.copy(state = state, failures = failures, nextTrySeconds = now() + delayMs / 1000)
+            it.copy(state = state, failures = failures, nextTrySeconds = now() + delayMs / 1000, relay = relay)
         }
         run.retry?.cancel()
         run.retry = scope.launch {
@@ -370,7 +379,7 @@ class SyncCoordinator(
         finished(g, peer, result)
         if (result.outcome == SyncOutcome.COMPLETED && peer in peersOf(g)) {
             peerUpdate(g, peer) {
-                it.copy(state = if (it.state == PeerState.SYNCING) it.state else PeerState.OK, lastSuccessSeconds = now(), notShared = notShared(g, result), kind = link.kind, security = link.security)
+                it.copy(state = if (it.state == PeerState.SYNCING) it.state else PeerState.OK, lastSuccessSeconds = now(), notShared = notShared(g, result), kind = link.kind, security = link.security, relay = null)
             }
         }
     }

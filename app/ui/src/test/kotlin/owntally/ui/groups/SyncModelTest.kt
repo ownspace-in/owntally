@@ -11,6 +11,7 @@ import owntally.data.store.ProblemKind
 import owntally.data.store.SyncProblem
 import owntally.model.PublicKey
 import owntally.sync.LinkKind
+import owntally.sync.RelayResult
 
 /** What the per-group Sync screen shows (design/05, without Nearby and the relay card, decisions S4 and S5), for every state. */
 class SyncModelTest {
@@ -73,6 +74,30 @@ class SyncModelTest {
         val line = m.members.first { it.name == "Meera" }
         assertEquals("Offline", line.badge)
         assertEquals("3 entries not shared · 3 days ago · trying again in 30 min", line.detail)
+    }
+
+    @Test fun aFriendWhoCannotBeReachedIsOfflineAndTheRowOpensTheExplanation() {
+        val line = model(mapOf(meera to PeerStatus(PeerState.UNREACHABLE, attempts = 1, failures = 1, lastAttemptSeconds = now, nextTrySeconds = now + 60, relay = RelayResult.PEER_NOT_THERE))).members.first { it.name == "Meera" }
+        assertEquals("Offline", line.badge)
+        assertEquals(BadgeTone.OFFLINE, line.tone)
+        assertEquals(true, line.explains)
+    }
+
+    @Test fun whenThisPhoneCannotReachTheRelayEitherTheChipSaysNeedsRelayInAWarningTone() {
+        val line = model(mapOf(meera to PeerStatus(PeerState.FAILED, attempts = 2, failures = 2, lastAttemptSeconds = now, nextTrySeconds = now + 120, relay = RelayResult.RELAY_DOWN))).members.first { it.name == "Meera" }
+        assertEquals("Needs relay", line.badge)
+        assertEquals(BadgeTone.WARN, line.tone)
+        assertEquals(true, line.explains)
+        assertEquals("Never synced", line.detail.substringBefore(" · "))
+        assertEquals(true, line.detail.contains("relay can't be reached"))
+    }
+
+    @Test fun rowsOfPeopleWhoWereReachedDoNotOpenTheExplanation() {
+        val m = model(mapOf(rohan to ok(60), meera to ok(60, kind = LinkKind.RELAYED)))
+        assertEquals(false, m.members.first { it.name == "Rohan" }.explains)
+        val meeraLine = m.members.first { it.name == "Meera" }
+        assertEquals("Via relay", meeraLine.badge)
+        assertEquals(false, meeraLine.explains)
     }
 
     @Test fun waitingWithNothingToSendDoesNotMentionEntries() {

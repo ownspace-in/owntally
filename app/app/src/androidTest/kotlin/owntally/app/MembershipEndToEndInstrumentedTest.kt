@@ -57,6 +57,7 @@ class MembershipEndToEndInstrumentedTest {
         wipe()
         try {
             container().syncOnStart = false // these screens are about membership, not about a phone looking for friends
+            container().internetEnabled = false // and nothing here should reach our relay or n0 (InternetWaysInstrumentedTest does that)
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
             container().sessions.createGroup("Goa Trip", "INR", 0)
             ActivityScenario.launch(MainActivity::class.java)
@@ -133,6 +134,7 @@ class MembershipEndToEndInstrumentedTest {
         wipe()
         try {
             container().syncOnStart = false
+            container().internetEnabled = false
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
             val group = container().sessions.createGroup("Goa Trip", "INR", 0)
             ActivityScenario.launch(MainActivity::class.java)
@@ -153,6 +155,7 @@ class MembershipEndToEndInstrumentedTest {
             // The invite is in the database: a new container (as after the app is closed) finds the same one.
             (context as OwnTallyApplication).resetContainerForTests()
             container().syncOnStart = false
+            container().internetEnabled = false
             assertEquals(first, container().invites.current(group)!!.link)
 
             // The Join requests screen lists it under OPEN INVITES.
@@ -182,6 +185,7 @@ class MembershipEndToEndInstrumentedTest {
         wipe()
         try {
             container().syncOnStart = false
+            container().internetEnabled = false
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Rohan", "98765 43210") }
             // An invite for a group on some other phone (made up here: there is no other phone to reach until M6's real connections).
             val ticket = owntally.crypto.Ticket(
@@ -227,6 +231,7 @@ class MembershipEndToEndInstrumentedTest {
     fun withSyncOnThePhoneLooksForEachFriendAndShowsThemOfflineWhenNobodyAnswersOnTheNetwork() {
         wipe()
         try {
+            container().internetEnabled = false // this test is about the same network; the internet ways have their own
             container().identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
             container().sessions.createGroup("Goa Trip", "INR", 0)
             ActivityScenario.launch(MainActivity::class.java)
