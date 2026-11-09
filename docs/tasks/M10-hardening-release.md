@@ -4,14 +4,15 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M10. Rules: [DESIGN.md](../
 
 Goal (BUILD_PLAN): a release build that installs, runs on a 2 GB phone, and passes the full test suite and a manual checklist, with a dark theme, an accessibility pass, shrunk code, release signing, the privacy text, and a final review of every security-relevant file.
 
-**Decisions X1 and S1 are made (9 Nov 2026, below). Nothing is built until the owner says "next".**
+**Decisions X1 and S1 are made (9 Nov 2026, below).**
 
 ## Progress
 
 | Task | Status |
 |---|---|
 | T10.1 plan and decisions | Done (9 Nov 2026): X1 and S1 decided. |
-| T10.2 to T10.9 | Not started. |
+| T10.2 code shrinking | Done (10 Nov 2026), see below. |
+| T10.3 to T10.9 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -56,4 +57,4 @@ None at the moment. What only the owner can do: make the upload key, the Play Co
 
 ## Results
 
-(To be written as each task is done.)
+**T10.2 result (10 Nov 2026).** **The release build is now shrunk and renamed** (`isMinifyEnabled`, `isShrinkResources`, `proguard-android-optimize.txt` and `app/app/proguard-rules.pro`). **What had to be kept (2 rules, each with its reason):** JNA and the Iroh bindings (`com.sun.jna.**`, `computer.iroh.**`, reached by name from native code; the same rules ran in the spike of M0) and a `-dontwarn` for the two platform HPKE classes that Tink uses only on Android versions that have them. Room, WorkManager, Compose, Tink, the biometric library, OkHttp and Play services need nothing more: their own rules ship in the libraries. **Size:** the APK is **29.5 MB, down from 55.2 MB** unshrunk (dex 4.5 MB, arm64 libraries 14.2 MB, armv7 9.9 MB, resources 0.7 MB); the **App Bundle is 17.8 MB** (`bundleRelease`); a phone downloads only its own architecture, about 19 MB (arm64) or 15 MB (armv7) before Play's compression. **Two ways of testing the shrunk build:** (1) **`tools/smoke_release.py` runs the shipped APK itself** (signed with the debug key, nothing kept for tests) on an emulator or phone and drives it through the screens like a person: an invite link tapped before setup, first-run setup with the recovery phrase read from the screen, the waiting link opening its join form afterwards, a group, an expense, Members and a new invitation with its QR code, the Sync tab, and 25 seconds with Iroh and the relay starting (the log shows `libiroh_ffi.so` loaded); WorkManager's job must be scheduled and the log must hold no crash and none of the errors shrinking causes. It passes (the emulator runs the arm64 build through translation). (2) **The whole emulator suite against a shrunk build type** (`./gradlew -PshrunkTests :app:app:installReleaseTest :app:app:installReleaseTestAndroidTest`, then the usual `am instrument`; 28 of 28 pass): the `releaseTest` build type is the release build signed with the debug key, with the emulator's architecture and the debug sources (the pretend members) added. Running tests against shrunk code needs keep rules for whatever the tests touch that the app itself never calls: the test libraries and their AndroidX, Guava and Kotlin runtime pieces, the hooks that only tests use, and **our own code** (`proguard-releasetest-rules.pro`, not shipped). So in that build type our code is kept and everything else stays shrunk and renamed (Room and SQLite support, Tink and protobuf, OkHttp and Okio, the biometric library, the QR generator, Play services, JNA and Iroh); the shipped build renames ours too, which is sound because **`ShrinkingSafetyTest` fails if any of our sources use reflection, load a class by name or depend on names for serialization, if the shipped rules keep any of our code, or if the manifest names a component other than the two the build tools keep** (mutations: keeping our code in the shipped rules, and adding `Class.forName`, each fail it). **A snag on the way, not in the app:** AGP also shrinks the test APK, and the first four tries crashed on test-library pieces (the Kotlin `Intrinsics` class, Guava, `androidx.collection`, WorkManager's test library) that the app's own shrinking removes or renames; the rules above are what it took. **CI** now also builds the release (`assembleRelease`), so a missing keep rule fails the pull request. **Not done here:** nothing in the shipped build is signed with a real key (T10.6); a phone with a real arm64 processor and a 2 GB phone are T10.7.

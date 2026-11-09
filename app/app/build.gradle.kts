@@ -21,11 +21,33 @@ android {
 
     buildTypes {
         release {
+            // Code and resource shrinking (M10, CRYPTO.md C8). The rules are in proguard-rules.pro; the whole emulator suite is run against the shrunk
+            // build (the releaseTest build type below).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Iroh's native library is about 14 MB for each architecture: a release build carries only the two that real phones use (the debug
             // build keeps them all so that the emulator, an x86_64 phone, can run it).
             ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         }
+        // The release build, signed with the debug key and with the emulator's architecture too, so that the whole emulator suite can run against the
+        // shrunk code (./gradlew -PshrunkTests :app:app:installReleaseTest :app:app:installReleaseTestAndroidTest; docs/tasks/M10-hardening-release.md).
+        // It is never shipped. The debug sources (the pretend members the tests use) are added to it for the same reason.
+        create("releaseTest") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("debug")
+            proguardFile("proguard-releasetest-rules.pro")
+            testProguardFiles("proguard-test-rules.pro")
+            ndk.abiFilters.clear()
+            ndk.abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
+        }
     }
+
+    sourceSets.getByName("releaseTest").java.srcDir("src/debug/kotlin")
+
+    // Run the instrumented tests against the shrunk build when asked.
+    if (project.hasProperty("shrunkTests")) testBuildType = "releaseTest"
 
     packaging {
         // JNA (which Iroh's bindings use) ships the native libraries of desktop systems inside its jar: none of them is for a phone.
@@ -45,7 +67,7 @@ android {
     testOptions {
         // The rule tests read these files directly. Declaring them makes Gradle re-run the tests when one changes.
         unitTests.all { test ->
-            test.inputs.files("../../build.gradle.kts", "../../gradle/libs.versions.toml", "../core-model/build.gradle.kts", "../crypto/build.gradle.kts", "../sync/build.gradle.kts", "../data/build.gradle.kts", "../ui/build.gradle.kts", "build.gradle.kts")
+            test.inputs.files("../../build.gradle.kts", "../../gradle/libs.versions.toml", "../core-model/build.gradle.kts", "../crypto/build.gradle.kts", "../sync/build.gradle.kts", "../data/build.gradle.kts", "../ui/build.gradle.kts", "build.gradle.kts", "proguard-rules.pro", "proguard-releasetest-rules.pro")
             // ManifestRulesTest reads the merged manifest of the release build, which is what a phone gets.
             test.dependsOn("processReleaseManifest")
             test.systemProperty("user.language", "en")
@@ -100,4 +122,5 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    add("releaseTestImplementation", "androidx.compose.ui:ui-test-manifest")
 }
