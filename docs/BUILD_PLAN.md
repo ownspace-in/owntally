@@ -26,7 +26,7 @@ Names marked "candidate" must be confirmed in M0 before depending on them.
 | Crypto | Google Tink or libsodium bindings (candidate): Ed25519 signatures, XChaCha20-Poly1305 or AES-256-GCM, X25519 key exchange, HKDF |
 | Recovery phrase | BIP39 word list, 12 words (candidate: a small Kotlin BIP39 library) |
 | Same-room sync | Google Nearby Connections (`play-services-nearby`), with same-Wi-Fi discovery as fallback |
-| Internet sync | Decided in M0 between Iroh (Rust, Kotlin bindings) and a simple WebSocket relay (OkHttp client). Both sit behind one `Transport` interface. See risk R1. |
+| Internet sync | Both, behind one `Transport` interface and tried as a chain (M7): the same network, then Iroh (Rust, Kotlin bindings; our relay as home relay and n0's discovery, decisions I1 and I2), with our WebSocket relay (OkHttp 4.12, decision W1) joining after 3 s; links through the relay are TLS end to end. A background job (WorkManager, decision B1) syncs about every 15 minutes while the app is closed. |
 | QR | ZXing or ML Kit barcode scanning (candidate) |
 | Build and CI | Gradle Kotlin DSL, GitHub Actions running unit tests and lint on every pull request |
 | DI | Hilt, or manual wiring if that is simpler |
@@ -141,6 +141,8 @@ Acceptance (two real phones, and a test): issued invite tickets survive an app r
 Internet transport (as chosen in M0), the relay as last resort used automatically (no setting, no admin switch; owner decision 4 Nov 2026) at `https://relay.ownspace.in`, status chips (Direct, Via relay, Offline, Needs relay), the "Can't reach a member" screen, retry rules (Nearby only when asked, 15 s; internet chain staggered: Iroh first, the WebSocket relay joins after 3 s if Iroh has not connected, first to connect wins; connect 15 s, stall 30 s, back off 1, 5, 30 minutes).
 
 Acceptance: two phones on different mobile networks sync, the status shows the right chip, and a pair that can reach each other only through the relay shows "Via relay", and when nothing connects the status says so instead of failing silently.
+
+Built (see docs/tasks/M7-internet-sync.md): the chain, the secure relay link, Iroh behind an interface, the chips and the "Can't reach" screen, joining over the internet, the background job, the relay's measured limits. The two-phone check on different networks is the owner's.
 
 ### M8. Settling
 

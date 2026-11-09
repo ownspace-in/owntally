@@ -64,6 +64,7 @@ class BackgroundSyncInstrumentedTest {
         try {
             val c = app.container
             c.syncOnStart = false
+            c.internetEnabled = false // a pretend friend; the pass must not call our relay for him
             c.identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
             val group = c.sessions.createGroup("Goa Trip", "INR", 0)
             val friend = KeyDerivation.groupIdentity(MasterSeed(ByteArray(64) { 5 }), 1)
