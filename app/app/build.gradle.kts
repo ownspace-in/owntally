@@ -52,6 +52,7 @@ android {
             test.systemProperty("user.country", "IN")
             test.inputs.dir("src/main")
             test.inputs.dir("../../site") // InviteSiteTest reads the invite page
+            test.inputs.dir("../../relay") // RelayConfigTest reads the relay's service files and runbooks
             test.inputs.dir("../ui/src/main")
             test.inputs.dir("../data/src/main")
             test.inputs.dir("../sync/src/main")

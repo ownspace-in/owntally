@@ -2,7 +2,7 @@
 
 Goal: phones that use Iroh can reach `https://relay.ownspace.in` as their relay, and learn their public address from it over QUIC. It runs on the same VM as the WebSocket relay and the other sites. nginx keeps TCP 80 and 443.
 
-**Status: written, not yet run on a real VM, and the relay program has not been run by us at all.** Several details come from the `iroh-relay` v1.4.1 source and docs, not from experience. Every step below has a check. If a check does not give the expected answer, stop, undo that step (section "Undo") and report the exact output. Fix this runbook in the same change.
+**Status: run on the real VM (29 Oct 2026, steps 1 to 6) and used by phones on mobile data (2 Nov 2026), see below. Several details still come from the `iroh-relay` v1.4.1 source and docs, not from our own experience, and the phone test of section 9b (after the per-address limits of 3 Nov 2026) is still to do. The access token of section 10 is optional and OFF: the decision of 3 Nov 2026 was to ship with limits only, and the app sends no token.** Every step has a check. If a check does not give the expected answer, stop, undo that step (section "Undo") and report the exact output. Fix this runbook in the same change.
 
 Verified on the VM on 29 Oct 2026 (steps 1 to 5): the program installs and starts under systemd as its own user; with `cert_mode = "Manual"` it loads the certificate and listens on TCP `127.0.0.1:3340` and `127.0.0.1:8443` and UDP `0.0.0.0:7842` (QUIC address discovery); `/healthz` and `/ping` answer 200 on the HTTPS listener; `/relay` exists on the HTTPS listener and demands a `sec-websocket-protocol` header (a bare test gets 400, which is correct, and with `Sec-WebSocket-Protocol: iroh-relay-v1` it answers `101 Switching Protocols`; `curl` then waits, so use `--max-time 3`); `/generate_204` is served only on the plain HTTP listener (3340) and answers 204.
 
@@ -191,9 +191,11 @@ scp relay/iroh-relay/config.toml relay/iroh-relay/nginx-limits.conf relay/iroh-r
 
 **Undo:** restore both `.bak` files, `sudo rm /etc/nginx/conf.d/00-iroh-relay-limits.conf`, `sudo nginx -t && sudo systemctl reload nginx`, `sudo systemctl restart iroh-relay`.
 
-## 10. Access token and rate limit (decided 2 Nov 2026, not yet run)
+## 10. Access token (optional, OFF: on 3 Nov 2026 the decision was to ship with limits only, section 9b)
 
-Decision: a shared token plus per-client rate limits. The relay supports only one access mode at a time (`everyone`, `allowlist`, `denylist`, `http` or `shared_token`), so a denylist is not used alongside the token. Abuse is handled by rotating the token (below).
+The first decision (2 Nov 2026) was a shared token plus per-client rate limits; section 9b replaced it with limits only. If a token is ever switched on, the app would have to send it (it does not today) and every phone would need an update. What follows is kept for that day and has not been run.
+
+The design: a shared token plus per-client rate limits. The relay supports only one access mode at a time (`everyone`, `allowlist`, `denylist`, `http` or `shared_token`), so a denylist is not used alongside the token. Abuse is handled by rotating the token (below).
 
 Know the limits: the token ships inside the APK, so anyone can extract it. It stops casual use, not a determined person, and a new APK carries the new token too. The rate limits cap the damage either way.
 
@@ -240,9 +242,20 @@ Never put a token in git, a command line, a URL or a chat. The app sends it as a
 
 ## 11. Not decided yet
 
-- **Who may use the relay.** Decided: shared token, see step 10. A different relay address entered by a group admin (`docs/DESIGN.md`) has its own token, so the app needs a place for the admin to enter it.
+- **Who may use the relay.** Open access with limits (section 9b, 3 Nov 2026); the token of section 10 stays off. A different relay address entered by a group admin (`docs/DESIGN.md`) is not part of the app for now.
 - **Version mismatch.** The relay is v1.4.1 and the phone library is 1.1.0.
 - **Second relay for failover.** `docs/DESIGN.md` suggests one on a different server later.
+
+## Health check and alert
+
+Add to the outside uptime monitor of `relay/ws-relay/RUNBOOK.md` (section 8), each every minute, alerting after two failures in a row:
+
+| Address | Healthy answer | What a failure usually means |
+|---|---|---|
+| `https://relay.ownspace.in/ping` | 200 | The Iroh relay, nginx, the VM, DNS or the certificate (`429` means the monitor itself is being limited: nginx allows only a few requests a second per address) |
+| `https://relay.ownspace.in/generate_204` | 204 | The Iroh relay's plain HTTP listener, or nginx: phones use it to test the network |
+
+UDP 7842 (address discovery) cannot be watched by an ordinary web monitor. If phones report direct links failing while the checks above pass, look at `sudo journalctl -u iroh-relay -n 50 --no-pager` and `sudo tcpdump -ni any udp port 7842` on the VM. When the Iroh relay is down the app still works: phones find each other through n0's discovery, over the same network, and through the WebSocket relay (docs/tasks/M7-internet-sync.md).
 
 ## Undo (reverses everything above except the downloaded files)
 
