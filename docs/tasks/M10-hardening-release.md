@@ -1,0 +1,59 @@
+# M10 tasks: hardening and release
+
+Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M10. Rules: [DESIGN.md](../DESIGN.md), [CRYPTO.md](../CRYPTO.md) (clarification C8, shrinking), the mockups for the light theme. Tests first.
+
+Goal (BUILD_PLAN): a release build that installs, runs on a 2 GB phone, and passes the full test suite and a manual checklist, with a dark theme, an accessibility pass, shrunk code, release signing, the privacy text, and a final review of every security-relevant file.
+
+**Decisions X1 and S1 are made (9 Nov 2026, below). Nothing is built until the owner says "next".**
+
+## Progress
+
+| Task | Status |
+|---|---|
+| T10.1 plan and decisions | Done (9 Nov 2026): X1 and S1 decided. |
+| T10.2 to T10.9 | Not started. |
+
+## What already exists (so it is not rebuilt)
+
+- **Release build:** `assembleRelease` works, unsigned and **not shrunk**: 29.6 MB (the two Iroh native libraries for arm64 and armv7 are about 24 MB of it); debug 40.7 MB. No signing configuration, no keep rules.
+- **Theme:** `OwnTallyTheme` uses `lightColorScheme` only (`app/ui/.../theme/Theme.kt`); the colours are in `OwnTallyColors`. No dark theme.
+- **Accessibility so far:** content descriptions on icon buttons and many controls, a minimum touch target of 44 dp in places (Material asks for 48 dp), no contrast check, no check with a large font.
+- **Privacy:** the join screen says members see a name and number; nothing yet says who runs the relay, what n0's discovery learns (decision I1) or what Google's Nearby sees. The site has no privacy page.
+- **Restore:** not built. The "your saved identity can't be opened" screen says restoring "arrives in a later update"; the first-run recovery-phrase screens and DESIGN.md "Recovery" describe restoring as if it existed.
+- **Security-relevant code, all reviewed only by me so far (BUILD_PLAN rule 8 needs a human):** `app/crypto` (keys, sealing, signatures, tickets, TLS binding), `app/core-model` (event rules, replay), `app/sync` (handshakes, TLS, relay link, Iroh), `app/data` (secret store, `GroupSession` key handling incl. K1), the manifest and the new link filter.
+- **Open items carried here:** the relay's lack of client authentication (M9 finding; the owner's decision); the Iroh Rust code is invisible to the vulnerability scan (read Iroh's release notes at each release); the Iroh relay is v1.4.1 and the phone library 1.1.0; one Iroh endpoint per member key (so per group) while the app is open (memory, T10.7); the ownership race (damage repaired in M8, the race itself possible).
+
+## Decisions made
+
+- **X1 (9 Nov 2026): restoring from the recovery phrase is not in M10; it is M11.** M10 therefore audits every place that promises it (the first-run recovery-phrase screens, How it works, the unreadable-identity screen, About, the store text) and makes them say plainly what the phrase does today: it is the key to your identity in every group, and restoring from it on a new phone is not available yet (so keep the phone's data and the phrase safe). DESIGN.md "Recovery" gets a line saying restore is M11. BUILD_PLAN has M11.
+- **S1 (9 Nov 2026): Google Play App Signing.** The owner makes an upload key; Google holds the real signing key. Consequences built in M10: the release build is signed with the **upload key** read from the owner's own Gradle properties or environment (never from the repo); the app is shipped as an **App Bundle** for Play; `assetlinks.json` (M9) lists **two fingerprints**: Play's app signing key (from the Play Console) and the upload key (for a build sent to a friend as a file); the runbook for the owner says how to make the upload key and where to keep it.
+
+## Builder's choices (to confirm in the pull request)
+
+1. **The dark theme follows the phone's setting** (no switch in the app). Every screen is checked in both themes with screenshots. The light theme's colours do not change.
+2. **Accessibility target:** WCAG 2.1 AA: text contrast at least 4.5:1 (3:1 for large text and for the edges of controls), computed by a test for every foreground and background pair the app uses, in both themes; touch targets at least 48 dp; every control has a name and a role (a test walks the screens' semantics); nothing is said by colour alone; no clipped or overlapping text at a font scale of 1.3 and 2.0 (screenshots). A TalkBack run on a real phone is on the owner's checklist.
+3. **Privacy text in three places, one source of facts:** an in-app Privacy screen under About, a static page `joinowntally.ownspace.in/privacy` (the Play Store needs a web address), and a draft of the store's data-safety answers; the facts live in one file the three are checked against. It says: nothing leaves the phone except to other members' phones; who runs the relay (the owner, at relay.ownspace.in) and what it sees (public keys, a hash of the group id, addresses, timing and sizes, never content); that **n0's public discovery learns each phone's member key, IP address and when it is online** (decision I1); that Google's Nearby Connections is used only when the person starts it; no accounts, no analytics, no advertising; what the permissions are for. The owner supplies the operator's name and a contact address.
+4. **Shrinking:** R8 with resource shrinking on the release build; keep rules for Tink, Room, Compose, Iroh and JNA; the whole emulator suite is run against the shrunk build (a test build type that is the release build signed with the debug key); the size is measured again and written down.
+5. **Version numbers:** `versionName` 1.0.0 and a `versionCode` that Play needs to increase on every upload, kept in one place.
+6. **Native debug symbols** are uploaded with the bundle (Play wants them for crash reports of the Iroh library), or the owner may leave them out; this is a size and a privacy-neutral choice.
+7. **The security review is prepared, not performed, by me:** a list of the security-relevant files with what a reviewer should check in each, my own review pass over them with the findings written down, and the gate left open for the owner's human review (BUILD_PLAN rule 8).
+8. **The store listing text is the owner's** (BUILD_PLAN "What the owner decides"). I draft facts only (what the app does, the permissions, the data-safety answers), not marketing text.
+
+## Tasks
+
+- **T10.2 Code shrinking.** Turn on R8 and resource shrinking for release; keep rules for Tink, Room, Compose, Iroh (UniFFI and JNA load classes by name) and the manifest's components; run every emulator test against the shrunk build (the release build signed with the debug key as a test build type); fix what breaks; measure the size (APK per ABI and the bundle). A test that the shrunk build still has the classes found by name.
+- **T10.3 Dark theme.** A dark colour scheme and dark values for every colour in `OwnTallyColors`; the cover and the recents screen; screenshots of every screen in both themes; tests that no screen uses a colour outside the theme.
+- **T10.4 Accessibility pass.** Contrast computed for every pair in both themes (fix what fails, with the owner's eye on the brand colours: any change is shown); touch targets raised to 48 dp; names and roles checked by a test that walks every screen; large-font screenshots at 1.3 and 2.0; focus order of the forms.
+- **T10.5 What the app promises.** The audit of every sentence about restoring (X1) and the privacy facts (choice 3): the facts file, the Privacy screen, the web page, the data-safety draft; tests that the three agree, that the screens do not say "restore" as if it worked, and that the page loads nothing from outside.
+- **T10.6 Release signing and the bundle (S1).** The signing configuration reading the upload key from the owner's properties or the environment, the bundle task, a test that the repository holds no keystore, key or password, the runbook for making the upload key and the first Play upload, and the two-fingerprint step for `assetlinks.json`.
+- **T10.7 A 2 GB phone.** An emulator of 2 GB and Android 11 (the minimum) and one of Android 16; install the shrunk release build; the first run, a group with members, a sync, the invite link; the memory (`dumpsys meminfo`) with 1, 5 and 15 groups open while syncing, which shows what an Iroh endpoint per group costs; if it is too much, a plan (for example starting Iroh only for groups that are syncing) for the owner to approve before anything is changed.
+- **T10.8 Security review preparation.** `docs/SECURITY_REVIEW.md`: the files, what each must guarantee, the tests that guard it and the mutations that were tried; my own review pass over them (the code-review agents and by hand) with the findings fixed or listed; the open items listed above restated for the owner's decision.
+- **T10.9 Hand back.** All tests, lint, the release build and bundle, the vulnerability check (and Iroh's release notes read, the blind spot), the manual checklist for the owner (TalkBack, a real 2 GB phone, the dark theme on a real screen, the install from a file and from Play's internal test track, the invite link with the verified fingerprints, the privacy page), the pull request.
+
+## Open questions
+
+None at the moment. What only the owner can do: make the upload key, the Play Console account and listing, the operator's name and contact for the privacy text, the human review of the security-relevant files, the decision on relay authentication, and M11 (restore).
+
+## Results
+
+(To be written as each task is done.)
