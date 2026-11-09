@@ -33,11 +33,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import owntally.ui.components.Glyph
 import owntally.ui.components.GlyphIcon
 import owntally.ui.components.Notice
+import owntally.model.DisputeReason
 import owntally.model.Money
 import owntally.model.format.MoneyFormat
 import owntally.ui.theme.OwnTallyColors
@@ -202,6 +204,68 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
                 Spacer(Modifier.height(16.dp))
             }
             Notice(SettleUpModel.NOTE, background = OwnTallyColors.InfoBackground, content = OwnTallyColors.Green)
+        }
+    }
+}
+
+/** "Payment not received" (design/15 and 15b). The reason is chosen here; [onTell] writes it. */
+@Composable
+fun NotReceivedScreen(model: NotReceivedModel, onBack: () -> Unit, onTell: (DisputeReason) -> Unit, message: String? = null) {
+    var chosen by remember { mutableStateOf(DisputeReason.NOTHING_RECEIVED) }
+    Column(Modifier.fillMaxSize().padding(20.dp, 8.dp, 20.dp, 24.dp)) {
+        BackHeader(model.screenTitle, null, onBack)
+        Spacer(Modifier.height(16.dp))
+        when (model) {
+            is NotReceivedModel.Unavailable -> {
+                Text(model.message, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
+                Spacer(Modifier.weight(1f))
+                ActionButton("Back to settle up", Modifier.fillMaxWidth(), filled = true, onClick = onBack)
+            }
+            is NotReceivedModel.Form -> {
+                CardBox { PersonLine(model.title, model.markedAgo, model.amount, OwnTallyColors.Ink, 3) }
+                Spacer(Modifier.height(8.dp))
+                Text("WHAT HAPPENED?", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
+                Spacer(Modifier.height(10.dp))
+                for (r in model.reasons) {
+                    val selected = chosen == r.reason
+                    Row(
+                        Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp))
+                            .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) OwnTallyColors.Green else OwnTallyColors.CardBorder), RoundedCornerShape(20.dp))
+                            .clickable { chosen = r.reason }.padding(16.dp)
+                            .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = selected },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(24.dp).border(BorderStroke(2.dp, if (selected) OwnTallyColors.Green else OwnTallyColors.Border), CircleShape), contentAlignment = Alignment.Center) {
+                            if (selected) Box(Modifier.size(12.dp).background(OwnTallyColors.Green, CircleShape))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(r.label, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(model.explanation, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                if (message != null) { Spacer(Modifier.height(12.dp)); Notice(message) }
+                Spacer(Modifier.weight(1f))
+                ActionButton(model.tellLabel, Modifier.fillMaxWidth(), filled = true, danger = true) { onTell(chosen) }
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onBack).semantics { role = Role.Button }, contentAlignment = Alignment.Center) {
+                    Text("Cancel", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Green)
+                }
+            }
+            is NotReceivedModel.Sent -> {
+                CardBox { PersonLine(model.title, model.markedAgo, model.amount, OwnTallyColors.Ink, 3) }
+                Column(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, cardShape).padding(18.dp)) {
+                    Text(model.bannerTitle, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.WarningText)
+                    Spacer(Modifier.height(6.dp))
+                    Text(model.bannerBody, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
+                }
+                Spacer(Modifier.height(12.dp))
+                CardBox { Text(model.tip, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary) }
+                Text(model.laterNote, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                Spacer(Modifier.weight(1f))
+                ActionButton(model.backLabel, Modifier.fillMaxWidth(), filled = true, onClick = onBack)
+            }
         }
     }
 }

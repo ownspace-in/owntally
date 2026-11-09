@@ -93,7 +93,8 @@ fun HomeFlow(
             is Screen.CantReach -> CantReachRoute(sessions, sync, screen.id, screen.member, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
             is Screen.Nearby -> NearbyRoute(sessions, nearby, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
-            is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
+            is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back, onNotReceived = { ui.nav = ui.nav.push(Screen.NotReceived(screen.id, it)) })
+            is Screen.NotReceived -> NotReceivedRoute(sessions, screen.id, screen.settlement, onBack = back)
             is Screen.Invite -> InviteRoute(sessions, invites, screen.id, onBack = back)
             Screen.JoinPaste -> JoinPasteRoute(joinGroup, onBack = back, onOpened = { ui.nav = ui.nav.pop().push(Screen.Join(it)) })
             is Screen.Join -> JoinRoute(joinGroup, screen.id, onBack = back, onOpenGroup = { ui.nav = ui.nav.home().push(Screen.Group(screen.id)) })
@@ -385,7 +386,7 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
 }
 
 @Composable
-private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
+private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit, onNotReceived: (owntally.model.EventId) -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
@@ -408,7 +409,6 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
         Box(Modifier.weight(1f)) {
             SettleUpScreen(
                 model, onBack,
-                notReceivedAvailable = false,
                 onAction = { action ->
                     message = null
                     when (action) {
@@ -426,7 +426,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
                         is SettleAction.IPaid, is SettleAction.MarkReceived -> amountFor = action
                         is SettleAction.Confirm -> write { s.confirm(action.id) }
                         is SettleAction.CancelDuplicate -> write { s.cancelDuplicate(action.id) }
-                        is SettleAction.NotReceived -> Unit
+                        is SettleAction.NotReceived -> onNotReceived(action.row.id)
                     }
                 },
             )
@@ -441,6 +441,21 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
         })
         else -> Unit
     }
+}
+
+@Composable
+private fun NotReceivedRoute(sessions: Sessions, id: GroupId, settlement: owntally.model.EventId, onBack: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session ?: return Box(Modifier.fillMaxSize())
+    val view by s.view.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    val model = remember(view) { NotReceivedModel.build(view, settlement, System.currentTimeMillis() / 1000) }
+    NotReceivedScreen(model, onBack, message = message, onTell = { reason ->
+        scope.launch { message = SettleMessages.of(withContext(Dispatchers.IO) { s.dispute(settlement, reason) }) }
+    })
 }
 
 @Composable

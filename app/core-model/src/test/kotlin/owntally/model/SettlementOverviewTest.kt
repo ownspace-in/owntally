@@ -133,4 +133,11 @@ class SettlementOverviewTest {
         assertEquals(listOf(p1.id, p2.id, p3.id).sorted(), ids)
         assertEquals(settleOverview(s.state()), settleOverview(replay(logOf(s.events.reversed()))), "arrival order does not matter")
     }
+
+    @Test fun aPaymentRemembersWhenItWasRecordedAndAConfirmationDoesNotChangeIt() {
+        val s = dinner(); val paid = s.emit(b, EventBody.SettlementRecorded(b, a, rupees(1_000)))
+        val at = s.events.last().time
+        s.emit(a, EventBody.SettlementConfirmed(paid.id))
+        assertEquals(at, s.state().settlements.getValue(paid.id).recordedAtMillis)
+    }
 }

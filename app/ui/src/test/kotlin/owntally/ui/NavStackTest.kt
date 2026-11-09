@@ -60,6 +60,8 @@ class NavStackTest {
     @Test fun leavingAGroupScreenWhoseGroupIsGoneGoesBackToItsParent() {
         val n = NavStack().push(Screen.Group(g1)).push(Screen.SettleUp(g1))
         assertEquals(Screen.Home, n.without(g1).current)
+        val deep = NavStack().push(Screen.Group(g1)).push(Screen.SettleUp(g1)).push(Screen.NotReceived(g1, owntally.model.EventId(owntally.model.PublicKey(ByteArray(32)), 1)))
+        assertEquals(listOf<Screen>(Screen.Home), deep.without(g1).screens, "the not-received screen goes with its group")
         assertEquals(listOf<Screen>(Screen.Home), n.without(g1).screens)
         assertEquals(n.screens, n.without(g2).screens)
     }

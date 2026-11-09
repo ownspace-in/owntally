@@ -126,7 +126,7 @@ private class Run(private val forced: Set<EventId>) {
                 val known = knownTo(event)
                 if (body.from !in known || body.to !in known) return IgnoreReason.INVALID
                 val status = if (author == body.from) SettlementStatus.PAID_MARKED else SettlementStatus.CONFIRMED
-                settlements[event.id] = Settlement(event.id, body.from, body.to, body.amount, status, null)
+                settlements[event.id] = Settlement(event.id, body.from, body.to, body.amount, status, null, event.time)
                 null
             }
             is EventBody.SettlementConfirmed -> {

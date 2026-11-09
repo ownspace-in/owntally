@@ -106,6 +106,7 @@ internal class PretendMembers(
             list += DebugAction("As ${f.name}: write an expense") {
                 act(session, f, EventBody.ExpenseAdded("Snacks by ${f.name}", Money(60_000), f.key, day, Split.Equal(setOf(me, f.key))))
             }
+            list += DebugAction("As ${f.name}: mark \u20b9500 as paid to you") { act(session, f, EventBody.SettlementRecorded(f.key, me, Money(50_000))) }
             if (state.members[f.key]?.role == owntally.model.Role.MEMBER) {
                 list += DebugAction("As ${f.name}: leave the group") { act(session, f, EventBody.MemberRemoved(f.key, state.epoch, emptyMap())) }
             }

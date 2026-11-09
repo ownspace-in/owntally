@@ -84,4 +84,38 @@ class SettleUpEndToEndInstrumentedTest {
             wipe()
         }
     }
+
+    @Test
+    fun aFriendMarksAPaymentTheOwnerSaysNotReceivedThenConfirmsItLater() {
+        wipe()
+        try {
+            val c = container()
+            c.syncOnStart = false; c.internetEnabled = false
+            c.identity.let { it.completeFirstRun(it.newPhrase(), "Asha", "98765 43210") }
+            c.sessions.createGroup("Goa Trip", "INR", 0)
+
+            ActivityScenario.launch(MainActivity::class.java)
+            see("Goa Trip"); rule.onNodeWithText("Goa Trip").performClick()
+            see("Add pretend friend: Ben (test) (debug)"); rule.onNodeWithText("Add pretend friend: Ben (test) (debug)").performClick()
+            see("As Ben (test): mark \u20b9500 as paid to you (debug)")
+            rule.onNodeWithText("As Ben (test): mark \u20b9500 as paid to you (debug)").performClick()
+            see("Settle up the group"); rule.onNodeWithText("Settle up the group").performClick()
+            see("Ben (test) marked \u20b9500 as paid. Waiting for you to confirm.")
+
+            rule.onNodeWithText("Not received").performClick()
+            see("Payment not received")
+            rule.onNodeWithText("The amount is different").performClick()
+            rule.onNodeWithText("Tell Ben (test)").performClick()
+            see("Ben (test) has been told")
+            rule.onNodeWithText("Back to settle up").performClick()
+
+            // Back on Settle up the payment is listed as not accepted, with the answer, and can still be confirmed.
+            see("You told Ben (test) the amount is different.")
+            rule.onNodeWithText("Confirm received").performClick()
+            see("1 payment already confirmed.")
+            assertTrue(container().sessions.session(container().groups.listGroups().single().groupId).view.value.overview.disputed.isEmpty())
+        } finally {
+            wipe()
+        }
+    }
 }
