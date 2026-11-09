@@ -47,3 +47,13 @@ jobs:
         run: |
           go vet ./...
           go test -race -count=1 ./...
+
+  site:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test the assetlinks tools
+        run: python3 -m unittest -v test_assetlinks
