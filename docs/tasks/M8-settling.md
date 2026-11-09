@@ -4,13 +4,13 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M8. Rules: [DESIGN.md](../D
 
 Goal (BUILD_PLAN): I paid, Received, Not received and reasons, reminders through the share sheet, the unconfirmed state, plan updates after changes. Acceptance: every state in screens 4 and 15 reachable and persisted; events merge correctly across devices.
 
-**Decisions P1 to P3 are made (9 Nov 2026, below). Nothing is built until the owner approves this plan.**
+**Decisions P1 to P6 are made (9 Nov 2026, below). The plan is approved except for what the owner says about the remaining builder's choices; T8.2 starts on "next".**
 
 ## Progress
 
 | Task | Status |
 |---|---|
-| T8.1 plan and decisions | In progress: P1 to P3 decided; the builder's choices below need a look. |
+| T8.1 plan and decisions | Done (9 Nov 2026): P1 to P6 decided. |
 | T8.2 to T8.8 | Not started. |
 
 ## What already exists (so it is not rebuilt)
@@ -26,25 +26,27 @@ Goal (BUILD_PLAN): I paid, Received, Not received and reasons, reminders through
 - **P2 (9 Nov 2026): the amount can be edited.** I paid and Mark received open a small amount box filled with the planned amount. A smaller payment counts at once and the plan shows the rest still to pay. The receiver who disputes with "the amount is different" can then record what they really got.
 - **P3 (9 Nov 2026): a payment recorded twice is noticed, with one tap to fix.** If the payer and the receiver each recorded the same payment (same two people, same amount) before they synced, the receiver sees "This looks like the same payment recorded twice" and a button that stops the payer's entry counting (it becomes a dispute with a new reason, DUPLICATE: see the wire change below; the payer sees "Rohan recorded the same payment, so yours no longer counts"). Nothing is deleted and the balances come right at once.
 
-## A change to the wire format that P3 needs (for the owner's approval with this plan)
+- **P4 (9 Nov 2026): the wire format gains dispute reason 3, duplicate** (approved). Details below.
+- **P5 (9 Nov 2026): a payment may be more than the plan says is owed.** The amount box has no cap at the planned amount (the limit of 100,000,000 whole units of the core stays). Consequence to show plainly: if Meera records ₹1,400 against a planned ₹1,350, Rohan then owes her ₹50 and the plan shows that new payment, so the plan can change direction; the box says "This is more than the plan asks for. The extra will show as owed back to you."
+- **P6 (9 Nov 2026): the reminder says the name and the amount only**, never the group name: "Hi <name>, OwnTally says you owe me <amount>. Pay however suits you, then mark it as paid in the app."
 
-`PaymentDisputed` has three reasons today (0 nothing received, 1 different amount, 2 not checked). To say "this is the same payment recorded twice" honestly, a fourth reason, **3 duplicate**, is added to WIRE_FORMAT.md, the core enum, the decoder (still strict: 0 to 3) and the test vectors (an independent Python vector as for the other events). Older phones would refuse the event as invalid, so a group's phones must all run the M8 build before anyone uses it; there are no released phones yet, so nothing is lost. If you would rather not touch the wire format, the fallback is to use reason 2 (not checked) and show the payer "Rohan has not checked", which is wrong for this case.
+## The wire change P4 makes
+
+`PaymentDisputed` has three reasons today (0 nothing received, 1 different amount, 2 not checked). To say "this is the same payment recorded twice" honestly, a fourth reason, **3 duplicate**, is added to WIRE_FORMAT.md, the core enum, the decoder (still strict: 0 to 3) and the test vectors (an independent Python vector as for the other events). Older phones would refuse the event as invalid, so a group's phones must all run the M8 build before anyone uses it; there are no released phones yet, so nothing is lost. Approved by the owner on 9 Nov 2026.
 
 ## Builder's choices (to confirm in the pull request)
 
-1. **A payment cannot be more than what the plan says that person owes that person.** The amount box caps at the planned amount; at least 1 paise. Over-paying is settled outside the app. (Core accepts any amount up to the limit; the cap is in the screen and the session.)
-2. **After "not received" the payment goes back to "Payments to make"** with the payer seeing the receiver's reason in words ("Rohan says he has not received anything", "Rohan says the amount is different", "Rohan has not checked his account yet"); the payer can mark it again (a new payment) and the receiver can still confirm the old one. A disputed payment does not count (core rule), so the plan shows the full amount again.
-3. **Reminder text** (share sheet, the receiver sends it): "Hi <name>, OwnTally says you owe me <amount> for <group>. Pay however suits you, then mark it as paid in the app." No number, no link. The share sheet shows no app unless the person picks one.
-4. **The list on Settle up** has three parts: Payments to make (the plan), Waiting (marked as paid and not yet confirmed: both sides see it, the receiver can confirm or say not received), and a count of confirmed ones in the footer, as in mockup 04. Payments between two other people are shown without buttons, as today.
-5. **Mockup 15's "Tell <name>"** records the dispute event; the screen says "Meera will see your answer" and the next sync carries it. If the payer's phone is offline the wording after sending is the same (it is saved on this phone, as every entry is).
+1. **After "not received" the payment goes back to "Payments to make"** with the payer seeing the receiver's reason in words ("Rohan says he has not received anything", "Rohan says the amount is different", "Rohan has not checked his account yet"); the payer can mark it again (a new payment) and the receiver can still confirm the old one. A disputed payment does not count (core rule), so the plan shows the full amount again.
+2. **The list on Settle up** has three parts: Payments to make (the plan), Waiting (marked as paid and not yet confirmed: both sides see it, the receiver can confirm or say not received), and a count of confirmed ones in the footer, as in mockup 04. Payments between two other people are shown without buttons, as today.
+3. **Mockup 15's "Tell <name>"** records the dispute event; the screen says "Meera will see your answer" and the next sync carries it. If the payer's phone is offline the wording after sending is the same (it is saved on this phone, as every entry is).
 
 ## Tasks
 
 - **T8.2 The payment list (core).** A plain-Kotlin function that turns a group state into what Settle up shows: payments to make (plan), waiting (PAID_MARKED), disputed (with reason), confirmed count, the "possible duplicate" pairs (P3), and per row what the viewer can do. Tests first: every state; a part payment leaves the rest in the plan; a disputed payment returns to the plan; duplicates found only for the same two people and the same amount; removed or left people hidden; the same list on every phone.
-- **T8.3 Recording (data).** `GroupSession` calls: `markPaid`, `markReceived`, `confirm`, `dispute`, `cancelDuplicate` (a dispute with reason DUPLICATE), each checking who may do it and the amount cap (choice 1), returning a result the screen can explain. Tests for each rule and for the events written.
+- **T8.3 Recording (data).** `GroupSession` calls: `markPaid`, `markReceived`, `confirm`, `dispute`, `cancelDuplicate` (a dispute with reason DUPLICATE), each checking who may do it and that the amount is positive and within the limit (P5: no cap at the plan), returning a result the screen can explain. Tests for each rule and for the events written.
 - **T8.4 Settle up screen.** The buttons switched on: I paid and Mark received with the amount box (P2), Copy number, Call (P1), Confirm received, Not received, Send reminder, the duplicate notice (P3). Model tests, then emulator tests and screenshots against mockup 04.
-- **T8.5 Payment not received screens.** Mockups 15 and 15b: the three reasons, Tell <name>, Cancel; what the payer sees afterwards (choice 2).
-- **T8.6 Reminders.** The share-sheet text (choice 3), tested as text.
+- **T8.5 Payment not received screens.** Mockups 15 and 15b: the three reasons, Tell <name>, Cancel; what the payer sees afterwards (choice 1).
+- **T8.6 Reminders.** The share-sheet text (P6), tested as text (it never contains the group name or a number).
 - **T8.7 Merge and persistence.** The simulation (3 to 5 devices, delays, drops, reordering) with payments: marked, confirmed, disputed, recorded twice, a payment while a member is removed; all devices end with the same list and balances; payments survive a restart (database round trip in an emulator test).
 - **T8.8 App wiring and hand back.** The Settle tab and group screen reflect unconfirmed payments, the manifest still asks for nothing new (a test: `ACTION_DIAL` needs no permission), the checklist for two phones, all checks, DESIGN.md updated (P1), the pull request with the choices listed.
 
