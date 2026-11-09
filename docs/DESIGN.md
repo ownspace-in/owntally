@@ -254,6 +254,9 @@ The creator or the group owner. Shows "This changes balances" when the entry is 
 ### Sync states shown to the user
 Up to date with N members, syncing, waiting for a friend to come online, not reachable directly, relay unreachable (retrying, changes saved on this phone). Each member row has a chip: Direct, Via relay, Nearby, Syncing, Not yet, Offline (the other phone is not there), Needs relay (direct failed and this phone cannot reach the relay). Offline and Needs relay rows open "Can't reach <name>": why, that the relay is used automatically (no button to turn it on, since the app decides), Try now, Meet and sync nearby, Try again later, and that entries are never lost.
 
+### Background sync
+Decision B1 (8 Nov 2026). While the app is closed, Android's WorkManager runs one pass about every 15 minutes (the shortest Android allows; it picks the real time and may delay it much longer when the phone is in Doze or low on battery): every group is tried once, then any leave still to be delivered. It runs only with a network connection, never while the app is in front (the app then syncs by itself), and never before the phone is set up. It stops itself after 8 minutes. Limits, said plainly: there is no mailbox, so the other phone must be online at about the same time for anything to move; the job helps less than it sounds. A pass that fails is not retried at once; the next run is soon enough, and the entries stay on the phone. The job adds three normal Android permissions (keep awake while it runs, know whether the network is up, run again after a restart); no question is asked of the person.
+
 ## Build order
 
 1. Local app: groups, expenses, balances, settle up, event log, encryption.

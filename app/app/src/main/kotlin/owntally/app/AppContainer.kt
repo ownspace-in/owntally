@@ -88,6 +88,24 @@ class AppContainer(private val context: Context) {
         for (g in sessions.summaries.value) sync.stop(g.groupId)
         localNode.close()
     }
+
+    /**
+     * One background pass (decision B1, M7): every group once, then the leaves still to be delivered, then done. It does nothing while the app is
+     * in front (the coordinators there are already syncing), before the person has set the phone up, or when the stored keys cannot be read.
+     * Returns whether a pass ran. Android picks when (about every 15 minutes at best), so the time given is short of what Android allows a job.
+     */
+    suspend fun backgroundPass(timeoutMs: Long = BACKGROUND_PASS_MS): Boolean {
+        if (following?.isActive == true) return false
+        val ready = try { identity.state() == IdentityState.READY } catch (e: SecretStoreException) { false }
+        if (!ready) return false
+        try {
+            kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { sync.runOnce() }
+        } finally {
+            localNode.close()
+        }
+        return true
+    }
+
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
     /** Syncing with the other members (M5), now over real connections (M6): the Sync screen and its "Sync now" read this. */
     val sync: owntally.data.session.SyncCoordinator by lazy {
@@ -123,5 +141,10 @@ class AppContainer(private val context: Context) {
         }
     } catch (e: SecretStoreException) {
         AppStart.StorageUnavailable
+    }
+
+    companion object {
+        /** A job that runs for more than about 10 minutes is stopped by Android; this leaves room for the pass to end cleanly. */
+        const val BACKGROUND_PASS_MS = 8 * 60_000L
     }
 }
