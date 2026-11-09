@@ -44,7 +44,12 @@ class InternetWaysInstrumentedTest {
             withTimeout(90_000) {
                 val incoming = wb.transport.incoming(room)
                 wa.transport.incoming(room)
-                val ab = wa.transport.connect(room, b.publicKey)
+                // The relay keeps nothing for a phone that has not joined yet: if A dials before B is in the room, A's try ends as "not there". A real
+                // phone tries again (the app does, after a minute); so does this test, a few times.
+                var dialled: owntally.sync.Link? = null
+                var last: owntally.sync.PeerUnreachable? = null
+                repeat(4) { if (dialled == null) try { dialled = wa.transport.connect(room, b.publicKey) } catch (e: owntally.sync.PeerUnreachable) { last = e; kotlinx.coroutines.delay(2_000) } }
+                val ab = dialled ?: throw last!!
                 val ba = incoming.first()
                 assertEquals(b.publicKey, ab.peer, "A reached B")
                 assertEquals(a.publicKey, ba.peer, "and B knows it is A")

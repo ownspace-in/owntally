@@ -86,16 +86,16 @@ private fun WithCover(content: @Composable () -> Unit) {
 
 /** The root of the app's screens. */
 @Composable
-fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions: () -> Sessions, debugTools: DebugTools? = null, lock: LockDeps? = null, joinRequests: owntally.data.session.JoinRequests? = null, sync: owntally.data.session.SyncCoordinator? = null, invites: owntally.data.session.Invites? = null, joinGroup: owntally.data.session.JoinGroup? = null, nearby: ((owntally.model.GroupId) -> owntally.ui.nearby.NearbyController)? = null) {
+fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions: () -> Sessions, debugTools: DebugTools? = null, lock: LockDeps? = null, joinRequests: owntally.data.session.JoinRequests? = null, sync: owntally.data.session.SyncCoordinator? = null, invites: owntally.data.session.Invites? = null, joinGroup: owntally.data.session.JoinGroup? = null, nearby: ((owntally.model.GroupId) -> owntally.ui.nearby.NearbyController)? = null, pendingInvites: owntally.data.session.PendingInvites? = null) {
     OwnTallyTheme {
         WithCover {
         when (start) {
             AppStart.Loading -> Box(Modifier.fillMaxSize().background(OwnTallyColors.Background))
             AppStart.NeedsFirstRun -> {
                 var finished by remember { mutableStateOf(false) }
-                if (finished) WithLock(lock) { HomeFlow(sessions(), debugTools, it, joinRequests, sync, invites, joinGroup, nearby) } else OnboardingFlow(onboarding(), onFinished = { finished = true })
+                if (finished) WithLock(lock) { HomeFlow(sessions(), debugTools, it, joinRequests, sync, invites, joinGroup, nearby, pendingInvites) } else OnboardingFlow(onboarding(), onFinished = { finished = true })
             }
-            AppStart.Ready -> WithLock(lock) { HomeFlow(sessions(), debugTools, it, joinRequests, sync, invites, joinGroup, nearby) }
+            AppStart.Ready -> WithLock(lock) { HomeFlow(sessions(), debugTools, it, joinRequests, sync, invites, joinGroup, nearby, pendingInvites) }
             AppStart.SeedUnreadable -> MessageScreen(
                 "Your saved identity can't be opened on this phone",
                 "This can happen when the app is restored from a backup or moved to another phone. Restoring from your recovery phrase arrives in a later update.",

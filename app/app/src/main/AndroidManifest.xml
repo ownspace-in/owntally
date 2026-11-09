@@ -37,10 +37,22 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!--
+              The invite link (M9, decision A1): https://joinowntally.ownspace.in/j#<code>, claimed as an Android App Link. It is verified against
+              https://joinowntally.ownspace.in/.well-known/assetlinks.json (made from the signing certificate: site/README.md); until then Android
+              opens the link in the browser, where the page shows the code. The exact path and nothing broader; ManifestRulesTest keeps it so.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="joinowntally.ownspace.in" android:path="/j" />
             </intent-filter>
         </activity>
         <service android:name="androidx.work.impl.foreground.SystemForegroundService" tools:node="remove" />

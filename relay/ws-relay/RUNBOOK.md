@@ -1,13 +1,16 @@
 # Runbook: deploy the WebSocket relay on a fresh VM
 
-Goal: `wss://relay.ownspace.in/ws` accepts connections, restarts if it crashes, and starts at boot. The same nginx also serves the static invite page at `joinowntally.ownspace.in` (see `site/README.md`). Written so someone who has not seen the project can follow it. Status of these steps: the relay, nginx and certbot steps were run on the real VM on 20 Oct 2026 using the shortcut below, and the smoke test passed. The program, its tests, the smoke tool, the unit file syntax and both nginx configs (routing, WebSocket upgrade, redirects, content types, checked with a self-signed certificate) are verified on a development machine. The steps on a real VM, and the certbot steps, have not been run yet. If a step fails, fix the runbook as part of the same change.
+Goal: `wss://relay.ownspace.in/ws` accepts connections, restarts if it crashes, and starts at boot. The same nginx also serves the static invite page at `joinowntally.ownspace.in` (see `site/README.md`). Written so someone who has not seen the project can follow it. If a step fails, fix the runbook as part of the same change.
+
+**What has been run, and when.** On the real VM on 20 Oct 2026: the program was installed under systemd, nginx and certbot were set up **by the shortcut at the end of step 4** (not by steps 4a to 4c), and the smoke test passed (step 6). The security headers of the invite site were added by hand on 3 Nov 2026 and checked from outside. Phones used the relay on mobile data on 2 Nov 2026. **Not run on a real VM:** steps 4a to 4c as written (they were checked on a development machine with a self-signed certificate: routing, the WebSocket upgrade, redirects, content types), and a run of the whole runbook from a fresh VM, which is the owner's check of M9. The program, its tests, the smoke tool and the unit file's syntax are verified on a development machine; the limits of step 7 were measured against the real program in M7 (T7.9).
 
 ## 0. What you need
 
 - A Linux VM (Ubuntu 22.04 or 24.04 assumed) with a public IPv4 address, 1 GB RAM is plenty, and `sudo` access.
 - Control of the DNS for `ownspace.in`.
 - Ports 80 and 443 open in the cloud provider's firewall (security group) as well as on the VM. Port 80 is needed to get the HTTPS certificate.
-- A laptop with Go installed, to build the program and to run the smoke test.
+- A laptop with Go installed, to build the program and to run the smoke test (and `git` and `ssh`/`scp`).
+- About an hour, and an email address for the certificate's expiry notices.
 
 ## 1. DNS
 
@@ -52,12 +55,10 @@ The relay listens only on `127.0.0.1:8080`. It is not reachable from the interne
 
 ## 4. nginx and HTTPS certificates (on the VM)
 
-The VM already runs nginx. Our files go in `/etc/nginx/conf.d/`, which the default Ubuntu `nginx.conf` includes. Other sites on the VM are not touched, because ours match only their own server names. Run `sudo nginx -t` before every reload, and stop if it reports an error.
-
-Install certbot (nginx is already there):
+On a **fresh VM** install nginx and certbot first (`sudo apt install nginx certbot`; the VM we use already had nginx for other sites). Our files go in `/etc/nginx/conf.d/`, which the default Ubuntu `nginx.conf` includes, and other sites on the VM are not touched, because ours match only their own server names. Run `sudo nginx -t` before every reload, and stop if it reports an error.
 
 ```
-sudo apt install certbot
+sudo apt install nginx certbot
 sudo mkdir -p /var/www/certbot /var/www/joinowntally
 ```
 
@@ -129,14 +130,22 @@ cd relay/ws-relay && go run ./tools/smoke        # prints: OK  connect=...  roun
 | See how many clients are connected | `sudo journalctl -u ws-relay -n 5 --no-pager` (a stats line is logged every minute) |
 | Restart | `sudo systemctl restart ws-relay` |
 | Update the program | build as in step 2, `scp` the file, then `sudo install -m 0755 ~/ws-relay /usr/local/bin/ws-relay && sudo systemctl restart ws-relay` |
-| Change limits | edit the `ExecStart` line in `/etc/systemd/system/ws-relay.service` (flags are listed in `README.md`), then `sudo systemctl daemon-reload && sudo systemctl restart ws-relay` |
+| Change limits | edit the `ExecStart` line in `/etc/systemd/system/ws-relay.service` (flags are listed in `README.md`; the repo's file has the production values `-connects-per-min 300 -max-per-room 40`, decision R3), then `sudo systemctl daemon-reload && sudo systemctl restart ws-relay`. Connected phones reconnect by themselves within seconds. |
 | Check the certificate | `echo | openssl s_client -connect relay.ownspace.in:443 -servername relay.ownspace.in 2>/dev/null | openssl x509 -noout -dates` |
 
 The relay logs only counts and errors, never message contents or keys. Do not add logging that changes this.
 
 ## 8. Health check and alert
 
-Set up an outside uptime monitor (any free service) that requests `https://relay.ownspace.in/healthz` every minute and emails or messages the owner after two failures. The relay restarts itself after a crash, so an alert usually means the VM, the network, DNS, nginx or a certificate.
+Set up an outside uptime monitor (any free service, from outside the VM and its network) with these checks, each every minute, alerting the owner (email or a message) after **two failures in a row**:
+
+| Address | Healthy answer | What a failure usually means |
+|---|---|---|
+| `https://relay.ownspace.in/healthz` | 200 and the text `ok` | The WebSocket relay, nginx, the VM, DNS or the certificate |
+| `https://joinowntally.ownspace.in/j` | 200 | nginx, the VM, DNS or the certificate (the invite page) |
+| `https://joinowntally.ownspace.in/.well-known/assetlinks.json` | 200, `application/json` (add this once the file exists, M10) | The file is gone or nginx changed; invite links stop opening the app |
+
+The Iroh relay's own checks are in `relay/iroh-relay/RUNBOOK.md`. Also ask the service to warn about certificate expiry (most can), or check by hand every few weeks with the command in step 7. The relay restarts itself after a crash, so an alert usually means the VM, the network, DNS, nginx or a certificate, not the program. **When an alert comes:** run the checks of step 6 from a laptop, then `systemctl status ws-relay nginx` and `journalctl -u ws-relay -n 50` on the VM. Phones keep working meanwhile: the app tries Iroh and the same network first, tries again after 1, 5 and 30 minutes, and keeps every entry on the phone; only phones that can reach each other no other way notice an outage.
 
 ## 9. Keep it updated
 
@@ -152,10 +161,12 @@ Set up an outside uptime monitor (any free service) that requests `https://relay
 | Certbot fails | DNS not yet pointing at the VM, port 80 closed, or the temporary config in 4a is not loaded | Fix, check `sudo nginx -t`, then run certbot again |
 | `502 Bad Gateway` from nginx | The relay is not running | `systemctl status ws-relay`, read `journalctl -u ws-relay` |
 | Smoke test says `400` or hangs on connect | nginx is not passing the upgrade headers | Compare the `/ws` block in `relay.ownspace.in.conf` with the repo |
-| Smoke test says `429` | Too many connects from one address in a minute | Wait a minute, or raise `-connects-per-min` |
-| Clients get `503 room full` | A room already has 20 members | Expected limit; raise `-max-per-room` only if the owner agrees |
+| Smoke test says `429` | Too many new connections from one address in a minute (the service file allows 300) | Wait a minute; if real phones are held back, raise `-connects-per-min` in the service file |
+| Clients get `503 room full` | A room already has 40 clients (the service file's limit; a group has at most 20 members) | Unusual: many stale members or someone abusing a room. Look at `journalctl -u ws-relay`; ask the owner before raising `-max-per-room` further |
 | Memory grows | Many stuck connections | Restart the service and report it; `MemoryMax=300M` in the unit protects the VM |
 
-## 11. Not done yet (production)
+## 11. What the relay does not do (read before changing it)
 
-The relay has no authentication. See "Not in the spike" in `README.md`. Do not announce the relay publicly before that is built.
+- **It cannot read or change what phones say.** Since M7 the app runs TLS between the two phones inside the relay's frames, each side proving the member key it holds, so the relay (and anyone who runs it or watches it) sees only the two public keys, the room (a hash of the group id), addresses, timing and sizes. Do not add anything that depends on the relay seeing content.
+- **It has no accounts and does not check who connects.** Anyone who knows a room's name and a member's public key can connect with that key and, because a new connection with the same key replaces the old one, push the real member's connection off the relay now and then (the member's phone reconnects, and tries Iroh and the same network meanwhile). They cannot read, forge or change entries. Who can know both: the group's members, including someone who was removed. The measures today are the rate limits of the service file, nginx's limits and the relay being only one of three ways phones reach each other. Making each client prove it holds its key (the program's `README.md`, "Not in the spike") is **not built**; whether to build it is the owner's decision.
+- **It stores nothing.** A message for a phone that is not connected is lost; the sync protocol recovers on the next sync.

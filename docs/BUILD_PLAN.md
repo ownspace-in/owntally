@@ -158,6 +158,8 @@ Built (see docs/tasks/M8-settling.md): the payment list in the core, recording p
 
 Acceptance: from a fresh VM, the runbook produces a working relay. Tapping an invite link on a phone with the app opens it directly, and on a phone without it shows the install page.
 
+Built (see docs/tasks/M9-relay-and-invite-page.md): the invite page checked against the real link (and two bugs fixed), invite links opening the app (an App Link on the exact path, a link that arrives early kept sealed on the phone until the person is in), `assetlinks.json` made and checked by a script, the relay's production limits and runbooks corrected, uptime checks made concrete. The owner's checks: a fresh-VM run, the live limits, the uptime monitor, and (M10) the signing certificate for `assetlinks.json`.
+
 ### M10. Hardening and release
 
 Recovery restore test end to end, dark theme, accessibility pass (touch targets, labels, contrast), release signing, Play Store listing, privacy text that states who runs the relay and what it can see, final review of every security-relevant file.

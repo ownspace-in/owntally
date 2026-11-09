@@ -131,7 +131,7 @@ class ManifestRulesTest {
         assertEquals(1, activities.length)
         val activity = activities.item(0) as Element
         assertEquals("true", activity.getAttributeNS(ns, "exported"))
-        assertEquals(1, activity.getElementsByTagName("intent-filter").length)
+        assertEquals(2, activity.getElementsByTagName("intent-filter").length, "the launcher, and the invite link (below)")
         fun own(tag: String) = (0 until manifest.getElementsByTagName(tag).length).map { manifest.getElementsByTagName(tag).item(it) as Element }.filter { it.getAttributeNS("http://schemas.android.com/tools", "node") != "remove" }
         assertEquals(0, own("service").size + own("receiver").size + own("provider").size, "this app declares no component of its own besides the activity; libraries bring theirs")
     }
@@ -144,5 +144,31 @@ class ManifestRulesTest {
             (0 until merged.getElementsByTagName(tag).length).map { merged.getElementsByTagName(tag).item(it) as Element }
         }.filter { it.getAttributeNS(ns, "exported") == "true" && it.getAttributeNS(ns, "permission").isEmpty() }.map { it.getAttributeNS(ns, "name") }
         assertEquals(listOf("owntally.app.MainActivity"), unprotected)
+    }
+
+    /**
+     * M9, T9.3: the one way into the app from outside besides the launcher is the invite link, and it is exactly this one: https, our host, the
+     * path /j, a view of it, from a browser or a chat app, claimed as an Android App Link (verified against assetlinks.json). Nothing broader.
+     */
+    @Test
+    fun theOnlyOtherWayInIsTheInviteLinkOnOurHostAndPath() {
+        val activity = manifest.getElementsByTagName("activity").item(0) as Element
+        val filters = (0 until activity.getElementsByTagName("intent-filter").length).map { activity.getElementsByTagName("intent-filter").item(it) as Element }
+        val link = filters.single { f -> (0 until f.getElementsByTagName("data").length).any() }
+        assertEquals("true", link.getAttributeNS(ns, "autoVerify"))
+        fun names(tag: String) = (0 until link.getElementsByTagName(tag).length).map { (link.getElementsByTagName(tag).item(it) as Element).getAttributeNS(ns, "name") }
+        assertEquals(listOf("android.intent.action.VIEW"), names("action"))
+        assertEquals(setOf("android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"), names("category").toSet())
+        val data = (0 until link.getElementsByTagName("data").length).map { link.getElementsByTagName("data").item(it) as Element }
+        assertEquals(1, data.size, "one data element: one scheme, host and path")
+        val d = data.single()
+        assertEquals("https", d.getAttributeNS(ns, "scheme"))
+        assertEquals(owntally.data.session.InviteLinks.HOST, d.getAttributeNS(ns, "host"))
+        assertEquals(owntally.data.session.InviteLinks.PATH, d.getAttributeNS(ns, "path"), "the exact path, not a prefix (/join, /jx)")
+        assertEquals("", d.getAttributeNS(ns, "pathPrefix"))
+        assertEquals("", d.getAttributeNS(ns, "pathPattern"))
+        assertEquals("", d.getAttributeNS(ns, "port"))
+        // A second tap while the app is open reaches the open app (onNewIntent) instead of starting another copy.
+        assertEquals("singleTask", activity.getAttributeNS(ns, "launchMode"))
     }
 }

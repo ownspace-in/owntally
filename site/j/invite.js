@@ -1,8 +1,16 @@
 (function () {
-  var code = decodeURIComponent((location.hash || "").replace(/^#/, ""));
   var box = document.getElementById("code");
   var copy = document.getElementById("copy");
   var copied = document.getElementById("copied");
+
+  var code = "";
+  try {
+    code = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+  } catch (e) {
+    // A link damaged on its way (a stray % sign): say so instead of leaving the page saying it is still reading.
+    box.textContent = "This invite link looks damaged. Ask your friend to send it again.";
+    return;
+  }
 
   if (!code) {
     box.textContent = "No invite code found in this link. Ask your friend to send it again.";

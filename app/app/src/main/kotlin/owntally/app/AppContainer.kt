@@ -128,6 +128,20 @@ class AppContainer(private val context: Context) {
         return true
     }
 
+    /** An invite link tapped outside the app, waiting until the person is past first-run setup and the lock (decision A1, M9). */
+    val pendingInvites: owntally.data.session.PendingInvites by lazy { owntally.data.session.PendingInvites(secrets, Clock.SYSTEM) }
+
+    /** A link that opened the app: kept if it is an invite link (null or refused ones leave a message for the screen). Off the main thread: the Keystore. */
+    fun inviteLinkArrived(link: String?) {
+        networkScope.launch {
+            try {
+                if (link == null) pendingInvites.refuse() else pendingInvites.receive(link)
+            } catch (e: SecretStoreException) {
+                pendingInvites.refuse() // the link could not be kept; the person can tap it again
+            }
+        }
+    }
+
     val joinRequests: owntally.data.session.JoinRequests by lazy { owntally.data.session.JoinRequests(owntally.data.store.RoomJoinRequestStore(database), sessions, Clock.SYSTEM) }
     /** Syncing with the other members (M5), now over real connections (M6): the Sync screen and its "Sync now" read this. */
     val sync: owntally.data.session.SyncCoordinator by lazy {

@@ -154,6 +154,8 @@ Needs:
 2. A static page at `/j` for people without the app: install button (Play Store), "copy code" fallback, and a note to paste the code in "Join with link or code".
 3. `/.well-known/assetlinks.json` with the app's package name and signing certificate SHA-256, so Android opens the app directly on tap. This can only be filled in once the app exists and is signed.
 
+**In the app (M9):** the manifest claims `https://joinowntally.ownspace.in/j` (the exact path) as an Android App Link. A link tapped before first-run setup or while the app is locked is kept sealed on the phone until the person is in, then opens the join form; one for a group the person is already in opens that group; one that is not an invite, or has expired, says so. Only that host and path open the app.
+
 If this is not set up, QR codes and pasted codes still work; only the tap-to-open experience is lost. The relay at `relay.ownspace.in` is the only server we run.
 
 ## Hosting your own relay
@@ -177,7 +179,7 @@ Operations:
 - Run two relays on different servers and list both. Clients fail over automatically, so one outage does not stop sync.
 - Firewall to only the needed ports, automatic security updates, and an uptime alert.
 
-Default relay: `relay.ownspace.in`, run by us using the steps above. Consider adding a second relay on a different server for failover.
+Default relay: `relay.ownspace.in`, run by us using the steps above, with `-connects-per-min 300 -max-per-room 40` (decision R3, M9: phones behind one carrier address share the connection limit, and a room must hold the largest group, 20, plus members who were removed or are waiting to join). The relay has no accounts and does not check who connects; it cannot read or change what phones say (TLS between them), so what a stranger who knows a room and a member's key can do is disturb, not read or forge. Consider adding a second relay on a different server for failover.
 
 Public relay caveat: the n0 public relays are free but rate-limited and documented as for development and hobby use, with no uptime guarantee. Use them while building. Run our own before a wider release.
 

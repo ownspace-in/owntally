@@ -4,7 +4,10 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/ws-relay -addr 127.0.0.1:8080 -trust-proxy
+# The limits (owner decision R3, 9 Nov 2026, after the measurements of docs/tasks/M7-internet-sync.md T7.9): 300 new connections a minute from one address
+# (the program's own default, 30, is too low: phones behind one mobile carrier address share it, and a phone in many groups opens one connection for each),
+# and 40 clients in one room (a group has at most 20 members; a removed member who still syncs, or a person waiting to be admitted, is one more).
+ExecStart=/usr/local/bin/ws-relay -addr 127.0.0.1:8080 -trust-proxy -connects-per-min 300 -max-per-room 40
 Restart=on-failure
 RestartSec=2
 

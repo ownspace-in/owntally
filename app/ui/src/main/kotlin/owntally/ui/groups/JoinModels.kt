@@ -123,6 +123,12 @@ object JoinModels {
         PreviewState.NOT_VERIFIED -> "The phone that answered is not the one this invite names. Don't use this invite; ask an admin for a new one."
     }
 
+    /** What to tell the person when a link they tapped could not be used (M9). */
+    fun linkProblem(r: owntally.data.session.PendingInvites.Received): String = when (r) {
+        owntally.data.session.PendingInvites.Received.Expired -> "This invite has expired. Ask an admin for a new one."
+        else -> "That link isn't an OwnTally invite. Ask your friend to send it again."
+    }
+
     fun pasteProblem(r: OpenResult): String? = when (r) {
         OpenResult.NotAnInvite -> "That doesn't look like an OwnTally invite. Paste the whole link or code."
         OpenResult.Expired -> "This invite has expired. Ask an admin for a new one."
