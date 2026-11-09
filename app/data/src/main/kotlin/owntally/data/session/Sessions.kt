@@ -37,6 +37,12 @@ data class GroupSummary(
     val ownershipOfferForMe: Boolean = false,
     /** The owner removed this person from the group (S2): the card says so and the group no longer counts in the totals. */
     val youWereRemoved: Boolean = false,
+    /** Payments marked as paid to this person that they have not confirmed or refused (M8): the card says so. */
+    val paymentsWaitingForMe: Int = 0,
+    /** Payments this person marked as paid and the other person has not answered. */
+    val paymentsIMarked: Int = 0,
+    /** Payments of the plan that involve this person (to make or to receive). */
+    val paymentsToSettle: Int = 0,
 )
 
 /**
@@ -167,6 +173,9 @@ class Sessions(
                 readable = state?.groupId != null,
                 ownershipOfferForMe = view != null && state?.pendingOffer == view.me,
                 youWereRemoved = view?.youWereRemoved == true,
+                paymentsWaitingForMe = view?.let { v -> v.overview.waiting.count { it.to == v.me } } ?: 0,
+                paymentsIMarked = view?.let { v -> v.overview.waiting.count { it.from == v.me } } ?: 0,
+                paymentsToSettle = view?.let { v -> v.overview.toMake.count { it.from == v.me || it.to == v.me } } ?: 0,
             )
         }
     }

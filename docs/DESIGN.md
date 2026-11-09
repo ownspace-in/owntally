@@ -137,10 +137,13 @@ Limits:
 - **Names are unique inside a group** (owner decision, 4 Nov 2026): "Rohan" and "rohan" cannot both be members, "Rohan V" can; a removed member's name stays taken. The admin who approves a join sets the name (for example "Rohan V") and the joiner is told which name they were given. The same person can use different names in different groups. Phone numbers may be typed with `-`, `(`, `)` and `.` as well as digits, `+` and spaces.
 - The phone number is shown to group members, so the join screen says so. Using a different number or name per group is allowed.
 - The phone number is unverified. It identifies nobody on its own: identity is the key.
-- Settle up shows who pays whom and how much. OwnTally opens no other app and refers to no payment service (owner decision, 4 Nov 2026): the person pays outside the app, however they like, and marks it there.
+- Settle up shows who pays whom and how much. OwnTally refers to no payment service (owner decision, 4 Nov 2026): the person pays outside the app, however they like, and marks it there. The one other app it opens is the phone's dialer, from **Call** on a payment (owner decision P1, 9 Nov 2026; it opens the dialer with the number and does not place the call, and needs no permission); **Copy number** puts the number on the clipboard.
 - The debtor taps "I paid" and the creditor taps "Received". Until then the settlement is shown as unconfirmed, but it counts toward the balances from the moment it is recorded (owner decision, 3 Nov 2026); a dispute stops it counting. `SettlementRecorded` stores the amount, from, to, and the confirmation state.
 - Cash is always an option.
-- Reminders: the creditor can send a message through the share sheet.
+- **The amount can be edited** when marking a payment (P2): it opens filled with what the plan asks for. A smaller payment counts at once and the plan shows the rest; **a larger one is allowed** (P5, with a warning): the group then owes the payer the extra, and the plan has someone who still owes pay them.
+- **A payment recorded twice** (the payer and the receiver each recorded it before they synced) is noticed (same two people, same amount): the receiver sees "This looks like the same payment recorded twice" and one tap stops the payer's entry counting, by a dispute with the reason *duplicate* (P3, P4). Nothing is deleted.
+- Settle up lists, in order: the plan (Payments to make), payments waiting for confirmation (the receiver can Confirm received or Not received; the payer waits), payments not accepted (with the reason in words; the receiver may still confirm), and a footer with the number already confirmed.
+- Reminders: the creditor can send a message through the share sheet. It says the person's name and the amount only, never the group's name or a number (P6): "Hi Rohan, OwnTally says you owe me ₹1,850. Pay however suits you, then mark it as paid in the app."
 
 ## Invite link page
 

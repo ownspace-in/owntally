@@ -101,11 +101,6 @@ class SettleUpModelTest {
         // nobody has paid anything: the plan is empty
         assertEquals("Everyone is settled up.", SettleUpModel.build(s2.view.value).footer)
     }
-
-    @Test fun actionsAreOffUntilPaymentsCanBeRecorded() {
-        assertTrue(!SettleUpModel.ACTIONS_ENABLED, "all four buttons stay off")
-        assertEquals("Recording payments arrives in a later update. Until then this is the list of who should pay whom.", SettleUpModel.ACTIONS_NOTE)
-    }
 }
 
 class SettleTabTest {
@@ -135,11 +130,9 @@ class HowItWorksTest {
         assertTrue(HowItWorks.note.body.contains("12-word recovery phrase"))
     }
 
-    @Test fun noUpiAnywhereAndNoOtherAppIsOpened() {
-        val all = (HowItWorks.cards.flatMap { listOf(it.title, it.body) } + HowItWorks.note.body + SettleUpModel.INTRO + SettleUpModel.ACTIONS_NOTE)
-            .joinToString(" ").lowercase()
-        assertFalse("upi" in all, "owner decision, 4 Nov 2026: no reference to UPI")
-        assertFalse("share sheet" in all, "the app opens no other app")
+    @Test fun noUpiAnywhere() {
+        val all = (HowItWorks.cards.flatMap { listOf(it.title, it.body) } + HowItWorks.note.body + SettleUpModel.INTRO + SettleUpModel.NOTE + SettleUpModel.reminderText("Rohan", "₹1")).joinToString(" ").lowercase()
+        assertFalse("upi" in all, "owner decision, 4 Nov 2026: no reference to UPI, or to any payment service")
     }
 
     @Test fun neverClaimsMoneyIsMovedOrCheckedByTheApp() {

@@ -47,7 +47,12 @@ class SimFailure(message: String, val report: SimReport?) : AssertionError(messa
  * that is a member. The seed decides every random choice, so a failing seed can be run again (the keys and nonces are random, the
  * sequence of operations and faults is the same).
  */
-class Simulation(private val seed: Long, private val steps: Int = 70) {
+class Simulation(
+    private val seed: Long,
+    private val steps: Int = 70,
+    /** M8: phones also pay, receive, confirm, dispute, record the same payment twice and cancel the duplicate. */
+    private val payments: Boolean = false,
+) {
     private val random = Random(seed)
     private val startedAt = System.nanoTime()
     private val log = ArrayList<String>()
@@ -95,7 +100,18 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
 
         network.faults = SimFaults.NONE
         devices.forEach { it.online = true }
-        val rounds = settle(scope, "final")
+        var rounds = settle(scope, "final")
+        if (payments) {
+            // Every receiver who sees a payment recorded twice cancels the payer's entry with the one call; then the phones agree again, with no
+            // duplicate left for any receiver who is still a member (checked below).
+            var cancelled = 0
+            for (d in devices) for (dup in d.session.view.value.overview.duplicates.filter { it.payerEntry.to == d.key }) {
+                val r = d.session.cancelDuplicate(dup.payerEntry.id)
+                note("${d.name}: cancelDuplicate ${dup.payerEntry.id} (end) -> ${r.toString().take(60)}")
+                if (r is owntally.data.session.AddResult.Added) cancelled++
+            }
+            if (cancelled > 0) rounds += settle(scope, "after cancelling duplicates")
+        }
         check(devices)
         return report(faults, rounds)
     }
@@ -139,6 +155,44 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
             roll < 74 -> { val m = members.random(random); what = "removeMember ${state.members[m]?.name}"; d.session.removeMember(m) }
             roll < 77 -> { what = "leave"; d.session.leave() }
             roll < 79 -> { what = "rotateKey"; d.session.rotateKey() }
+            payments && roll < 83 -> {
+                val to = (members - d.key).randomOrNull(random)
+                // Often the amount the plan asks, sometimes a part of it, sometimes more (decision P5).
+                val planned = v.overview.toMake.firstOrNull { it.from == d.key }?.amount ?: Money(random.nextLong(1, 3_000) * 100)
+                val amount = when (random.nextInt(4)) { 0 -> Money(maxOf(1L, planned.paise / 2)); 1 -> Money(planned.paise + random.nextLong(1, 20_000)); else -> planned }
+                what = "markPaid ${amount.paise} to ${to?.let { state.members[it]?.name }}"
+                if (to == null) Unit else d.session.markPaid(to, amount)
+            }
+            payments && roll < 86 -> {
+                val from = (members - d.key).randomOrNull(random)
+                val amount = v.overview.toMake.firstOrNull { it.to == d.key && it.from == from }?.amount ?: Money(random.nextLong(1, 3_000) * 100)
+                what = "markReceived ${amount.paise} from ${from?.let { state.members[it]?.name }}"
+                if (from == null) Unit else d.session.markReceived(from, amount)
+            }
+            payments && roll < 88 -> {
+                val target = v.overview.waiting.filter { it.to == d.key }.randomOrNull(random) ?: v.overview.disputed.filter { it.to == d.key }.randomOrNull(random)
+                what = "confirm ${target?.id}"
+                if (target == null) Unit else d.session.confirm(target.id)
+            }
+            payments && roll < 90 -> {
+                val target = v.overview.waiting.filter { it.to == d.key }.randomOrNull(random)
+                val reason = owntally.model.DisputeReason.values().random(random)
+                what = "dispute ${target?.id} $reason"
+                if (target == null) Unit else d.session.dispute(target.id, reason)
+            }
+            payments && roll < 93 -> {
+                // The receiver saw the money arrive and records the payment before the payer's entry has reached them (the simulation looks at the
+                // other phones to find one): a duplicate once the phones sync, on purpose.
+                val known = v.overview.waiting.map { it.id }.toSet()
+                val target = devices.flatMap { o -> o.session.view.value.overview.waiting }.filter { it.to == d.key && it.id !in known }.randomOrNull(random)
+                what = "markReceived again ${target?.id}"
+                if (target == null) Unit else d.session.markReceived(target.from, target.amount)
+            }
+            payments && roll < 96 -> {
+                val target = v.overview.duplicates.filter { it.payerEntry.to == d.key }.randomOrNull(random)
+                what = "cancelDuplicate ${target?.payerEntry?.id}"
+                if (target == null) Unit else d.session.cancelDuplicate(target.payerEntry.id)
+            }
             else -> { nameCounter++; what = "updateProfile"; d.session.updateProfile("${d.name} v$nameCounter", "98765 %05d".format(10_000 + nameCounter)) }
         }
         note("${d.name}: $what -> ${result.toString().take(60)}")
@@ -254,6 +308,13 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
             }
             if (extra.isNotEmpty()) fail("${d.name} is no longer a member but holds ${extra.size} envelopes the members lack")
         }
+        // 4. Payments (M8): the balances add up to nothing, every payment on the list is between members, and a duplicate cancelled by its receiver
+        //    is no longer a duplicate; the same on every member (checked below with the list itself).
+        if (ref.balances.values.fold(Money.ZERO) { x, y -> x + y } != Money.ZERO) fail("the balances do not add up to zero")
+        for (dup in ref.overview.duplicates) if (dup.payerEntry.to in memberKeys) fail("a payment recorded twice is still on the list after its receiver cancelled it: ${dup.payerEntry.id}")
+        for (p in ref.overview.waiting + ref.overview.confirmed + ref.overview.disputed) {
+            if (p.from !in memberKeys || p.to !in memberKeys) fail("a payment on the list is with someone who is not a member: ${p.id}")
+        }
         for (d in members) {
             val v = d.session.view.value
             if (d !in readers) fail(
@@ -272,6 +333,7 @@ class Simulation(private val seed: Long, private val steps: Int = 70) {
             }
             if (v.balances != ref.balances) fail("the balances on ${d.name} differ")
             if (v.plan != ref.plan) fail("the settlement plan on ${d.name} differs")
+            if (v.overview != ref.overview) fail("the payment list on ${d.name} differs from a reference member's")
         }
     }
 

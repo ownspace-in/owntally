@@ -93,7 +93,8 @@ fun HomeFlow(
             is Screen.CantReach -> CantReachRoute(sessions, sync, screen.id, screen.member, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
             is Screen.Nearby -> NearbyRoute(sessions, nearby, screen.id, onBack = back)
             Screen.Settings -> if (lock != null) SettingsRoute(sessions, lock, onBack = back) else MessageTab("Settings", "There is nothing to set yet.")
-            is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back)
+            is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back, onNotReceived = { ui.nav = ui.nav.push(Screen.NotReceived(screen.id, it)) })
+            is Screen.NotReceived -> NotReceivedRoute(sessions, screen.id, screen.settlement, onBack = back)
             is Screen.Invite -> InviteRoute(sessions, invites, screen.id, onBack = back)
             Screen.JoinPaste -> JoinPasteRoute(joinGroup, onBack = back, onOpened = { ui.nav = ui.nav.pop().push(Screen.Join(it)) })
             is Screen.Join -> JoinRoute(joinGroup, screen.id, onBack = back, onOpenGroup = { ui.nav = ui.nav.home().push(Screen.Group(screen.id)) })
@@ -385,13 +386,73 @@ private fun AddExpenseRoute(sessions: Sessions, id: GroupId, onDone: () -> Unit)
 }
 
 @Composable
-private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit) {
+private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit, onNotReceived: (owntally.model.EventId) -> Unit) {
     val session by produceState<GroupSession?>(null, id) {
         value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
     }
     val s = session ?: return Box(Modifier.fillMaxSize())
     val view by s.view.collectAsStateWithLifecycle()
-    SettleUpScreen(remember(view) { SettleUpModel.build(view) }, onBack)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var amountFor by remember { mutableStateOf<SettleAction?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    fun write(call: () -> owntally.data.session.AddResult) {
+        scope.launch { message = SettleMessages.of(withContext(Dispatchers.IO) { call() }) }
+    }
+    val model = remember(view) { SettleUpModel.build(view) }
+    Column(Modifier.fillMaxSize()) {
+        if (message != null) {
+            Box(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp)) {
+                owntally.ui.components.Notice(message!!, modifier = Modifier.clickable { message = null })
+            }
+        }
+        Box(Modifier.weight(1f)) {
+            SettleUpScreen(
+                model, onBack,
+                onAction = { action ->
+                    message = null
+                    when (action) {
+                        is SettleAction.Copy -> action.row.phone?.let { owntally.ui.copySensitive(context, "Phone number", it) }
+                        is SettleAction.Call -> action.row.phone?.let {
+                            try { context.startActivity(SettleIntents.dial(it)) }
+                            catch (e: android.content.ActivityNotFoundException) { message = "This phone has no app to make calls." }
+                        }
+                        is SettleAction.Reminder ->
+                            try { context.startActivity(SettleIntents.chooser(SettleIntents.reminder(action.row.otherName, action.row.amount))) }
+                            catch (e: android.content.ActivityNotFoundException) { message = "This phone has no app to send a message with." }
+                        is SettleAction.IPaid, is SettleAction.MarkReceived -> amountFor = action
+                        is SettleAction.Confirm -> write { s.confirm(action.id) }
+                        is SettleAction.CancelDuplicate -> write { s.cancelDuplicate(action.id) }
+                        is SettleAction.NotReceived -> onNotReceived(action.row.id)
+                    }
+                },
+            )
+        }
+    }
+    when (val a = amountFor) {
+        is SettleAction.IPaid -> AmountDialog("I paid ${a.row.otherName}", a.row.money, onCancel = { amountFor = null }, onConfirm = { amount ->
+            amountFor = null; write { s.markPaid(a.row.to, amount) }
+        })
+        is SettleAction.MarkReceived -> AmountDialog("Received from ${a.row.otherName}", a.row.money, onCancel = { amountFor = null }, onConfirm = { amount ->
+            amountFor = null; write { s.markReceived(a.row.from, amount) }
+        })
+        else -> Unit
+    }
+}
+
+@Composable
+private fun NotReceivedRoute(sessions: Sessions, id: GroupId, settlement: owntally.model.EventId, onBack: () -> Unit) {
+    val session by produceState<GroupSession?>(null, id) {
+        value = try { withContext(Dispatchers.IO) { sessions.session(id) } } catch (e: IllegalStateException) { null }
+    }
+    val s = session ?: return Box(Modifier.fillMaxSize())
+    val view by s.view.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    val model = remember(view) { NotReceivedModel.build(view, settlement, System.currentTimeMillis() / 1000) }
+    NotReceivedScreen(model, onBack, message = message, onTell = { reason ->
+        scope.launch { message = SettleMessages.of(withContext(Dispatchers.IO) { s.dispute(settlement, reason) }) }
+    })
 }
 
 @Composable

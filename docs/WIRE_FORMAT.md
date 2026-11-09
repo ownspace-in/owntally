@@ -56,7 +56,7 @@ That is 34 bytes. The same event always gives these 34 bytes.
 | 5 | `ExpenseDeleted` | `id` expense |
 | 6 | `SettlementRecorded` | `key` from, `key` to, `i64` amount |
 | 7 | `SettlementConfirmed` | `id` settlement |
-| 8 | `PaymentDisputed` | `id` settlement, `u8` reason (0 nothing received, 1 different amount, 2 not checked) |
+| 8 | `PaymentDisputed` | `id` settlement, `u8` reason (0 nothing received, 1 different amount, 2 not checked, 3 duplicate: added 9 Nov 2026, decision P4) |
 | 9 | `AdminAdded` | `key` member |
 | 10 | `AdminRemoved` | `key` member |
 | 11 | `OwnershipOffered` | `key` to |
@@ -85,7 +85,7 @@ A decoder rejects (treats the event as invalid) anything that is not exactly wha
 - wrong magic, unknown envelope `version`, or fewer or more bytes than the lengths say (trailing bytes are an error);
 - a `set` or `map` that is unsorted or has a duplicate;
 - a `str` that is not valid UTF-8;
-- a known body whose `content` is longer or shorter than its fields need, an unknown `split` kind, or a dispute reason other than 0, 1 or 2 (an unknown `tag` is the only thing that is skipped by length);
+- a known body whose `content` is longer or shorter than its fields need, an unknown `split` kind, or a dispute reason other than 0, 1, 2 or 3 (an unknown `tag` is the only thing that is skipped by length);
 - a counter of 0, an `after` entry of 0, or a split that breaks the rules in PROTOCOL.md section 2 (the event constructors in `core-model` already check these).
 
 Consequence: `decode(bytes)` succeeds only if `encode(decode(bytes)) == bytes`. Tests check this in both directions with random events and with fixed byte vectors.

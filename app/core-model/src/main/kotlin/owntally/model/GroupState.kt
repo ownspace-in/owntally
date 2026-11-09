@@ -26,6 +26,8 @@ data class Settlement(
     val amount: Money,
     val status: SettlementStatus,
     val disputeReason: DisputeReason?,
+    /** The wall clock of the phone that recorded the payment, in milliseconds: for showing "2 hrs ago" only, never used by a rule (M8). */
+    val recordedAtMillis: Long = 0,
 )
 
 /** [lastSeenCounter] is the highest counter of the member's that the remover had seen. Newer ones are ignored. */

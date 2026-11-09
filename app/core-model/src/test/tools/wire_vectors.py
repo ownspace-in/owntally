@@ -21,7 +21,7 @@ def kset(names):
     ks = sorted(KEY[n] for n in names); assert len(set(ks)) == len(ks)
     return u16(len(ks)) + b"".join(ks)
 def eid(x): return KEY[x[0]] + u64(x[1])
-REASON = {"NOTHING_RECEIVED": 0, "DIFFERENT_AMOUNT": 1, "NOT_CHECKED": 2}
+REASON = {"NOTHING_RECEIVED": 0, "DIFFERENT_AMOUNT": 1, "NOT_CHECKED": 2, "DUPLICATE": 3}
 def sealed(h): b = bytes.fromhex(h); return u16(len(b)) + b
 
 def body(b):
@@ -73,6 +73,7 @@ V = [
     ev("settlement-recorded", "eve", 1, {"asha": 8}, 1006, {"type": "SettlementRecorded", "from": "eve", "to": "asha", "amount": 200000}),
     ev("settlement-confirmed", "asha", 9, {"asha": 8, "eve": 1}, 1007, {"type": "SettlementConfirmed", "settlement": ["eve", 1]}),
     ev("payment-disputed", "chitra", 3, {"chitra": 2, "ben": 2}, 1008, {"type": "PaymentDisputed", "settlement": ["ben", 2], "reason": "DIFFERENT_AMOUNT"}),
+    ev("payment-disputed-duplicate", "chitra", 4, {"chitra": 3, "ben": 2}, 1008, {"type": "PaymentDisputed", "settlement": ["ben", 2], "reason": "DUPLICATE"}),
     ev("admin-added", "asha", 10, {"asha": 9}, 1009, {"type": "AdminAdded", "member": "ben"}),
     ev("admin-removed", "asha", 11, {"asha": 10}, 1010, {"type": "AdminRemoved", "member": "ben"}),
     ev("ownership-offered", "asha", 12, {"asha": 11}, 1011, {"type": "OwnershipOffered", "to": "ben"}),
@@ -120,6 +121,7 @@ INVALID_P = [
     mut("content-shorter-than-fields", pr, add_len(-1, b""), "body content ends in the middle of a field"),
     mut("unknown-split-kind", ex, lambda b: b.__setitem__(bytes(b).index(bytes([2, 0, 4])), 3) or b, "split kind 3"),
     mut("bad-dispute-reason", pd, lambda b: b.__setitem__(len(b) - 1, 5) or b, "dispute reason 5"),
+    mut("bad-dispute-reason-four", pd, lambda b: b.__setitem__(len(b) - 1, 4) or b, "dispute reason 4: the first one after the last known (3 is duplicate)"),
     mut("invalid-utf8", pr, lambda b: b.__setitem__(bytes(b).index(b"Asha"), 0xFF) or b, "name has a byte that is not UTF-8"),
     mut("truncated", eq, lambda b: b[:-5], "payload cut short"),
     mut("empty", pr, lambda b: bytearray(), "no bytes at all"),

@@ -28,6 +28,8 @@ data class GroupCardModel(
     val ownershipOffer: Boolean = false,
     /** The owner removed this person: the card says so, whatever the balance was. */
     val removed: Boolean = false,
+    /** What needs attention about payments (M8): one line under the name, or null. */
+    val paymentLine: String? = null,
 )
 
 data class GroupsListModel(val owed: BalanceView, val owe: BalanceView, val cards: List<GroupCardModel>)
@@ -44,6 +46,16 @@ object GroupsModels {
             else -> words.take(2).joinToString("") { String(Character.toChars(it.codePointAt(0))) }
         }
         return letters.uppercase()
+    }
+
+    /** The line about payments on a group's card: what is waiting for this person first, then what they marked, then what is left to settle. */
+    fun paymentLine(g: GroupSummary): String? = when {
+        !g.readable || g.youWereRemoved -> null
+        g.paymentsWaitingForMe == 1 -> "1 payment is waiting for you to confirm"
+        g.paymentsWaitingForMe > 1 -> "${g.paymentsWaitingForMe} payments are waiting for you to confirm"
+        g.paymentsIMarked > 0 -> "You marked ${plural(g.paymentsIMarked, "payment", "payments")} as paid, waiting for the other person"
+        g.paymentsToSettle > 0 -> "${plural(g.paymentsToSettle, "payment", "payments")} to settle"
+        else -> null
     }
 
     /** The Settle tab: every group that can be opened, settled or not. */
@@ -71,6 +83,7 @@ object GroupsModels {
                     readable = it.readable,
                     ownershipOffer = it.ownershipOfferForMe,
                     removed = it.youWereRemoved,
+                    paymentLine = paymentLine(it),
                 )
             },
         )
@@ -102,6 +115,8 @@ data class GroupScreenModel(
     val expenses: List<ExpenseRow>,
     /** Everyone except me has a zero balance (or there is nobody else yet). */
     val allSettled: Boolean,
+    /** "2 payments are waiting for you to confirm." when someone marked payments to this person (M8), else null. */
+    val paymentNotice: String? = null,
 )
 
 object GroupScreenModels {
@@ -143,6 +158,7 @@ object GroupScreenModels {
                 .sortedWith(compareByDescending<Expense> { it.day }.thenByDescending { it.id.counter }.thenBy { it.id.author })
                 .map { row(view, it) },
             allSettled = others.all { (view.balances[it] ?: Money.ZERO) == Money.ZERO },
+            paymentNotice = view.overview.waiting.count { it.to == view.me }.let { n -> if (n == 0) null else if (n == 1) "1 payment is waiting for you to confirm." else "$n payments are waiting for you to confirm." },
         )
     }
 
@@ -372,54 +388,6 @@ object DeleteRules {
         return view.state.settlements.values.any {
             (it.status == owntally.model.SettlementStatus.PAID_MARKED || it.status == owntally.model.SettlementStatus.CONFIRMED) &&
                 (it.from in involved || it.to in involved)
-        }
-    }
-}
-
-enum class PaymentRole { FROM_ME, TO_ME, BETWEEN_OTHERS }
-
-data class PaymentRow(
-    val from: PublicKey,
-    val to: PublicKey,
-    val money: Money,
-    val amount: String,
-    val title: String,
-    /** The phone number of the person on the other side (the one I pay, or the one who pays me), as they entered it. */
-    val phone: String?,
-    val role: PaymentRole,
-)
-
-/** Settle up for the whole group: the core's plan, row for row. */
-data class SettleUpModel(val subtitle: String, val payments: List<PaymentRow>, val footer: String, val groupName: String = "") {
-    companion object {
-        const val INTRO = "A short list of payments that clear everyone. Pay however you like, outside OwnTally, then mark it here. OwnTally never moves or checks money."
-        /** Marking payments as paid or received is not built yet, so those buttons are shown switched off. */
-        const val ACTIONS_ENABLED = false
-        const val ACTIONS_NOTE = "Recording payments arrives in a later update. Until then this is the list of who should pay whom."
-
-        fun build(view: GroupView): SettleUpModel {
-            fun name(k: PublicKey) = if (k == view.me) "You" else view.state.members[k]?.name?.takeIf { it.isNotBlank() } ?: "Someone"
-            val rows = view.plan.map { p ->
-                val role = when {
-                    p.from == view.me -> PaymentRole.FROM_ME
-                    p.to == view.me -> PaymentRole.TO_ME
-                    else -> PaymentRole.BETWEEN_OTHERS
-                }
-                val other = if (role == PaymentRole.FROM_ME) p.to else p.from
-                PaymentRow(
-                    p.from, p.to, p.amount, MoneyFormat.format(p.amount), "${name(p.from)} → ${name(p.to)}",
-                    if (role == PaymentRole.BETWEEN_OTHERS) view.state.members[p.to]?.phone else view.state.members[other]?.phone, role,
-                )
-            }
-            val inPlan = view.plan.flatMap { listOf(it.from, it.to) }.toSet()
-            val free = view.state.currentMembers.keys.filter { it != view.me && it !in inPlan }.map { name(it) }.sorted()
-            val footer = when {
-                view.plan.isEmpty() -> "Everyone is settled up."
-                free.isEmpty() -> ""
-                free.size == 1 -> "${free[0]} needs no payments."
-                else -> "${free.dropLast(1).joinToString(", ")} and ${free.last()} need no payments."
-            }
-            return SettleUpModel("${view.state.name ?: "Group"} · whole group", rows, footer, view.state.name ?: "Group")
         }
     }
 }
