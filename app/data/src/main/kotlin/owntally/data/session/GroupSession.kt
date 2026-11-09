@@ -373,11 +373,15 @@ class GroupSession(
                 val real = temp[epoch] ?: continue
                 val held = ring[epoch]
                 if (held == null || !held.bytes().contentEquals(real.bytes())) {
+                    // Entries this phone wrote under the key it is about to drop (its own key change was refused) are sealed again under the
+                    // accepted key first, while it can still read them.
+                    if (held != null) sealOwnAgain(epoch, held, epoch, real)
                     secrets.saveGroupKey(groupId, epoch, real)
                     ring.add(epoch, real)
                     changed = true
                 }
             }
+            if (dropRefusedOwnKeys(st)) changed = true
             if (!changed || (waiting.isEmpty() && rejected.isEmpty())) return
             // A key was replaced: what failed to open with the old one, and what was waiting, may open now.
             val again = ArrayList(waiting)
@@ -385,6 +389,47 @@ class GroupSession(
             waiting.clear()
             rejected.clear()
             process(again)
+        }
+    }
+
+    /**
+     * Keys this phone made for a key change the rules refused, for an epoch that no accepted event started (it and another phone each believed
+     * they were the owner, decision M8). Entries written under such a key are sealed again under the accepted current epoch, then the key is
+     * forgotten. A key from an invitation is never touched: only an epoch named by this phone's own refused key change counts.
+     */
+    private fun dropRefusedOwnKeys(st: GroupState): Boolean {
+        val refused = st.ignored.map { it.id }.toSet()
+        val stale = log.allEvents().filter { it.author == me.publicKey && it.id in refused }.mapNotNull { event ->
+            when (val b = event.body) {
+                is EventBody.KeyRotated -> b.newEpoch
+                is EventBody.MemberRemoved -> b.newEpoch
+                else -> null
+            }
+        }.filter { it >= 2 && it !in st.epochStarts && ring[it] != null }.toSet()
+        if (stale.isEmpty()) return false
+        val current = ring[st.epoch] ?: return false
+        for (epoch in stale) {
+            sealOwnAgain(epoch, ring[epoch]!!, st.epoch, current)
+            secrets.deleteGroupKey(groupId, epoch)
+        }
+        ring = secrets.loadKeyring(groupId).keyring
+        return true
+    }
+
+    /**
+     * Seals again, under [newKey] for [toEpoch], this phone's own entries that are sealed under [oldKey] for [fromEpoch]: the same entry (same
+     * author, counter and content), a new envelope. The others never could open the old one, so nothing is doubled; they open the new one and
+     * every later entry of this phone, which depends on it, can be applied. An entry already sealed again is not done twice.
+     */
+    private fun sealOwnAgain(fromEpoch: Long, oldKey: GroupKey, toEpoch: Long, newKey: GroupKey) {
+        val old = GroupKeyring(groupId).also { it.add(fromEpoch, oldKey) }
+        val target = GroupKeyring(groupId).also { it.add(toEpoch, newKey) }
+        val mine = repo.envelopes(groupId).envelopes.filter { it.author == me.publicKey }
+        val done = mine.filter { EventSealing.open(it, target) is OpenResult.Opened }.map { it.counter }.toSet()
+        for (envelope in mine) {
+            if (envelope.epoch != fromEpoch || envelope.counter in done) continue
+            val event = (EventSealing.open(envelope, old) as? OpenResult.Opened)?.event ?: continue
+            repo.appendEnvelope(groupId, EventSealing.seal(me, groupId, toEpoch, newKey, event))
         }
     }
 
@@ -397,7 +442,13 @@ class GroupSession(
             balances = b,
             plan = settlementPlan(b),
             overview = owntally.model.settleOverview(s),
-            counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), rejected.size, damaged, deferred.size),
+            counts = run {
+                // An envelope that cannot be opened but whose entry is held in another version (this phone's or another's own entry, sealed
+                // again under the accepted key) is not missing anything.
+                val have = log.allEvents().map { it.id }.toHashSet()
+                fun missing(e: Envelope) = EventId(e.author, e.counter) !in have
+                Counts(opened, waiting.filter(::missing).map { it.epoch }.toSortedSet(), rejected.count(::missing), damaged, deferred.size)
+            },
             unreadableKeyEpochs = unreadableKeyEpochs,
             cancelled = owntally.model.cancelledEntries(log, s),
             youWereRemoved = wasRemovedByOwner(s),

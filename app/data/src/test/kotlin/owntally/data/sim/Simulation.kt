@@ -52,8 +52,6 @@ class Simulation(
     private val steps: Int = 70,
     /** M8: phones also pay, receive, confirm, dispute, record the same payment twice and cancel the duplicate. */
     private val payments: Boolean = false,
-    /** With [payments], leave the ownership offers out (see docs/tasks/M8-settling.md, "Found while testing"). Without payments the operations are exactly as in M5. */
-    private val ownership: Boolean = true,
 ) {
     private val random = Random(seed)
     private val startedAt = System.nanoTime()
@@ -132,8 +130,7 @@ class Simulation(
         val v = d.session.view.value
         val state = v.state
         val members = state.currentMembers.keys.toList()
-        // With payments the ownership rolls (64 to 70) become expenses when ownership is left out.
-        val roll = random.nextInt(100).let { if (payments && !ownership && it in 64..70) it - 40 else it }
+        val roll = random.nextInt(100)
         val what: String
         val result: Any = when {
             members.isEmpty() -> { what = "nothing (no members known)"; Unit }
