@@ -41,6 +41,14 @@ The relay does not queue messages. A message for a client that is not connected 
 | Ping | every 30 seconds, connection closed after 90 seconds without an answer |
 | Slow receivers | closed if their 64 message queue fills up |
 
+### How the app meets these limits (measured 9 Nov 2026, `RelayLimitsTest`)
+
+- **Frames and message rate:** the app sends frames of at most 16,000 bytes and at most 40 a second, under both limits. A history of 5,000 signed entries (about 2.2 MB) crossed the real relay in about 4 seconds and was not cut off.
+- **Connections:** the app holds one connection per group while it listens, so a phone in 40 groups opens 40 at once. With the default 30 a minute from one address, 30 get in at once and the rest wait their turn (all 40 were in after about 36 seconds). The limit is per address as the relay sees it, and many phones on one mobile carrier or one office network share an address, so a few busy phones can hold back the others behind it for a minute at a time. Nothing is lost (the app tries again after 1, 5 and 30 seconds), but joining and "Try now" can be slow. **Recommendation to the owner:** raise `-connects-per-min` to about 300; the cost is only the work of accepting connections.
+- **Clients per room:** exactly 20, which is the largest group. A removed member who still syncs, or a person waiting to be admitted to a full group, is a 21st client and gets `503 room full` (the app reports the person as not reachable). **Recommendation to the owner:** raise `-max-per-room` to 40.
+
+The relay was not changed. Both recommendations are one line in the service file (see `RUNBOOK.md`).
+
 ## Run
 
 ```

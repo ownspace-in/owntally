@@ -80,7 +80,9 @@ A relay forwards encrypted bytes between two phones that cannot reach each other
 - When even the relay cannot connect, the app says so and offers: meet up (Nearby) or try again later.
 - All members use the same relay: our own at `https://relay.ownspace.in`. (A custom relay address, and the "Hosting your own relay" steps below, are not part of the app for now; kept for later.)
 - Both phones connect outbound to the relay, which forwards by public id. Hole punching runs in parallel; if it works, traffic moves to the direct link and the relay drops out.
-- The relay sees public ids, IP addresses, timing and data volume. It never sees content.
+- The relay sees public ids, IP addresses, timing and data volume. It never sees content: a link through it is encrypted end to end between the two phones (TLS, with each phone proving its group key), so even our relay cannot read it or change it.
+- Phones also find each other with Iroh (decision I1), which uses n0's public discovery service as well as our relay. **n0, a third party, learns each phone's member key for the group, its IP address and when it is online.** It never sees content. The privacy text shown to people (M10) must say this in plain words, next to what our relay learns.
+- Limits (measured, docs/tasks/M7-internet-sync.md T7.9): a group of 20 fits the relay's room size exactly, and a big history crosses quickly, but the relay allows only 30 new connections a minute from one address, which phones sharing a mobile carrier's address can hit together. The owner may raise it (relay README).
 - A phone is a poor relay: it needs a public address and Android sleeps background apps. Recommend a small VPS, a home Raspberry Pi, or the public relay. Phones act as the connection point only for same-room sync.
 
 ## Encryption
