@@ -4,14 +4,15 @@ Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M9. Rules: [DESIGN.md](../D
 
 Goal (BUILD_PLAN): the relay runbook that someone who has not seen the project can follow, and the invite page at `joinowntally.ownspace.in` (`/j` and `/.well-known/assetlinks.json`). Acceptance: from a fresh VM, the runbook produces a working relay; tapping an invite link on a phone with the app opens it directly, and on a phone without it shows the install page.
 
-**Decisions A1 and R3 are made (9 Nov 2026, below). Nothing is built until the owner says "next".**
+**Decisions A1 and R3 are made (9 Nov 2026, below).**
 
 ## Progress
 
 | Task | Status |
 |---|---|
 | T9.1 plan and decisions | Done (9 Nov 2026): A1 and R3 decided. |
-| T9.2 to T9.6 | Not started. |
+| T9.2 the invite page against the real link | Done (9 Nov 2026), see below. The two fixed files must be deployed by the owner. |
+| T9.3 to T9.6 | Not started. |
 
 ## What already exists (so it is not rebuilt)
 
@@ -47,4 +48,4 @@ None at the moment. What only the owner can do: the fresh-VM run of the relay ru
 
 ## Results
 
-(To be written as each task is done.)
+**T9.2 result (9 Nov 2026).** `InviteSiteTest` (`app/app`, 8 tests; it runs the page's script under Node, which GitHub's runners have; on a machine without Node those four tests are skipped, not failed). **What it checks:** for 25 real tickets (some with a relay hint) the script shows exactly the code the app puts in the link, it can be copied, and `Ticket.fromShared` reads the copied code and the whole link back as the same ticket; the link's host and path (`Invites.LINK_START`) are what the site's nginx file serves; a hostile fragment (`<img onerror>`, `<script>`, an encoded script) is shown as text and the harness fails if the script ever assigns `innerHTML`; no pages, styles or script load or run anything the site's policy forbids (no inline script, style or handler, no iframe, form, image or style tag, everything from this site only, no network call or storage in the script); the policy is the same at the server and in the `assetlinks.json` location and forbids everything by default; the page's expiry text (8 hours) matches `Ticket.LIFETIME_SECONDS`. **Found and fixed (2):** (1) a link with a stray `%` (damaged on its way) made the script throw and left the page saying "Reading the invite code…" for ever: it now says "This invite link looks damaged. Ask your friend to send it again."; (2) the page told people to paste the code under "Join with link or code", a button the app does not have: it now says to tap **Have an invite? Join a group** on the Groups tab. **Mutations (3)** each fail a test: the script using `innerHTML`, the script changing the code, one of the two policies differing. **For the owner:** `site/j/index.html` and `site/j/invite.js` changed; deploy them as in `site/README.md` ("Deploy") to the live site. Not run: `nginx -t` on the site file (the file did not change; its policy lines are checked by the test).
