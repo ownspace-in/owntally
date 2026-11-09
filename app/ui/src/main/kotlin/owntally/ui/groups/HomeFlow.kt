@@ -67,11 +67,13 @@ fun HomeFlow(
     invites: owntally.data.session.Invites? = null,
     joinGroup: owntally.data.session.JoinGroup? = null,
     nearby: ((GroupId) -> owntally.ui.nearby.NearbyController)? = null,
+    pendingInvites: owntally.data.session.PendingInvites? = null,
 ) {
     val ui: HomeViewModel = viewModel()
     val nav = ui.nav
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { sessions.refresh() } }
     androidx.activity.compose.BackHandler(enabled = nav.canGoBack) { ui.nav = nav.pop() }
+    InviteLinkEffect(pendingInvites, joinGroup, onOpenInvitation = { ui.nav = NavStack().push(Screen.Join(it)) }, onOpenGroup = { ui.nav = NavStack().push(Screen.Group(it)) })
     val back = { ui.nav = ui.nav.pop() }
     Box(Modifier.fillMaxSize().background(OwnTallyColors.Background).safeDrawingPadding()) {
         when (val screen = nav.current) {
@@ -994,4 +996,38 @@ private fun NearbyRoute(sessions: Sessions, nearby: ((GroupId) -> owntally.ui.ne
         },
         onStart = { controller.start() }, onStop = { controller.stop() }, onLookAgain = { controller.lookAgain() },
     )
+}
+
+/**
+ * An invite link the person tapped outside the app (M9, decision A1): once this screen is showing (so past first-run setup and the lock), the
+ * waiting link is opened like a pasted one: the join form, or the group if the person is already in it, or a message saying what is wrong. The
+ * link is removed from storage as soon as it has been opened (an opened invitation is kept by the join flow itself).
+ */
+@Composable
+private fun InviteLinkEffect(pending: owntally.data.session.PendingInvites?, joinGroup: owntally.data.session.JoinGroup?, onOpenInvitation: (GroupId) -> Unit, onOpenGroup: (GroupId) -> Unit) {
+    if (pending == null || joinGroup == null) return
+    val arrived by pending.changes.collectAsStateWithLifecycle()
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(arrived) {
+        pending.takeProblem()?.let { message = JoinModels.linkProblem(it) }
+        val link = withContext(Dispatchers.IO) { pending.waiting() } ?: return@LaunchedEffect
+        val result = withContext(Dispatchers.IO) { joinGroup.open(link) }
+        withContext(Dispatchers.IO) { pending.clear() }
+        when (result) {
+            is owntally.data.session.OpenResult.Opened -> {
+                val bad = JoinModels.previewProblem(result.preview)
+                if (bad != null) { withContext(Dispatchers.IO) { joinGroup.discard(result.join.group) }; message = bad } else onOpenInvitation(result.join.group)
+            }
+            is owntally.data.session.OpenResult.AlreadyInGroup -> { message = JoinModels.pasteProblem(result); onOpenGroup(result.group) }
+            else -> message = JoinModels.pasteProblem(result)
+        }
+    }
+    message?.let { text ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { message = null },
+            title = { Text("Invite link") },
+            text = { Text(text) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { message = null }) { Text("OK") } },
+        )
+    }
 }

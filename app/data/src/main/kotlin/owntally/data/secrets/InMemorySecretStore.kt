@@ -40,6 +40,17 @@ class InMemorySecretStore : SecretStore {
         keys.remove(name(groupId, epoch))
     }
 
+    private var pending: PendingInvite? = null
+
+    @Synchronized
+    override fun savePendingInvite(link: String, expiresAtSeconds: Long) { pending = PendingInvite(link, expiresAtSeconds) }
+
+    @Synchronized
+    override fun loadPendingInvite(): SecretLoad<PendingInvite> = pending?.let { SecretLoad.Found(it) } ?: SecretLoad.Missing
+
+    @Synchronized
+    override fun clearPendingInvite() { pending = null }
+
     @Synchronized
     override fun deleteGroup(groupId: GroupId) {
         keys.keys.removeAll { it.startsWith("${groupId.toHex()}-") }
@@ -49,5 +60,6 @@ class InMemorySecretStore : SecretStore {
     override fun wipeAll() {
         seed = null
         keys.clear()
+        pending = null
     }
 }

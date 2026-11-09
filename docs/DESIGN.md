@@ -154,6 +154,8 @@ Needs:
 2. A static page at `/j` for people without the app: install button (Play Store), "copy code" fallback, and a note to paste the code in "Join with link or code".
 3. `/.well-known/assetlinks.json` with the app's package name and signing certificate SHA-256, so Android opens the app directly on tap. This can only be filled in once the app exists and is signed.
 
+**In the app (M9):** the manifest claims `https://joinowntally.ownspace.in/j` (the exact path) as an Android App Link. A link tapped before first-run setup or while the app is locked is kept sealed on the phone until the person is in, then opens the join form; one for a group the person is already in opens that group; one that is not an invite, or has expired, says so. Only that host and path open the app.
+
 If this is not set up, QR codes and pasted codes still work; only the tap-to-open experience is lost. The relay at `relay.ownspace.in` is the only server we run.
 
 ## Hosting your own relay

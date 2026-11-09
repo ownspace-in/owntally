@@ -15,6 +15,9 @@ sealed class SecretLoad<out T> {
 /** The keys that could be read for a group, and the epochs that are stored but could not be opened. */
 data class KeyringLoad(val keyring: GroupKeyring, val unreadableEpochs: Set<Long>)
 
+/** An invite link that arrived before the person could use it (decision A1, M9): the link as it was written, and when its ticket expires (seconds). */
+data class PendingInvite(val link: String, val expiresAtSeconds: Long)
+
 /** Keeps the master seed and each group's epoch keys safe on disk. Nothing secret is logged, and no message contains one. */
 interface SecretStore {
     /** Replaces any stored seed. Throws [SecretStoreException] if it cannot be sealed. */
@@ -28,6 +31,14 @@ interface SecretStore {
     /** Forgets one epoch's key (for example one saved for a key change that was then refused). Deleting what is not there is fine. */
     fun deleteGroupKey(groupId: GroupId, epoch: Long)
     fun deleteGroup(groupId: GroupId)
+
+    /**
+     * Keeps one invite link (it holds the group key, so it is sealed like a key and never goes to the database) until it is used. A newer link
+     * replaces it. Throws [SecretStoreException] if it cannot be sealed.
+     */
+    fun savePendingInvite(link: String, expiresAtSeconds: Long)
+    fun loadPendingInvite(): SecretLoad<PendingInvite>
+    fun clearPendingInvite()
     fun wipeAll()
 }
 
@@ -117,6 +128,30 @@ class BoxedSecretStore(private val box: SecretBox, private val blobs: BlobStore)
         blobs.delete(keyName(groupId, epoch))
     }
 
+    override fun savePendingInvite(link: String, expiresAtSeconds: Long) {
+        val bytes = java.nio.ByteBuffer.allocate(8).putLong(expiresAtSeconds).array() + link.toByteArray(Charsets.UTF_8)
+        try {
+            write(PENDING_NAME, PENDING_CONTEXT, bytes)
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
+    override fun loadPendingInvite(): SecretLoad<PendingInvite> = when (val r = read(PENDING_NAME, PENDING_CONTEXT)) {
+        is SecretLoad.Found -> try {
+            if (r.value.size < 9) SecretLoad.Unreadable
+            else SecretLoad.Found(PendingInvite(String(r.value, 8, r.value.size - 8, Charsets.UTF_8), java.nio.ByteBuffer.wrap(r.value, 0, 8).long))
+        } finally {
+            r.value.fill(0)
+        }
+        SecretLoad.Missing -> SecretLoad.Missing
+        SecretLoad.Unreadable -> SecretLoad.Unreadable
+    }
+
+    override fun clearPendingInvite() {
+        blobs.delete(PENDING_NAME)
+    }
+
     override fun deleteGroup(groupId: GroupId) {
         for (name in blobs.list("$KEY_PREFIX${groupId.toHex()}-")) blobs.delete(name)
     }
@@ -129,6 +164,8 @@ class BoxedSecretStore(private val box: SecretBox, private val blobs: BlobStore)
         private const val VERSION: Byte = 1
         private const val SEED_NAME = "seed"
         private const val KEY_PREFIX = "key-"
+        private const val PENDING_NAME = "pending-invite"
+        private val PENDING_CONTEXT = "owntally/v1/pending-invite".toByteArray()
         private val SEED_CONTEXT = "owntally/v1/seed".toByteArray()
 
         private fun blobBytes(box: SecretBox, context: ByteArray, secret: ByteArray) = byteArrayOf(VERSION) + box.seal(secret, context)
