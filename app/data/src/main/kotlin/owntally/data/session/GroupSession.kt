@@ -13,6 +13,7 @@ import owntally.data.repo.AppendResult
 import owntally.data.repo.GroupRepository
 import owntally.data.repo.IdentityRepository
 import owntally.data.secrets.SecretStore
+import owntally.model.DisputeReason
 import owntally.model.Envelope
 import owntally.model.Event
 import owntally.model.EventBody
@@ -45,6 +46,8 @@ data class GroupView(
     val me: PublicKey,
     val balances: Map<PublicKey, Money>,
     val plan: List<Payment>,
+    /** What Settle up lists: the plan, payments waiting, disputed and confirmed, and payments recorded twice (M8). */
+    val overview: owntally.model.SettleOverview,
     val counts: Counts,
     /** Epochs whose key is stored but cannot be opened (for example the Keystore key was lost). */
     val unreadableKeyEpochs: Set<Long>,
@@ -157,6 +160,33 @@ class GroupSession(
         append(EventBody.ExpenseAdded(description, total, paidBy, day, split))
 
     fun deleteExpense(expense: EventId): AddResult = append(EventBody.ExpenseDeleted(expense))
+
+    // ---- payments (M8) ---------------------------------------------------------------------------------------------
+
+    /** "I paid": this person says they paid [to] [amount]. It counts at once and shows as waiting until [to] confirms. */
+    fun markPaid(to: PublicKey, amount: Money): AddResult = build { EventBody.SettlementRecorded(me.publicKey, to, amount) }
+
+    /** "Mark received": this person says [from] paid them [amount]. It is confirmed from the start. */
+    fun markReceived(from: PublicKey, amount: Money): AddResult = build { EventBody.SettlementRecorded(from, me.publicKey, amount) }
+
+    /** The receiver confirms a payment marked as paid (or one they had said was not received). */
+    fun confirm(settlement: EventId): AddResult = append(EventBody.SettlementConfirmed(settlement))
+
+    /** The receiver says a payment marked as paid did not arrive, or not as marked. It stops counting; the reason is told to the payer. */
+    fun dispute(settlement: EventId, reason: DisputeReason): AddResult = append(EventBody.PaymentDisputed(settlement, reason))
+
+    /**
+     * The receiver stops the payer's entry counting because it is the same payment they recorded themselves (decision P3). Only for an
+     * entry the list shows as a duplicate and only by its receiver; nothing else is written.
+     */
+    @Synchronized
+    fun cancelDuplicate(settlement: EventId): AddResult {
+        sync()
+        val pair = owntally.model.settleOverview(replay(log)).duplicates.firstOrNull { it.payerEntry.id == settlement }
+            ?: return AddResult.Invalid("this is not a payment recorded twice")
+        if (pair.payerEntry.to != me.publicKey) return AddResult.Invalid("only the person who received the payment can cancel the duplicate")
+        return append(EventBody.PaymentDisputed(settlement, DisputeReason.DUPLICATE))
+    }
 
     // ---- membership (M4) -------------------------------------------------------------------------------------------
 
@@ -366,6 +396,7 @@ class GroupSession(
             me = me.publicKey,
             balances = b,
             plan = settlementPlan(b),
+            overview = owntally.model.settleOverview(s),
             counts = Counts(opened, waiting.map { it.epoch }.toSortedSet(), rejected.size, damaged, deferred.size),
             unreadableKeyEpochs = unreadableKeyEpochs,
             cancelled = owntally.model.cancelledEntries(log, s),
