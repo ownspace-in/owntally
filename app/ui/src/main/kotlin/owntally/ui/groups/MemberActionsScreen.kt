@@ -43,7 +43,7 @@ fun MemberActionsScreen(model: MemberActionsModel, onClose: () -> Unit, onAction
         Spacer(Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(56.dp).background(OwnTallyColors.GroupPastels[model.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-                Text(model.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+                Text(model.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
             }
             Spacer(Modifier.width(14.dp))
             Column {

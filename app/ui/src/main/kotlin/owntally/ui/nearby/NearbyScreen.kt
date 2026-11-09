@@ -76,12 +76,12 @@ fun NearbyScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Box(Modifier.size(40.dp).background(OwnTallyColors.GroupPastels[(line.key.bytes()[0].toInt() and 0xff) % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-                                    Text(line.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+                                    Text(line.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Text(
                                     line.text, style = MaterialTheme.typography.bodyLarge,
-                                    color = when (line.tone) { NearbyTone.PROBLEM -> OwnTallyColors.Red; NearbyTone.GOOD -> OwnTallyColors.Green; else -> OwnTallyColors.Ink },
+                                    color = when (line.tone) { NearbyTone.PROBLEM -> OwnTallyColors.Red; NearbyTone.GOOD -> OwnTallyColors.Accent; else -> OwnTallyColors.Ink },
                                 )
                             }
                         }

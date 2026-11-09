@@ -62,10 +62,10 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
             if (onNearby != null) {
                 Spacer(Modifier.height(10.dp))
                 Row(
-                    Modifier.fillMaxWidth().border(1.dp, OwnTallyColors.Green, RoundedCornerShape(24.dp)).clickable(onClick = onNearby).padding(vertical = 16.dp)
+                    Modifier.fillMaxWidth().border(1.dp, OwnTallyColors.Accent, RoundedCornerShape(24.dp)).clickable(onClick = onNearby).padding(vertical = 16.dp)
                         .semantics { contentDescription = "Nearby"; role = SemanticsRole.Button },
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                ) { Text("Nearby: sync in the same room", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green) }
+                ) { Text("Nearby: sync in the same room", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent) }
             }
             Spacer(Modifier.height(14.dp))
             Text(model.headlineText, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
@@ -114,7 +114,7 @@ private fun MemberSyncRow(m: SyncMemberLine, onOpen: (() -> Unit)?) {
     val tap = if (onOpen != null) Modifier.clickable(onClick = onOpen).semantics { role = SemanticsRole.Button } else Modifier
     Row(Modifier.fillMaxWidth().then(tap).padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[m.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-            Text(m.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+            Text(m.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -126,7 +126,7 @@ private fun MemberSyncRow(m: SyncMemberLine, onOpen: (() -> Unit)?) {
         }
         Spacer(Modifier.width(8.dp))
         val (background, content) = when (m.tone) {
-            BadgeTone.GOOD -> OwnTallyColors.InfoBackground to OwnTallyColors.Green
+            BadgeTone.GOOD -> OwnTallyColors.InfoBackground to OwnTallyColors.Accent
             BadgeTone.NEUTRAL -> OwnTallyColors.Chip to OwnTallyColors.TextSecondary
             BadgeTone.WARN -> OwnTallyColors.WarningBackground to OwnTallyColors.WarningText
             BadgeTone.OFFLINE -> OwnTallyColors.Chip to OwnTallyColors.TextSecondary

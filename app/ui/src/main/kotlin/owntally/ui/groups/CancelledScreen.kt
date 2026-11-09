@@ -63,7 +63,7 @@ fun CancelledScreen(model: CancelledListModel, onBack: () -> Unit, onAddAgain: (
                     Text(row.detail, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
                 }
                 Text(
-                    "Add again", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Green,
+                    "Add again", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent,
                     modifier = Modifier.clickable { onAddAgain(row) }.padding(8.dp).semantics { role = SemanticsRole.Button },
                 )
             }

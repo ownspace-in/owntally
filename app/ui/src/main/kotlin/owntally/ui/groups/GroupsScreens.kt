@@ -44,8 +44,9 @@ import owntally.ui.components.PrimaryButton
 import owntally.ui.components.Wordmark
 import owntally.ui.theme.OwnTallyColors
 
+@Composable
 internal fun BalanceKind.colour(onDark: Boolean = false) = when (this) {
-    BalanceKind.OWED -> if (onDark) OwnTallyColors.Mint else OwnTallyColors.Green
+    BalanceKind.OWED -> if (onDark) OwnTallyColors.Mint else OwnTallyColors.Accent
     BalanceKind.OWES -> if (onDark) OwnTallyColors.PeachOnDark else OwnTallyColors.Red
     BalanceKind.SETTLED -> if (onDark) OwnTallyColors.OnDarkMuted else OwnTallyColors.TextSecondary
 }
@@ -54,7 +55,7 @@ internal fun BalanceKind.colour(onDark: Boolean = false) = when (this) {
 fun GroupIcon(initials: String, colourIndex: Int, size: Int = 48) {
     val colour = OwnTallyColors.GroupPastels[colourIndex.coerceIn(0, OwnTallyColors.GroupPastels.lastIndex)]
     Box(Modifier.size(size.dp).background(colour, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-        Text(initials, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
+        Text(initials, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnPastel)
     }
 }
 
@@ -64,9 +65,9 @@ fun StoredOnlyHereChip() {
         Modifier.background(OwnTallyColors.InfoBackground, RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlyphIcon(Glyph.PHONE, OwnTallyColors.Green, 20.dp)
+        GlyphIcon(Glyph.PHONE, OwnTallyColors.Accent, 20.dp)
         Spacer(Modifier.width(8.dp))
-        Text("Stored only on this phone", style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.Green)
+        Text("Stored only on this phone", style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.Accent)
     }
 }
 
@@ -105,7 +106,7 @@ fun GroupsScreen(
             if (onJoin != null) {
                 item {
                     Spacer(Modifier.height(6.dp))
-                    Text("Have an invite? Join a group", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green, modifier = Modifier.clickable(onClick = onJoin).padding(8.dp).semantics { role = SemanticsRole.Button })
+                    Text("Have an invite? Join a group", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onJoin).padding(8.dp).semantics { role = SemanticsRole.Button })
                 }
             }
         }
@@ -145,7 +146,7 @@ private fun NewGroupButton(onClick: () -> Unit, modifier: Modifier) {
 
 @Composable
 private fun TotalsCard(owed: BalanceView, owe: BalanceView) {
-    Row(Modifier.fillMaxWidth().background(OwnTallyColors.Ink, RoundedCornerShape(28.dp)).padding(24.dp)) {
+    Row(Modifier.fillMaxWidth().background(OwnTallyColors.Hero, RoundedCornerShape(28.dp)).padding(24.dp)) {
         Column(Modifier.weight(1f)) {
             Text("You are owed", style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.OnDarkMuted)
             Text(owed.text, style = MaterialTheme.typography.headlineMedium, color = OwnTallyColors.Mint)
@@ -270,7 +271,7 @@ fun GroupScreen(
 
 @Composable
 private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
-    Column(Modifier.fillMaxWidth().background(OwnTallyColors.Ink, RoundedCornerShape(28.dp)).padding(24.dp)) {
+    Column(Modifier.fillMaxWidth().background(OwnTallyColors.Hero, RoundedCornerShape(28.dp)).padding(24.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -305,7 +306,7 @@ private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
                 Modifier.fillMaxWidth().height(52.dp).background(OwnTallyColors.Mint, RoundedCornerShape(20.dp)).clickable(onClick = onSettle)
                     .semantics { role = SemanticsRole.Button },
                 contentAlignment = Alignment.Center,
-            ) { Text("Settle up the group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink) }
+            ) { Text("Settle up the group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnMint) }
             if (model.paymentNotice != null) {
                 Spacer(Modifier.height(10.dp))
                 Box(
@@ -361,7 +362,7 @@ fun CreateGroupScreen(model: CreateGroupModel, onChange: (CreateGroupModel) -> U
                 val selected = i == model.colourIndex
                 Box(
                     Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[i], CircleShape)
-                        .border(BorderStroke(if (selected) 3.dp else 1.dp, if (selected) OwnTallyColors.Green else OwnTallyColors.Border), CircleShape)
+                        .border(BorderStroke(if (selected) 3.dp else 1.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.Border), CircleShape)
                         .clickable { onChange(model.withColour(i)) }
                         .semantics { role = SemanticsRole.RadioButton; this.selected = selected; contentDescription = "Colour ${i + 1}" },
                 )

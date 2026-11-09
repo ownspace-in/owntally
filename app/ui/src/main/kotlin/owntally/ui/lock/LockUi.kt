@@ -189,13 +189,13 @@ private fun ModeRow(title: String, body: String, on: Boolean, enabled: Boolean, 
     val shape = RoundedCornerShape(20.dp)
     Row(
         Modifier.fillMaxWidth().background(OwnTallyColors.Card, shape)
-            .border(BorderStroke(if (on) 2.dp else 1.dp, if (on) OwnTallyColors.Green else OwnTallyColors.CardBorder), shape)
+            .border(BorderStroke(if (on) 2.dp else 1.dp, if (on) OwnTallyColors.Accent else OwnTallyColors.CardBorder), shape)
             .clickable(onClick = onClick).padding(16.dp)
             .semantics(mergeDescendants = true) { role = Role.RadioButton; selected = on; contentDescription = title },
         verticalAlignment = Alignment.Top,
     ) {
-        Box(Modifier.padding(top = 2.dp).size(22.dp).border(BorderStroke(2.dp, if (on) OwnTallyColors.Green else OwnTallyColors.TextHint), CircleShape), contentAlignment = Alignment.Center) {
-            if (on) Box(Modifier.size(10.dp).background(OwnTallyColors.Green, CircleShape))
+        Box(Modifier.padding(top = 2.dp).size(22.dp).border(BorderStroke(2.dp, if (on) OwnTallyColors.Accent else OwnTallyColors.TextHint), CircleShape), contentAlignment = Alignment.Center) {
+            if (on) Box(Modifier.size(10.dp).background(OwnTallyColors.Accent, CircleShape))
         }
         Spacer(Modifier.width(14.dp))
         Column {

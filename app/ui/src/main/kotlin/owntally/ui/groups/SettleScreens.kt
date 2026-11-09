@@ -89,7 +89,7 @@ private fun ActionButton(text: String, modifier: Modifier, filled: Boolean, dang
 private fun PersonLine(title: String, subtitle: String?, amount: String, amountColour: androidx.compose.ui.graphics.Color, colourIndex: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-            Text(title.take(1), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
+            Text(title.take(1), style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnPastel)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -134,7 +134,7 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
         }
         items(model.payments, key = { "pay" + it.from.toHex() + it.to.toHex() }) { p ->
             CardBox {
-                PersonLine(p.title, p.phone, p.amount, if (p.role == PaymentRole.FROM_ME) OwnTallyColors.Red else OwnTallyColors.Green, if (p.role == PaymentRole.FROM_ME) 1 else 3)
+                PersonLine(p.title, p.phone, p.amount, if (p.role == PaymentRole.FROM_ME) OwnTallyColors.Red else OwnTallyColors.Accent, if (p.role == PaymentRole.FROM_ME) 1 else 3)
                 val top = p.actions.filter { it == PaymentAction.COPY_NUMBER || it == PaymentAction.CALL || it == PaymentAction.SEND_REMINDER }
                 val main = p.actions.filter { it == PaymentAction.I_PAID || it == PaymentAction.MARK_RECEIVED }
                 if (p.actions.isNotEmpty()) Spacer(Modifier.height(12.dp))
@@ -162,7 +162,7 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
         }
         items(model.waiting, key = { "wait" + it.id.author.toHex() + it.id.counter }) { w ->
             CardBox {
-                PersonLine(w.title, null, w.amount, OwnTallyColors.Green, 3)
+                PersonLine(w.title, null, w.amount, OwnTallyColors.Accent, 3)
                 Spacer(Modifier.height(12.dp))
                 Box(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, RoundedCornerShape(16.dp)).padding(12.dp)) {
                     Text(w.message, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
@@ -197,13 +197,13 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
         item {
             if (model.footer.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.Top) {
-                    Text("✓", color = OwnTallyColors.Green, style = MaterialTheme.typography.labelLarge)
+                    Text("✓", color = OwnTallyColors.Accent, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.width(10.dp))
                     Text(model.footer, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
                 }
                 Spacer(Modifier.height(16.dp))
             }
-            Notice(SettleUpModel.NOTE, background = OwnTallyColors.InfoBackground, content = OwnTallyColors.Green)
+            Notice(SettleUpModel.NOTE, background = OwnTallyColors.InfoBackground, content = OwnTallyColors.Accent)
         }
     }
 }
@@ -230,13 +230,13 @@ fun NotReceivedScreen(model: NotReceivedModel, onBack: () -> Unit, onTell: (Disp
                     val selected = chosen == r.reason
                     Row(
                         Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp))
-                            .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) OwnTallyColors.Green else OwnTallyColors.CardBorder), RoundedCornerShape(20.dp))
+                            .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.CardBorder), RoundedCornerShape(20.dp))
                             .clickable { chosen = r.reason }.padding(16.dp)
                             .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = selected },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(Modifier.size(24.dp).border(BorderStroke(2.dp, if (selected) OwnTallyColors.Green else OwnTallyColors.Border), CircleShape), contentAlignment = Alignment.Center) {
-                            if (selected) Box(Modifier.size(12.dp).background(OwnTallyColors.Green, CircleShape))
+                        Box(Modifier.size(24.dp).border(BorderStroke(2.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.Border), CircleShape), contentAlignment = Alignment.Center) {
+                            if (selected) Box(Modifier.size(12.dp).background(OwnTallyColors.Accent, CircleShape))
                         }
                         Spacer(Modifier.width(12.dp))
                         Text(r.label, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
@@ -250,7 +250,7 @@ fun NotReceivedScreen(model: NotReceivedModel, onBack: () -> Unit, onTell: (Disp
                 ActionButton(model.tellLabel, Modifier.fillMaxWidth(), filled = true, danger = true) { onTell(chosen) }
                 Spacer(Modifier.height(8.dp))
                 Box(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onBack).semantics { role = Role.Button }, contentAlignment = Alignment.Center) {
-                    Text("Cancel", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Green)
+                    Text("Cancel", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent)
                 }
             }
             is NotReceivedModel.Sent -> {
@@ -305,7 +305,7 @@ fun HowItWorksScreen(onBack: () -> Unit) {
                 Box(
                     Modifier.size(40.dp).background(OwnTallyColors.GroupPastels[(c.number.toInt() - 1) % OwnTallyColors.GroupPastels.size], RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center,
-                ) { Text(c.number, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink) }
+                ) { Text(c.number, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnPastel) }
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(c.title, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
@@ -316,9 +316,9 @@ fun HowItWorksScreen(onBack: () -> Unit) {
         }
         item {
             Column(Modifier.fillMaxWidth().background(OwnTallyColors.InfoBackground, cardShape).padding(16.dp)) {
-                Text(HowItWorks.note.title, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Green)
+                Text(HowItWorks.note.title, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent)
                 Spacer(Modifier.height(4.dp))
-                Text(HowItWorks.note.body, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.Green)
+                Text(HowItWorks.note.body, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.Accent)
             }
         }
     }

@@ -63,7 +63,7 @@ private fun Boxed(modifier: Modifier = Modifier, content: @Composable () -> Unit
 private fun PlainField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, decimal: Boolean = false, large: Boolean = false, align: TextAlign = TextAlign.Start) {
     val style = (if (large) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.bodyLarge).copy(color = OwnTallyColors.Ink, textAlign = align)
     BasicTextField(
-        value, onChange, modifier, singleLine = true, textStyle = style, cursorBrush = SolidColor(OwnTallyColors.Green),
+        value, onChange, modifier, singleLine = true, textStyle = style, cursorBrush = SolidColor(OwnTallyColors.Accent),
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Text),
         decorationBox = { inner ->
             Box { if (value.isEmpty()) Text(hint, style = style.copy(color = OwnTallyColors.TextHint)); inner() }
@@ -120,7 +120,7 @@ fun AddExpenseScreen(
             for (p in model.people) PersonRow(model, p.key, p.label, onChange)
             if (model.mode == SplitMode.EXACT && model.exactStatus != null) {
                 Spacer(Modifier.height(4.dp))
-                Text(model.exactStatus!!, style = MaterialTheme.typography.labelMedium, color = if (model.exactStatus == "All assigned") OwnTallyColors.Green else OwnTallyColors.Red)
+                Text(model.exactStatus!!, style = MaterialTheme.typography.labelMedium, color = if (model.exactStatus == "All assigned") OwnTallyColors.Accent else OwnTallyColors.Red)
             }
             val message = error ?: model.problem
             if (message != null) {
@@ -138,9 +138,9 @@ fun AddExpenseScreen(
 
 @Composable
 private fun CrossGlyph() {
+    val c = OwnTallyColors.Ink
     androidx.compose.foundation.Canvas(Modifier.size(24.dp)) {
         val w = size.width
-        val c = OwnTallyColors.Ink
         drawLine(c, androidx.compose.ui.geometry.Offset(w * .25f, w * .25f), androidx.compose.ui.geometry.Offset(w * .75f, w * .75f), w * .085f, androidx.compose.ui.graphics.StrokeCap.Round)
         drawLine(c, androidx.compose.ui.geometry.Offset(w * .75f, w * .25f), androidx.compose.ui.geometry.Offset(w * .25f, w * .75f), w * .085f, androidx.compose.ui.graphics.StrokeCap.Round)
     }
@@ -166,7 +166,7 @@ private fun PaidByCard(model: AddExpenseModel, onChange: (AddExpenseModel) -> Un
 @Composable
 private fun Initial(label: String) {
     Box(Modifier.size(28.dp).background(OwnTallyColors.GroupPastels[0], androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-        Text(label.take(1).uppercase(), style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.Ink)
+        Text(label.take(1).uppercase(), style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.OnPastel)
     }
 }
 
@@ -195,9 +195,9 @@ private fun ModeSwitch(mode: SplitMode, onSelect: (SplitMode) -> Unit) {
         for ((m, text) in listOf(SplitMode.EQUAL to "Equally", SplitMode.EXACT to "Exact ₹")) {
             val on = m == mode
             Box(
-                Modifier.background(if (on) OwnTallyColors.Ink else Color.Transparent, RoundedCornerShape(20.dp)).clickable { onSelect(m) }
+                Modifier.background(if (on) OwnTallyColors.Green else Color.Transparent, RoundedCornerShape(20.dp)).clickable { onSelect(m) }
                     .padding(horizontal = 16.dp, vertical = 8.dp).semantics { role = Role.RadioButton; selected = on },
-            ) { Text(text, style = MaterialTheme.typography.labelMedium, color = if (on) Color.White else OwnTallyColors.Ink) }
+            ) { Text(text, style = MaterialTheme.typography.labelMedium, color = if (on) OwnTallyColors.OnDark else OwnTallyColors.Ink) }
         }
     }
 }
@@ -216,7 +216,7 @@ private fun PersonRow(model: AddExpenseModel, key: PublicKey, label: String, onC
         if (!exact) {
             Box(
                 Modifier.size(26.dp).background(if (on) OwnTallyColors.Green else Color.Transparent, RoundedCornerShape(8.dp))
-                    .border(BorderStroke(2.dp, if (on) OwnTallyColors.Green else OwnTallyColors.TextHint), RoundedCornerShape(8.dp)),
+                    .border(BorderStroke(2.dp, if (on) OwnTallyColors.Accent else OwnTallyColors.TextHint), RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center,
             ) { if (on) Text("✓", color = Color.White, style = MaterialTheme.typography.labelMedium) }
             Spacer(Modifier.width(14.dp))

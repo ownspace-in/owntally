@@ -192,7 +192,7 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             for (t in Tab.entries) {
                 val on = t == selected
-                val colour = if (on) OwnTallyColors.Green else OwnTallyColors.TextSecondary
+                val colour = if (on) OwnTallyColors.Accent else OwnTallyColors.TextSecondary
                 Column(
                     Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 6.dp)
                         .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = on; contentDescription = t.label },

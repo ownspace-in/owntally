@@ -123,7 +123,7 @@ fun JoinRequestsScreen(
                     Spacer(Modifier.height(10.dp))
                 }
                 item {
-                    Text(model.newInviteLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green, modifier = Modifier.clickable(onClick = onNewInvite).padding(8.dp).semantics { role = SemanticsRole.Button })
+                    Text(model.newInviteLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onNewInvite).padding(8.dp).semantics { role = SemanticsRole.Button })
                 }
             }
         }

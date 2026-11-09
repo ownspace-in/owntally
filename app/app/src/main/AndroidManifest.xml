@@ -34,7 +34,7 @@
         android:icon="@drawable/ic_launcher"
         android:label="OwnTally"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.OwnTally">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -43,7 +43,7 @@ fun CantReachScreen(model: CantReachModel, onBack: () -> Unit, onTryNow: () -> U
                 Text(model.title, style = MaterialTheme.typography.headlineSmall, color = OwnTallyColors.Ink)
             }
             Spacer(Modifier.height(16.dp))
-            val (bg, fg) = if (model.bannerTone == CantReachTone.WARNING) OwnTallyColors.WarningBackground to OwnTallyColors.WarningText else OwnTallyColors.InfoBackground to OwnTallyColors.Green
+            val (bg, fg) = if (model.bannerTone == CantReachTone.WARNING) OwnTallyColors.WarningBackground to OwnTallyColors.WarningText else OwnTallyColors.InfoBackground to OwnTallyColors.Accent
             Column(Modifier.fillMaxWidth().background(bg, RoundedCornerShape(24.dp)).padding(18.dp)) {
                 Text(model.bannerTitle, style = MaterialTheme.typography.titleMedium, color = fg)
                 Spacer(Modifier.height(6.dp))

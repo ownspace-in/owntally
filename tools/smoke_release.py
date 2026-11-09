@@ -141,6 +141,18 @@ def wait_for(screen, what, seconds=40, **find):
 failures = []
 
 
+SHOTS = None
+
+
+def shot(name):
+    """Saves a screenshot of the phone when the run was started with --screenshots DIR."""
+    if SHOTS:
+        os.makedirs(SHOTS, exist_ok=True)
+        data = subprocess.run([ADB, "exec-out", "screencap", "-p"], capture_output=True).stdout
+        with open(os.path.join(SHOTS, name + ".png"), "wb") as f:
+            f.write(data)
+
+
 def fail(msg):
     print("FAIL:", msg)
     dump_log()
@@ -168,7 +180,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apk", default="app/app/build/outputs/apk/release/app-release-unsigned.apk")
     ap.add_argument("--build", action="store_true", help="run ./gradlew :app:app:assembleRelease first")
+    ap.add_argument("--screenshots", help="save a screenshot of each main screen into this folder (for looking at a theme)")
     a = ap.parse_args()
+    global SHOTS
+    SHOTS = a.screenshots
     if a.build:
         subprocess.run(["./gradlew", ":app:app:assembleRelease"], check=True)
     if not os.path.exists(a.apk):
@@ -182,6 +197,7 @@ def main():
 
     adb("shell", "am", "start", "-n", ACTIVITY)
     wait_for(scr, "the welcome screen", contains="Keep your data")
+    shot("welcome")
     ok("cold start: the welcome screen shows")
 
     # A link tapped before setup waits (decision A1).
@@ -201,6 +217,7 @@ def main():
         if not d:
             fail("word %d of the recovery phrase is not on the screen" % n)
         words.append(d["content-desc"].split(": ", 1)[1])
+    shot("phrase")
     ok("first run: the recovery phrase shows 12 words")
     tap(scr.find(text="I've written it down"))
     wait_for(scr, "the check screen", text="Check you wrote it down")
@@ -209,6 +226,7 @@ def main():
         type_into(node, words[n - 1])
     tap(scr.refresh().find(text="Finish"))
     wait_for(scr, "the invite form (the link that waited)", 60, text="You were invited")
+    shot("join-form")
     ok("setup done; the invite link that waited opened its join form")
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_for(scr, "the Groups screen", text="New group")
@@ -221,6 +239,7 @@ def main():
     wait_for(scr, "the group card", text="Goa Trip")
     tap(scr.find(text="Goa Trip"))
     wait_for(scr, "the group screen", text="You are the owner")
+    shot("group")
     ok("a group was made and opened")
     tap(scr.find(desc="Add expense"))
     amount = wait_for(scr, "the amount field", text="Save expense")
@@ -229,6 +248,7 @@ def main():
     type_into(scr.refresh().find(desc="What was it for?") or scr.find(contains="What was it for"), "Lunch")
     tap(scr.refresh().find(text="Save expense"))
     wait_for(scr, "the saved expense", 30, contains="Lunch")
+    shot("expense-saved")
     ok("an expense was saved (Room and Keystore work in the shrunk build)")
 
     # Members, Invite.
@@ -236,6 +256,7 @@ def main():
     wait_for(scr, "the Members screen", contains="Goa Trip")
     tap(wait_for(scr, "the Invite button", desc="Invite"))
     wait_for(scr, "the invite screen with a link", 30, text="Share invite link")
+    shot("invite")
     ok("a new invitation was made and shown (Tink, Room, the QR code)")
     adb("shell", "input", "keyevent", "KEYCODE_BACK"); adb("shell", "input", "keyevent", "KEYCODE_BACK"); adb("shell", "input", "keyevent", "KEYCODE_BACK")
 
@@ -245,6 +266,7 @@ def main():
     time.sleep(25)
     if not alive():
         fail("the app stopped while Iroh and the relay were starting")
+    shot("sync")
     ok("the app kept running for 25 s with Iroh and the relay starting")
 
     jobs = adb("shell", "dumpsys", "jobscheduler", check=False)

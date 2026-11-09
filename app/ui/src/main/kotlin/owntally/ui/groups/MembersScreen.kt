@@ -77,7 +77,7 @@ fun MembersScreen(
                     Text("Join requests", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnDark, modifier = Modifier.weight(1f))
                     if (model.joinRequestsCount > 0) {
                         Box(Modifier.size(32.dp).background(OwnTallyColors.OnDark, CircleShape), contentAlignment = Alignment.Center) {
-                            Text("${model.joinRequestsCount}", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Green)
+                            Text("${model.joinRequestsCount}", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent)
                         }
                         Spacer(Modifier.width(12.dp))
                     }
@@ -135,7 +135,7 @@ fun MembersScreen(
 private fun MemberRow(row: MemberRowModel, onMenu: ((MemberRowModel) -> Unit)?, onTap: (() -> Unit)?) {
     Row(Modifier.fillMaxWidth().then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).background(OwnTallyColors.GroupPastels[row.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-            Text(row.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+            Text(row.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -145,8 +145,8 @@ private fun MemberRow(row: MemberRowModel, onMenu: ((MemberRowModel) -> Unit)?, 
         if (row.badge != null) {
             val owner = row.role == Role.OWNER
             Text(
-                row.badge, style = MaterialTheme.typography.labelLarge, color = if (owner) OwnTallyColors.OnDark else OwnTallyColors.Green,
-                modifier = Modifier.background(if (owner) OwnTallyColors.Ink else OwnTallyColors.GroupPastels[0], RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+                row.badge, style = MaterialTheme.typography.labelLarge, color = if (owner) OwnTallyColors.OnDark else OwnTallyColors.Accent,
+                modifier = Modifier.background(if (owner) OwnTallyColors.Green else OwnTallyColors.InfoBackground, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
         if (row.hasMenu && onMenu != null) {

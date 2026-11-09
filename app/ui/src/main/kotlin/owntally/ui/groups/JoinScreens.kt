@@ -51,7 +51,7 @@ import owntally.ui.theme.OwnTallyColors
 private fun InvitedCard(heading: String, initials: String, title: String, subtitle: String, expiry: String) {
     Text(heading, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.TextSecondary)
     Spacer(Modifier.height(10.dp))
-    Row(Modifier.fillMaxWidth().background(OwnTallyColors.Ink, RoundedCornerShape(28.dp)).padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(OwnTallyColors.Hero, RoundedCornerShape(28.dp)).padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(56.dp).background(OwnTallyColors.GroupPastels[0], RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
             Text(initials, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
         }
@@ -91,12 +91,12 @@ fun PasteInviteScreen(text: String, onText: (String) -> Unit, problem: String?, 
             placeholder = { Text("https://joinowntally.ownspace.in/j#…", color = OwnTallyColors.TextHint) }, isError = problem != null,
             shape = RoundedCornerShape(16.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, errorContainerColor = Color.White,
-                focusedBorderColor = OwnTallyColors.Green, unfocusedBorderColor = OwnTallyColors.Border, errorBorderColor = OwnTallyColors.Red, cursorColor = OwnTallyColors.Green,
+                focusedContainerColor = OwnTallyColors.Card, unfocusedContainerColor = OwnTallyColors.Card, errorContainerColor = OwnTallyColors.Card,
+                focusedBorderColor = OwnTallyColors.Accent, unfocusedBorderColor = OwnTallyColors.Border, errorBorderColor = OwnTallyColors.Red, cursorColor = OwnTallyColors.Accent,
             ),
         )
         Spacer(Modifier.height(10.dp))
-        Text("Paste from clipboard", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green, modifier = Modifier.clickable(onClick = onPaste).padding(8.dp).semantics { role = SemanticsRole.Button })
+        Text("Paste from clipboard", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onPaste).padding(8.dp).semantics { role = SemanticsRole.Button })
         if (problem != null) {
             Spacer(Modifier.height(6.dp))
             Text(problem, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.Red)
@@ -119,7 +119,7 @@ fun JoinFormScreen(
             if (model.unreachableNote != null) {
                 Spacer(Modifier.height(14.dp))
                 Notice(model.unreachableNote)
-                if (onTryAgain != null) Text("Try to reach them again", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green, modifier = Modifier.clickable(onClick = onTryAgain).padding(8.dp).semantics { role = SemanticsRole.Button })
+                if (onTryAgain != null) Text("Try to reach them again", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onTryAgain).padding(8.dp).semantics { role = SemanticsRole.Button })
             }
             if (problem != null) {
                 Spacer(Modifier.height(14.dp))
@@ -150,7 +150,7 @@ fun JoinWaitingScreen(model: JoinWaitingModel, note: String?, busy: Boolean, onR
             Spacer(Modifier.height(36.dp))
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(72.dp).background(OwnTallyColors.InfoBackground, CircleShape), contentAlignment = Alignment.Center) {
-                    GlyphIcon(Glyph.SYNC, OwnTallyColors.Green, 32.dp)
+                    GlyphIcon(Glyph.SYNC, OwnTallyColors.Accent, 32.dp)
                 }
                 Spacer(Modifier.height(18.dp))
                 Text(model.title, style = MaterialTheme.typography.headlineMedium, color = OwnTallyColors.Ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -171,8 +171,8 @@ fun JoinWaitingScreen(model: JoinWaitingModel, note: String?, busy: Boolean, onR
         }
         if (model.retry != null) {
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onRetry, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(28.dp), border = BorderStroke(1.dp, OwnTallyColors.Green)) {
-                Text(if (busy) "Checking…" else model.retry, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green)
+            OutlinedButton(onClick = onRetry, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(28.dp), border = BorderStroke(1.dp, OwnTallyColors.Accent)) {
+                Text(if (busy) "Checking…" else model.retry, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent)
             }
         }
     }

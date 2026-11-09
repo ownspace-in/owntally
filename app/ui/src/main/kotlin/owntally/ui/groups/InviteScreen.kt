@@ -65,7 +65,7 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
             }
             Spacer(Modifier.height(16.dp))
             if (model.qr != null) {
-                Column(Modifier.fillMaxWidth().background(OwnTallyColors.Ink, RoundedCornerShape(32.dp)).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth().background(OwnTallyColors.Hero, RoundedCornerShape(32.dp)).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     QrView(model.qr, Modifier.size(232.dp))
                     Spacer(Modifier.height(18.dp))
                     Text(model.qrTitle, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnDark)
@@ -95,7 +95,7 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
                     }
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        if (copied) "Copied" else "Copy", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green,
+                        if (copied) "Copied" else "Copy", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent,
                         modifier = Modifier.clickable(enabled = model.canCopy) { onCopy(); copied = true }.padding(8.dp).semantics { role = SemanticsRole.Button },
                     )
                 }
@@ -111,8 +111,8 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
             ) { Text("Revoke invite", style = MaterialTheme.typography.titleMedium, color = if (model.canRevoke) OwnTallyColors.Red else OwnTallyColors.TextHint) }
             OutlinedButton(
                 onClick = { copied = false; onNew() }, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, OwnTallyColors.Green),
-            ) { Text(model.newLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green) }
+                border = BorderStroke(1.dp, OwnTallyColors.Accent),
+            ) { Text(model.newLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent) }
         }
     }
 }
@@ -120,11 +120,13 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
 /** The QR code on white with the four-square quiet border a reader needs, drawn square by square. */
 @Composable
 fun QrView(qr: QrMatrix, modifier: Modifier = Modifier) {
+    // A QR code is always dark on white, whatever the theme: scanners expect it.
+    val dark = owntally.ui.theme.LightPalette.ink
     Canvas(modifier.background(Color.White, RoundedCornerShape(20.dp)).padding(14.dp).semantics { contentDescription = "QR code for the invite" }) {
         val quiet = 2
         val cell = size.width / (qr.size + 2 * quiet)
         for (y in 0 until qr.size) for (x in 0 until qr.size) {
-            if (qr[x, y]) drawRect(OwnTallyColors.Ink, Offset((x + quiet) * cell, (y + quiet) * cell), Size(cell + 0.5f, cell + 0.5f))
+            if (qr[x, y]) drawRect(dark, Offset((x + quiet) * cell, (y + quiet) * cell), Size(cell + 0.5f, cell + 0.5f))
         }
     }
 }
