@@ -179,7 +179,7 @@ Operations:
 - Run two relays on different servers and list both. Clients fail over automatically, so one outage does not stop sync.
 - Firewall to only the needed ports, automatic security updates, and an uptime alert.
 
-Default relay: `relay.ownspace.in`, run by us using the steps above. Consider adding a second relay on a different server for failover.
+Default relay: `relay.ownspace.in`, run by us using the steps above, with `-connects-per-min 300 -max-per-room 40` (decision R3, M9: phones behind one carrier address share the connection limit, and a room must hold the largest group, 20, plus members who were removed or are waiting to join). The relay has no accounts and does not check who connects; it cannot read or change what phones say (TLS between them), so what a stranger who knows a room and a member's key can do is disturb, not read or forge. Consider adding a second relay on a different server for failover.
 
 Public relay caveat: the n0 public relays are free but rate-limited and documented as for development and hobby use, with no uptime guarantee. Use them while building. Run our own before a wider release.
 
