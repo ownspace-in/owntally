@@ -414,15 +414,12 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit, o
                     when (action) {
                         is SettleAction.Copy -> action.row.phone?.let { owntally.ui.copySensitive(context, "Phone number", it) }
                         is SettleAction.Call -> action.row.phone?.let {
-                            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse(PhoneLinks.telUri(it)))) }
+                            try { context.startActivity(SettleIntents.dial(it)) }
                             catch (e: android.content.ActivityNotFoundException) { message = "This phone has no app to make calls." }
                         }
-                        is SettleAction.Reminder -> {
-                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(android.content.Intent.EXTRA_TEXT, SettleUpModel.reminderText(action.row.otherName, action.row.amount))
-                            try { context.startActivity(android.content.Intent.createChooser(send, "Send reminder")) }
+                        is SettleAction.Reminder ->
+                            try { context.startActivity(SettleIntents.chooser(SettleIntents.reminder(action.row.otherName, action.row.amount))) }
                             catch (e: android.content.ActivityNotFoundException) { message = "This phone has no app to send a message with." }
-                        }
                         is SettleAction.IPaid, is SettleAction.MarkReceived -> amountFor = action
                         is SettleAction.Confirm -> write { s.confirm(action.id) }
                         is SettleAction.CancelDuplicate -> write { s.cancelDuplicate(action.id) }
