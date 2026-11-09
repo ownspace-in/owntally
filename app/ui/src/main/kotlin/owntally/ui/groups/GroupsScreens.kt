@@ -176,6 +176,13 @@ fun GroupCard(card: GroupCardModel, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(card.name, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Text(card.subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+            if (card.paymentLine != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    card.paymentLine, style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.WarningText,
+                    modifier = Modifier.background(OwnTallyColors.WarningBackground, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
             if (card.ownershipOffer) {
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -299,6 +306,13 @@ private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
                     .semantics { role = SemanticsRole.Button },
                 contentAlignment = Alignment.Center,
             ) { Text("Settle up the group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink) }
+            if (model.paymentNotice != null) {
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, RoundedCornerShape(16.dp)).padding(12.dp)
+                        .semantics { contentDescription = model.paymentNotice },
+                ) { Text(model.paymentNotice, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText) }
+            }
         }
     }
 }

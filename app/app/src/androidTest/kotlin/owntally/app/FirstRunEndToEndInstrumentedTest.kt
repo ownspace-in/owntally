@@ -147,7 +147,7 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("Delete expense").performClick()
             rule.waitUntilExactlyOneExists(hasText("Deleted by Asha · not counted"), 25_000)
 
-            // Test friends (debug build only), then Settle up shows the plan, with its buttons switched off.
+            // Test friends (debug build only), then Settle up shows the plan, with the buttons of M8 (I paid, Copy number, Call for what I owe).
             rule.onNodeWithText("Add test friends and expenses (debug build)").performClick()
             rule.waitUntilExactlyOneExists(hasText("Meera (test) is owed"), 15_000)
             rule.onNodeWithText("Settle up the group").performClick()
@@ -155,8 +155,9 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("₹2,850").assertExists()
             rule.onNodeWithText("Ben (test) → Meera (test)").assertExists()
             rule.onNodeWithText("₹9,550").assertExists()
-            rule.onNodeWithText("Pay").assertIsNotEnabled()
-            rule.onNodeWithText("I paid").assertIsNotEnabled()
+            rule.onNodeWithText("I paid").assertExists()
+            rule.onNodeWithText("Copy number").assertExists()
+            rule.onNodeWithText("Call").assertExists()
             rule.onNodeWithText(SETTLE_NOTE).assertExists()
             rule.onNode(hasContentDescription("Back")).performClick()
             rule.waitUntilExactlyOneExists(hasText("Settle up the group"), 5_000)
@@ -185,7 +186,7 @@ class FirstRunEndToEndInstrumentedTest {
     }
 
     private companion object {
-        const val SETTLE_NOTE = "Recording payments arrives in a later update. Until then this is the list of who should pay whom."
+        const val SETTLE_NOTE = "If you owe someone, you'll see I paid here, with their number to copy or call. The plan updates if an expense is added or deleted."
     }
 
     private fun container() = (context as OwnTallyApplication).container

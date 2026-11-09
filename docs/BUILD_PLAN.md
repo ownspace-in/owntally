@@ -150,6 +150,8 @@ I paid, Received, Not received and reasons, reminders through the share sheet, u
 
 Acceptance: every state in screens 4 and 15 reachable and persisted, events merge correctly across devices.
 
+Built (see docs/tasks/M8-settling.md): the payment list in the core, recording payments, Settle up with I paid, Mark received, Confirm, Not received, Copy number, Call and Send reminder, the amount box, the duplicate fix, the Not received screens, notices on the tabs and the Group screen, a simulation with payments, and a repair for a refused key change found on the way. The two-phone check is the owner's.
+
 ### M9. Relay and invite page (can run in parallel with M6 to M8)
 
 `relay/`: install steps for the chosen relay (the Iroh relay program, or the WebSocket relay from M0), config, systemd unit, firewall notes, health check and uptime alert, written as a runbook that someone who has not seen the project can follow. `site/`: static page for `/j`, `/.well-known/assetlinks.json` (filled after the first signed build), hosted with HTTPS on `joinowntally.ownspace.in`.

@@ -99,6 +99,8 @@ class SettleUpEndToEndInstrumentedTest {
             see("Add pretend friend: Ben (test) (debug)"); rule.onNodeWithText("Add pretend friend: Ben (test) (debug)").performClick()
             see("As Ben (test): mark \u20b9500 as paid to you (debug)")
             rule.onNodeWithText("As Ben (test): mark \u20b9500 as paid to you (debug)").performClick()
+            // The group screen says a payment waits for the owner's answer.
+            see("1 payment is waiting for you to confirm.")
             see("Settle up the group"); rule.onNodeWithText("Settle up the group").performClick()
             see("Ben (test) marked \u20b9500 as paid. Waiting for you to confirm.")
 

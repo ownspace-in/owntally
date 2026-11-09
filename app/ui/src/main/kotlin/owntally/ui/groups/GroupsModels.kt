@@ -28,6 +28,8 @@ data class GroupCardModel(
     val ownershipOffer: Boolean = false,
     /** The owner removed this person: the card says so, whatever the balance was. */
     val removed: Boolean = false,
+    /** What needs attention about payments (M8): one line under the name, or null. */
+    val paymentLine: String? = null,
 )
 
 data class GroupsListModel(val owed: BalanceView, val owe: BalanceView, val cards: List<GroupCardModel>)
@@ -44,6 +46,16 @@ object GroupsModels {
             else -> words.take(2).joinToString("") { String(Character.toChars(it.codePointAt(0))) }
         }
         return letters.uppercase()
+    }
+
+    /** The line about payments on a group's card: what is waiting for this person first, then what they marked, then what is left to settle. */
+    fun paymentLine(g: GroupSummary): String? = when {
+        !g.readable || g.youWereRemoved -> null
+        g.paymentsWaitingForMe == 1 -> "1 payment is waiting for you to confirm"
+        g.paymentsWaitingForMe > 1 -> "${g.paymentsWaitingForMe} payments are waiting for you to confirm"
+        g.paymentsIMarked > 0 -> "You marked ${plural(g.paymentsIMarked, "payment", "payments")} as paid, waiting for the other person"
+        g.paymentsToSettle > 0 -> "${plural(g.paymentsToSettle, "payment", "payments")} to settle"
+        else -> null
     }
 
     /** The Settle tab: every group that can be opened, settled or not. */
@@ -71,6 +83,7 @@ object GroupsModels {
                     readable = it.readable,
                     ownershipOffer = it.ownershipOfferForMe,
                     removed = it.youWereRemoved,
+                    paymentLine = paymentLine(it),
                 )
             },
         )
@@ -102,6 +115,8 @@ data class GroupScreenModel(
     val expenses: List<ExpenseRow>,
     /** Everyone except me has a zero balance (or there is nobody else yet). */
     val allSettled: Boolean,
+    /** "2 payments are waiting for you to confirm." when someone marked payments to this person (M8), else null. */
+    val paymentNotice: String? = null,
 )
 
 object GroupScreenModels {
@@ -143,6 +158,7 @@ object GroupScreenModels {
                 .sortedWith(compareByDescending<Expense> { it.day }.thenByDescending { it.id.counter }.thenBy { it.id.author })
                 .map { row(view, it) },
             allSettled = others.all { (view.balances[it] ?: Money.ZERO) == Money.ZERO },
+            paymentNotice = view.overview.waiting.count { it.to == view.me }.let { n -> if (n == 0) null else if (n == 1) "1 payment is waiting for you to confirm." else "$n payments are waiting for you to confirm." },
         )
     }
 
