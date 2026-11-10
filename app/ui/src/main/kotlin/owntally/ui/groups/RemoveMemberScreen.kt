@@ -40,7 +40,7 @@ fun RemoveMemberScreen(model: RemoveMemberModel, onCancel: () -> Unit, onConfirm
     Column(Modifier.fillMaxSize().padding(20.dp, 8.dp)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onCancel).semantics { contentDescription = "Close"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onCancel).semantics { contentDescription = "Close"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.CLOSE, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))

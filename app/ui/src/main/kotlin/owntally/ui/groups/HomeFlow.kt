@@ -82,6 +82,7 @@ fun HomeFlow(
                 onOpen = { ui.nav = ui.nav.push(Screen.Group(it)) },
                 onSettle = { ui.nav = ui.nav.push(Screen.SettleUp(it)) },
                 onHow = { ui.nav = ui.nav.push(Screen.HowItWorks) },
+                onPrivacy = { ui.nav = ui.nav.push(Screen.Privacy) },
                 onSettings = if (lock != null) ({ ui.nav = ui.nav.push(Screen.Settings) }) else null,
                 joinGroup = joinGroup,
                 onJoin = { ui.nav = ui.nav.push(Screen.JoinPaste) },
@@ -91,6 +92,7 @@ fun HomeFlow(
             )
             Screen.CreateGroup -> CreateGroupRoute(sessions, onDone = back)
             Screen.HowItWorks -> HowItWorksScreen(onBack = back)
+            Screen.Privacy -> owntally.ui.privacy.PrivacyScreen(onBack = back)
             is Screen.Sync -> SyncRoute(sessions, sync, screen.id, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null, onExplain = { ui.nav = ui.nav.push(Screen.CantReach(screen.id, it)) })
             is Screen.CantReach -> CantReachRoute(sessions, sync, screen.id, screen.member, onBack = back, onNearby = if (nearby != null) ({ ui.nav = ui.nav.push(Screen.Nearby(screen.id)) }) else null)
             is Screen.Nearby -> NearbyRoute(sessions, nearby, screen.id, onBack = back)
@@ -125,7 +127,7 @@ fun HomeFlow(
 
 @Composable
 private fun HomeTabs(
-    sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onSettings: (() -> Unit)?, onCreate: () -> Unit,
+    sessions: Sessions, onOpen: (GroupId) -> Unit, onSettle: (GroupId) -> Unit, onHow: () -> Unit, onPrivacy: () -> Unit, onSettings: (() -> Unit)?, onCreate: () -> Unit,
     sync: owntally.data.session.SyncCoordinator?, onSync: (GroupId) -> Unit,
     joinGroup: owntally.data.session.JoinGroup? = null, onJoin: () -> Unit = {}, onOpenInvitation: (GroupId) -> Unit = {},
 ) {
@@ -158,11 +160,12 @@ private fun HomeTabs(
                     Box(Modifier.weight(1f)) {
                         MessageTab(
                             "About OwnTally",
-                            "OwnTally splits expenses with friends. There is no account and no server of ours: your groups are stored on this phone, and each group's data is encrypted with its own key.",
+                            "OwnTally splits expenses with friends. There is no account, and no server keeps your data: your groups are stored on this phone, and each group's data is encrypted with its own key.",
                         )
                     }
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         owntally.ui.components.PrimaryButton("How OwnTally works", onHow, Modifier.fillMaxWidth())
+                        owntally.ui.components.PrimaryButton("Privacy", onPrivacy, Modifier.fillMaxWidth())
                         if (onSettings != null) owntally.ui.components.PrimaryButton("Settings", onSettings, Modifier.fillMaxWidth())
                     }
                 }
@@ -192,9 +195,9 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             for (t in Tab.entries) {
                 val on = t == selected
-                val colour = if (on) OwnTallyColors.Green else OwnTallyColors.TextSecondary
+                val colour = if (on) OwnTallyColors.Accent else OwnTallyColors.TextSecondary
                 Column(
-                    Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 6.dp)
+                    Modifier.weight(1f).clickable(onClick = { onSelect(t) }).padding(vertical = 6.dp)
                         .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = on; contentDescription = t.label },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -405,7 +408,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit, o
     Column(Modifier.fillMaxSize()) {
         if (message != null) {
             Box(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp)) {
-                owntally.ui.components.Notice(message!!, modifier = Modifier.clickable { message = null })
+                owntally.ui.components.Notice(message!!, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { message = null }))
             }
         }
         Box(Modifier.weight(1f)) {

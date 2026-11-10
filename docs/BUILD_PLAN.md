@@ -162,11 +162,21 @@ Built (see docs/tasks/M9-relay-and-invite-page.md): the invite page checked agai
 
 ### M10. Hardening and release
 
-Recovery restore test end to end, dark theme, accessibility pass (touch targets, labels, contrast), release signing, Play Store listing, privacy text that states who runs the relay and what it can see, final review of every security-relevant file.
+Dark theme, accessibility pass (touch targets, labels, contrast), code shrinking, release signing, the privacy text that states who runs the relay and what it can see (in the app, on the web and for the store), a memory check on a 2 GB phone, and the final review of every security-relevant file. **Restoring from the recovery phrase is not in M10** (owner decision X1, 9 Nov 2026): it is M11, and until then the app, the how-it-works text and the store text say plainly that it is not available. Code shrinking (from CRYPTO.md clarification C8): turn it on for the release build, with keep rules for Tink, Room, Compose, Iroh and JNA, run the full suite against the shrunk build, and measure the APK again (about 26 MB unsigned without shrinking before Iroh, 29.6 MB with it).
 
-Also in M10 (from CRYPTO.md clarification C8): turn on code shrinking for the release build (with keep rules for Tink, Room and Compose, and a test run), and measure the APK again; it was about 26 MB unsigned without shrinking.
+Acceptance: a release build installs, runs on a 2 GB phone, and passes the full test suite and a manual checklist. Plan and results: docs/tasks/M10-hardening-release.md.
 
-Acceptance: a release build installs, runs on a 2 GB phone, and passes the full test suite and a manual checklist.
+### M11. Restoring from the recovery phrase
+
+Enter the 12 words on a new phone and get the same identity back; for each group, a friend's invite brings the phone back in as the same member with no new approval, and the history syncs (DESIGN.md "Recovery"). Needs a plan of its own first (how the phone finds the key slot it used in a group, and how the host recognises a key that is already a member), because the join flow of M6 always makes a new key.
+
+Acceptance: a phone that was wiped and restored from the phrase rejoins every group it was in without an admin's approval and ends with the same balances; a test with a wrong phrase and a phrase of another person.
+
+### M12. Relay sign-in (a signed challenge when connecting)
+
+Owner decision, 10 Nov 2026 (M10 finding N3): "signed challenge at connect, M11 or later". The WebSocket relay (`relay/ws-relay`) takes the sender id from the address the client gives, so anyone who knows a room and a member's public key can knock that member off the relay or flood them. The relay must send a fresh nonce on connect and accept the connection only after the client proves, with a signature by the member key (a label of its own, the room, the nonce), that it holds the key it names. Needs a plan of its own (relay program, the app, how an old app and a new relay live together). Can be done together with M11 or after it.
+
+Acceptance: a client that names a key it does not hold is refused and cannot replace the real member's connection; a test with a wrong signature, a replayed signature (other nonce, other room) and a good one; the privacy text and `docs/SECURITY_REVIEW.md` N3 updated.
 
 ## Definition of done (every milestone)
 

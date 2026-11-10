@@ -40,7 +40,7 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -51,7 +51,7 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
             }
             Spacer(Modifier.height(16.dp))
             Row(
-                Modifier.fillMaxWidth().background(OwnTallyColors.Green, RoundedCornerShape(24.dp)).clickable(onClick = onSyncNow).padding(vertical = 20.dp)
+                Modifier.fillMaxWidth().background(OwnTallyColors.Green, RoundedCornerShape(24.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSyncNow).padding(vertical = 20.dp)
                     .semantics { contentDescription = "Sync now"; role = SemanticsRole.Button },
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -62,10 +62,10 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
             if (onNearby != null) {
                 Spacer(Modifier.height(10.dp))
                 Row(
-                    Modifier.fillMaxWidth().border(1.dp, OwnTallyColors.Green, RoundedCornerShape(24.dp)).clickable(onClick = onNearby).padding(vertical = 16.dp)
+                    Modifier.fillMaxWidth().border(1.dp, OwnTallyColors.Accent, RoundedCornerShape(24.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onNearby).padding(vertical = 16.dp)
                         .semantics { contentDescription = "Nearby"; role = SemanticsRole.Button },
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                ) { Text("Nearby: sync in the same room", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Green) }
+                ) { Text("Nearby: sync in the same room", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent) }
             }
             Spacer(Modifier.height(14.dp))
             Text(model.headlineText, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
@@ -76,7 +76,7 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(model.notice, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
-                    Box(Modifier.size(44.dp).clickable(onClick = onDismissNotice).semantics { contentDescription = "Dismiss"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onDismissNotice).semantics { contentDescription = "Dismiss"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                         GlyphIcon(Glyph.CLOSE, OwnTallyColors.WarningText)
                     }
                 }
@@ -111,10 +111,10 @@ fun SyncScreen(model: SyncScreenModel, onBack: () -> Unit, onSyncNow: () -> Unit
 
 @Composable
 private fun MemberSyncRow(m: SyncMemberLine, onOpen: (() -> Unit)?) {
-    val tap = if (onOpen != null) Modifier.clickable(onClick = onOpen).semantics { role = SemanticsRole.Button } else Modifier
+    val tap = if (onOpen != null) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpen).semantics { role = SemanticsRole.Button } else Modifier
     Row(Modifier.fillMaxWidth().then(tap).padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[m.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-            Text(m.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+            Text(m.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -126,7 +126,7 @@ private fun MemberSyncRow(m: SyncMemberLine, onOpen: (() -> Unit)?) {
         }
         Spacer(Modifier.width(8.dp))
         val (background, content) = when (m.tone) {
-            BadgeTone.GOOD -> OwnTallyColors.InfoBackground to OwnTallyColors.Green
+            BadgeTone.GOOD -> OwnTallyColors.InfoBackground to OwnTallyColors.Accent
             BadgeTone.NEUTRAL -> OwnTallyColors.Chip to OwnTallyColors.TextSecondary
             BadgeTone.WARN -> OwnTallyColors.WarningBackground to OwnTallyColors.WarningText
             BadgeTone.OFFLINE -> OwnTallyColors.Chip to OwnTallyColors.TextSecondary
@@ -150,7 +150,7 @@ fun SyncTab(cards: List<GroupCardModel>, statusLine: @Composable (GroupCardModel
             item(key = card.id.toHex()) {
                 Column(
                     Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp))
-                        .clickable { onOpen(card) }.padding(16.dp),
+                        .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { onOpen(card) }).padding(16.dp),
                 ) {
                     Text(card.name, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Ink)
                     Text(statusLine(card), style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)

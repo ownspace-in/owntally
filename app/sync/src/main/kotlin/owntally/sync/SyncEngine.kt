@@ -92,7 +92,7 @@ class SyncEngine(
     private val access: PeerAccess = PeerAccess.EVERYONE,
 ) {
     suspend fun run(link: Link, role: SyncRole): SyncResult = coroutineScope {
-        val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+        val inbox = Channel<ByteArray>(LinkQueue.CAPACITY) // bounded: a peer that sends faster than we store waits (F3)
         val pump = launch {
             try {
                 link.received.collect { inbox.send(it) }

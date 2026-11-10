@@ -34,6 +34,19 @@ interface IrohConnection {
     suspend fun close()
 }
 
+/**
+ * A connection that has been accepted but whose other end has not yet opened its stream (finding F7, docs/SECURITY_REVIEW.md). Anyone who knows
+ * a member's key can get this far and then say nothing, so waiting for the stream is the transport's job, one connection at a time on its own and
+ * with a time limit, never in the loop that accepts the next.
+ */
+interface IncomingIroh {
+    /** Completes the handshake and waits for the stream the other end opens. Throws if it fails. */
+    suspend fun open(): IrohConnection
+
+    /** Drops the connection: it was too slow, or there were too many waiting. */
+    fun abandon()
+}
+
 /** What the transport needs from Iroh (the real one is `IrohPortImpl` in the app; the native library cannot run on the JVM tests). */
 interface IrohPort {
     /** Binds the endpoint with the member's key as its identity (decision I2) and our relay as its home relay. Returns the endpoint id. */
@@ -41,7 +54,7 @@ interface IrohPort {
 
     /** Dials a member by its key. [relayHint] is the relay to try first. Throws if it cannot connect within the library's own attempt. */
     suspend fun connect(peer: PublicKey, relayHint: String?): IrohConnection
-    fun incoming(): Flow<IrohConnection>
+    fun incoming(): Flow<IncomingIroh>
     suspend fun stop()
 }
 
@@ -50,6 +63,10 @@ class IrohConfig(
     val connectWindowMs: Long = 15_000,
     val retryMs: Long = 2_000,
     val relayHint: String? = null,
+    /** How long an incoming connection may take to open its stream before it is dropped (F7). */
+    val acceptWindowMs: Long = 10_000,
+    /** How many incoming connections may be waiting for their stream at once; more are dropped at once (F7). */
+    val maxPendingAccepts: Int = 16,
 )
 
 /**
@@ -67,6 +84,7 @@ class IrohTransport(
     private val started = CompletableDeferred<PublicKey>()
     private val starting = java.util.concurrent.atomic.AtomicBoolean(false)
     private val inbox = Channel<Link>(Channel.UNLIMITED)
+    private val pendingAccepts = java.util.concurrent.Semaphore(config.maxPendingAccepts)
 
     private fun ensureStarted() {
         if (!starting.compareAndSet(false, true)) return
@@ -77,7 +95,26 @@ class IrohTransport(
                 started.completeExceptionally(e)
                 return@launch
             }
-            port.incoming().collect { conn -> inbox.trySend(IrohLink(conn)) }
+            port.incoming().collect { incoming ->
+                if (!pendingAccepts.tryAcquire()) { incoming.abandon(); return@collect }
+                // Each one waits for its stream on its own, so a silent stranger holds up nobody (F7).
+                scope.launch {
+                    try {
+                        val conn = try {
+                            withTimeout(config.acceptWindowMs) { incoming.open() }
+                        } catch (e: TimeoutCancellationException) {
+                            null
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            null // one that fails to complete must not stop the others being accepted
+                        }
+                        if (conn != null) inbox.trySend(IrohLink(conn)) else incoming.abandon()
+                    } finally {
+                        pendingAccepts.release()
+                    }
+                }
+            }
         }
     }
 

@@ -9,6 +9,7 @@ import kotlin.test.assertTrue
 import owntally.crypto.InMemoryTicketRecords
 import owntally.crypto.Ticket
 import owntally.data.repo.TestEnv
+import owntally.data.store.InMemoryJoinRequestStore
 import owntally.model.GroupId
 
 /** T6.3 and T6.4 on real repositories: tickets of a real group, a "restart" being a new Invites over the same records. */
@@ -58,6 +59,35 @@ class InvitesTest {
         val ticket = Ticket.fromShared(invites.create(group)!!.link)!!
         assertEquals(2L, ticket.epoch)
         assertEquals(env.secrets.loadKeyring(group).keyring[2L], ticket.groupKey)
+    }
+
+    // ---- N2 (docs/SECURITY_REVIEW.md, owner decision 10 Nov 2026): a key change cancels the invitations that are open ---------------------
+
+    @Test fun anOpenInviteStopsWorkingWhenTheKeyChanges() {
+        val s = sessions()
+        val before = Invites(records, env.groups, env.secrets, env.identity, s, env.clock)
+        val old = before.create(group)!!
+        val backend = GroupJoinBackend(group, env.identity.groupIdentity(env.groups.group(group)!!.keySlot)!!, before, JoinRequests(InMemoryJoinRequestStore(), s, env.clock), s)
+        assertNotNull(backend.issued(old.ticketId), "works before the change")
+        assertTrue(s.session(group).rotateKey() is AddResult.Added)
+        val after = Invites(records, env.groups, env.secrets, env.identity, s, env.clock)
+        assertNull(backend.issued(old.ticketId), "a joiner holding the old link is refused (the same answer as for an expired one)")
+        assertTrue(after.open(group).isEmpty(), "and the screen no longer lists it")
+        assertNull(after.current(group))
+        val fresh = after.create(group)!!
+        assertNotNull(backend.issued(fresh.ticketId), "a new invitation carries the new key and works")
+    }
+
+    @Test fun removingAMemberCancelsTheOpenInvitesToo() {
+        val s = sessions()
+        val invites = Invites(records, env.groups, env.secrets, env.identity, s, env.clock)
+        val backend = GroupJoinBackend(group, env.identity.groupIdentity(env.groups.group(group)!!.keySlot)!!, invites, JoinRequests(InMemoryJoinRequestStore(), s, env.clock), s)
+        val old = invites.create(group)!!
+        val ben = owntally.model.PublicKey(ByteArray(32) { 9 })
+        assertTrue(s.session(group).approveJoin(ben, owntally.model.EncryptionKey(ByteArray(32) { 7 }), "Ben", "+91 98765 43211") is AddResult.Added)
+        assertNotNull(backend.issued(old.ticketId), "admitting someone does not change the key")
+        assertTrue(s.session(group).removeMember(ben) is AddResult.Added)
+        assertNull(backend.issued(old.ticketId))
     }
 
     @Test fun theCurrentInviteIsTheNewestOneThatStillWorksAndSurvivesARestart() {

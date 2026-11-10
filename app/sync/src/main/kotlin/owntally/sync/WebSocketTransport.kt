@@ -166,7 +166,7 @@ class WebSocketTransport(
     }
 
     private class RelayLink(override val peer: PublicKey, private val conn: RoomConnection) : Link {
-        private val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+        private val inbox = Channel<ByteArray>(LinkQueue.CALLBACK_CAPACITY)
         override val kind = LinkKind.RELAYED
         override val received: Flow<ByteArray> = inbox.receiveAsFlow()
 
@@ -174,7 +174,7 @@ class WebSocketTransport(
             conn.sendFrame(byteArrayOf(MODE_TARGETED) + peer.bytes() + bytes)
 
         fun deliver(payload: ByteArray) {
-            inbox.trySend(payload)
+            if (inbox.trySend(payload).isFailure) inbox.close() // the peer outran us by a whole queue: end the link (F3)
         }
 
         fun end() {

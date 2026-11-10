@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy - OwnTally</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Privacy</h1>
+    <p>This is what OwnTally does with your information, in plain words. The same text is in the app, under About, Privacy.</p>
+    <div class="card">
+      <h2>Where your data lives</h2>
+      <p>Your groups, expenses, payments and the keys that protect them are stored only on this phone, encrypted.</p>
+      <p>There is no OwnTally account, and no server keeps your data.</p>
+    </div>
+    <div class="card">
+      <h2>What leaves your phone</h2>
+      <p>Your entries go only to the other members of your groups, encrypted, straight from phone to phone or through the relay below.</p>
+      <p>The name and phone number you give are shown to the members of each group you join. They are not checked, and you can use different ones in each group.</p>
+    </div>
+    <div class="card">
+      <h2>The relay</h2>
+      <p>relay.ownspace.in is run by [OPERATOR NAME: the owner fills this in before release]. It passes encrypted data between two phones that cannot reach each other directly.</p>
+      <p>It can see the public keys of the two phones, a code made from the group&#39;s id, the phones&#39; internet addresses, when they connect and how much they send. It cannot read what you send, and it stores nothing.</p>
+    </div>
+    <div class="card">
+      <h2>Finding each other</h2>
+      <p>To help phones find each other, OwnTally uses the public discovery service of n0, the makers of the Iroh connection library.</p>
+      <p>n0 learns a public key that your phone uses in each group, your phone&#39;s internet address, and when your phone is online. It cannot read what you send.</p>
+    </div>
+    <div class="card">
+      <h2>Sharing in the same room</h2>
+      <p>Sharing with a phone nearby uses Google&#39;s Nearby Connections, part of Google Play services on your phone, and only after you tap Start on the Nearby screen. It is Google&#39;s service: Google&#39;s own privacy policy applies to it.</p>
+    </div>
+    <div class="card">
+      <h2>What OwnTally does not do</h2>
+      <p>No analytics, no advertising, no tracking, and no crash reports are sent anywhere.</p>
+      <p>It does not read your contacts, your location, your photos or your messages.</p>
+      <p>It never holds or moves money, and it does not know which payment app you use.</p>
+    </div>
+    <div class="card">
+      <h2>Permissions and why</h2>
+      <p>Internet: to sync with the other members of your groups.</p>
+      <p>Nearby devices, Bluetooth and Wi-Fi: only for sharing in the same room, when you start it. On Android 11 and 12 Bluetooth scanning is called &quot;location&quot;; OwnTally does not read your location.</p>
+      <p>Running in the background: about every 15 minutes OwnTally may wake to sync, which Android allows without a question.</p>
+    </div>
+    <div class="card">
+      <h2>Backups and a lost phone</h2>
+      <p>Android may back up OwnTally&#39;s database to your Google account: the encrypted entries, and the name and phone number you gave when you set up OwnTally, which are kept there as plain text. The keys are never part of a backup, so a backup alone cannot read your groups.</p>
+      <p>If you lose your phone, the groups on it are gone unless other members still have them. Your 12-word recovery phrase is your identity; restoring from it on a new phone is not available yet.</p>
+    </div>
+    <div class="card">
+      <h2>Questions</h2>
+      <p>Write to [CONTACT ADDRESS: the owner fills this in before release].</p>
+    </div>
+    <p class="muted"><a href="/">OwnTally</a></p>
+  </main>
+</body>
+</html>

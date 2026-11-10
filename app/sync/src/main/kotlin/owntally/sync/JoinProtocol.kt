@@ -48,7 +48,7 @@ class JoinHost(
     private val random: SecureRandom = SecureRandom(),
 ) {
     suspend fun serve(link: Link) = coroutineScope {
-        val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+        val inbox = Channel<ByteArray>(LinkQueue.CAPACITY)
         val pump = launch {
             try { link.received.collect { inbox.send(it) } } finally { inbox.close() }
         }
@@ -151,7 +151,7 @@ class JoinClient(
     private class Ended(val outcome: JoinOutcome) : Exception(null, null, false, false)
 
     private suspend fun <T> conversation(link: Link, body: suspend (send: suspend (JoinMessage) -> Unit, next: suspend () -> JoinMessage) -> T): T = coroutineScope {
-        val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+        val inbox = Channel<ByteArray>(LinkQueue.CAPACITY)
         val pump = launch {
             try { link.received.collect { inbox.send(it) } } finally { inbox.close() }
         }

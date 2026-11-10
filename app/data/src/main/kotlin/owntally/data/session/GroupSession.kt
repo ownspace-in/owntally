@@ -240,7 +240,12 @@ class GroupSession(
         }
         val epoch = now.epoch + 1
         val fresh = GroupKey.generate()
-        val sealed = KeyRotation.seal(me.publicKey, groupId, epoch, fresh, KeyRotation.recipients(now, excluding))
+        val sealed = try {
+            KeyRotation.seal(me.publicKey, groupId, epoch, fresh, KeyRotation.recipients(now, excluding))
+        } catch (e: java.security.GeneralSecurityException) {
+            // A member's key cannot be sealed to (a group made before replay refused such keys): say so, do not crash (F1).
+            return AddResult.Invalid("a member's key cannot be used to send them the new group key")
+        }
         secrets.saveGroupKey(groupId, epoch, fresh)
         val result = try {
             append(body(epoch, sealed))

@@ -41,4 +41,11 @@ class CreateGroupModelTest {
         assertEquals(0, CreateGroupModel().withColour(GroupLooks.PALETTE_SIZE).colourIndex) // out of range is ignored
         assertEquals(2, CreateGroupModel(colourIndex = 2).withColour(-1).colourIndex)
     }
+
+    @Test fun aGroupNameWithAHiddenOrDirectionCharacterCannotBeCreatedAndSaysWhy() {
+        val m = CreateGroupModel(name = "Goa" + 0x202E.toChar() + "Trip")
+        assertFalse(m.canCreate)
+        assertEquals(owntally.model.NameText.INVISIBLE, m.problem)
+        assertTrue(CreateGroupModel(name = "\u0917\u094B\u0935\u093E \u092F\u093E\u0924\u094D\u0930\u093E").canCreate)
+    }
 }

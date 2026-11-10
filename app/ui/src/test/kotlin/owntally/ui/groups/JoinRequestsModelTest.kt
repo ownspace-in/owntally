@@ -130,4 +130,10 @@ class JoinRequestsModelTest {
         assertEquals("No one is waiting to join.", m.empty)
         assertEquals("No open invites.", JoinRequestsModels.build(s.view.value, emptyList(), now, listOf(OpenInviteInfo("old", now - 10)))!!.noOpenInvites)
     }
+
+    @Test fun aNameWithAHiddenOrDirectionCharacterIsBlockedLiveWithItsOwnMessage() {
+        val c = ApproveCheck.of(s.view.value, "Aarav" + 0x202E.toChar())
+        assertFalse(c.canApprove)
+        assertEquals(owntally.model.NameText.INVISIBLE, c.problem)
+    }
 }

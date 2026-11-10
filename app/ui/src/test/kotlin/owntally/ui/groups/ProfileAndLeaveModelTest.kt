@@ -127,4 +127,10 @@ class ProfileAndLeaveModelTest {
         w.sessions.markLeft(view.state.groupId!!)
         assertEquals(emptyList(), w.sessions.summaries.value)
     }
+
+    @Test fun aNameWithAHiddenOrDirectionCharacterCannotBeSavedAndSaysWhy() {
+        val c = ProfileCheck.of(s.view.value, "Asha" + 0x202E.toChar() + "K", "98765 43210")
+        assertFalse(c.canSave)
+        assertEquals(owntally.model.NameText.INVISIBLE, c.nameProblem)
+    }
 }

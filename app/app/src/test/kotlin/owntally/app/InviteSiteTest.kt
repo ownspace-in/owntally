@@ -109,7 +109,7 @@ class InviteSiteTest {
 
     @Test
     fun noPageOrStyleLoadsOrRunsAnythingTheSitePolicyForbids() {
-        val files = listOf("index.html", "j/index.html").map { File(site, it).readText() }
+        val files = listOf("index.html", "j/index.html", "privacy/index.html").map { File(site, it).readText() }
         for (html in files) {
             assertFalse(Regex("""<script(?![^>]*\bsrc=)""", RegexOption.IGNORE_CASE).containsMatchIn(html), "no inline script")
             assertFalse(Regex("""\son[a-z]+\s*=""", RegexOption.IGNORE_CASE).containsMatchIn(html), "no inline event handler")

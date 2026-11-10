@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window behind the first frame (M10, T10.3): the page colour of the light theme, so a phone in light mode does not flash another colour. -->
+    <style name="Theme.OwnTally" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F3F5F1</item>
+        <item name="android:colorBackground">#F3F5F1</item>
+    </style>
+</resources>

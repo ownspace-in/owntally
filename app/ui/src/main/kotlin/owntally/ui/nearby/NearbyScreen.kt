@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +52,7 @@ fun NearbyScreen(
     Column(Modifier.fillMaxSize().padding(20.dp, 8.dp, 20.dp, 20.dp)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -76,12 +77,12 @@ fun NearbyScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Box(Modifier.size(40.dp).background(OwnTallyColors.GroupPastels[(line.key.bytes()[0].toInt() and 0xff) % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
-                                    Text(line.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
+                                    Text(line.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Text(
                                     line.text, style = MaterialTheme.typography.bodyLarge,
-                                    color = when (line.tone) { NearbyTone.PROBLEM -> OwnTallyColors.Red; NearbyTone.GOOD -> OwnTallyColors.Green; else -> OwnTallyColors.Ink },
+                                    color = when (line.tone) { NearbyTone.PROBLEM -> OwnTallyColors.Red; NearbyTone.GOOD -> OwnTallyColors.Accent; else -> OwnTallyColors.Ink },
                                 )
                             }
                         }
@@ -102,7 +103,7 @@ fun NearbyScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (model.lookAgainLabel != null) PrimaryButton(model.lookAgainLabel, onLookAgain, Modifier.fillMaxWidth())
                     if (model.stopLabel != null) OutlinedButton(
-                        onClick = onStop, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(27.dp), border = BorderStroke(1.dp, OwnTallyColors.Red),
+                        onClick = onStop, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(27.dp), border = BorderStroke(1.dp, OwnTallyColors.Red),
                     ) { Text(model.stopLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Red) }
                 }
             }

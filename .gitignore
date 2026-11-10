@@ -29,3 +29,6 @@ local-secrets.properties
 # Python
 __pycache__/
 *.pyc
+
+# Kotlin compiler session files
+.kotlin/

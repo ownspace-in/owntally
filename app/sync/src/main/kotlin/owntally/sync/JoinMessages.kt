@@ -60,6 +60,7 @@ class JoinRequestBody(val joinerKey: PublicKey, val encryptionKey: EncryptionKey
                 val name = text(JoinLimits.MAX_NAME_BYTES) ?: return null
                 val phone = text(JoinLimits.MAX_PHONE_BYTES) ?: return null
                 if (b.hasRemaining()) return null
+                if (owntally.model.LowOrderKeys.isLowOrder(EncryptionKey(enc))) return null // nobody could seal a group key to it (F1)
                 return JoinRequestBody(PublicKey(key), EncryptionKey(enc), name, phone)
             } catch (e: IllegalArgumentException) {
                 return null

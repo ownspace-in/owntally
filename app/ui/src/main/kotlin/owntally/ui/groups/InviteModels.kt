@@ -32,7 +32,7 @@ class InviteModel(
     val canRevoke: Boolean,
 ) {
     val qrTitle = "For friends in the same room"
-    val qrHint = "They scan this with OwnTally"
+    val qrHint = "They scan this with their phone's camera"
     val warning = "Anyone with this link can ask to join. Send it only in private chats. You still approve each request."
     val newLabel = "New invite"
 

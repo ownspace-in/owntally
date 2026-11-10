@@ -25,6 +25,7 @@ sealed interface Screen {
     data class RemoveMember(val id: GroupId, val member: owntally.model.PublicKey) : Screen
     data class MemberActions(val id: GroupId, val member: owntally.model.PublicKey) : Screen
     data object HowItWorks : Screen
+    data object Privacy : Screen
     data object Settings : Screen
 }
 

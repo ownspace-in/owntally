@@ -45,6 +45,7 @@ class SettleUpScreenInstrumentedTest {
     private fun id(n: Long) = EventId(key(9), n)
 
     private fun save(name: String) {
+        owntally.ui.A11yChecks.assertAccessible(rule, name)
         rule.waitForIdle()
         val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "screens").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { rule.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

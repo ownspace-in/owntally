@@ -22,9 +22,9 @@ class GroupJoinBackend(
     private val joinRequests: JoinRequests,
     private val sessions: Sessions,
 ) : JoinHostBackend {
-    override fun issued(ticketId: ByteArray): Ticket? = invites.registry(group)?.find(ticketId)
+    override fun issued(ticketId: ByteArray): Ticket? = invites.registry(group)?.find(ticketId)?.takeIf { invites.isForCurrentKey(group, it) } // a key change cancels earlier invitations (N2)
 
-    override fun consume(ticket: Ticket): Boolean = invites.registry(group)?.accept(ticket) == true
+    override fun consume(ticket: Ticket): Boolean = invites.isForCurrentKey(group, ticket) && invites.registry(group)?.accept(ticket) == true
 
     /** False for a name or number the group would not accept, and for someone who is already a member. */
     override fun submit(request: JoinRequestBody): Boolean {

@@ -46,7 +46,7 @@ fun ProfileScreen(
 ) {
     Column(Modifier.fillMaxSize().padding(20.dp, 8.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                 GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
             }
             Spacer(Modifier.width(8.dp))
@@ -69,7 +69,7 @@ fun ProfileScreen(
         Spacer(Modifier.height(32.dp))
         Text(
             "Leave group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Red,
-            modifier = Modifier.clickable(onClick = onLeave).padding(vertical = 12.dp).semantics { role = SemanticsRole.Button },
+            modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onLeave).padding(vertical = 12.dp).semantics { role = SemanticsRole.Button },
         )
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,20 +34,26 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import owntally.ui.theme.DarkPalette
+import owntally.ui.theme.LightPalette
+import owntally.ui.theme.LocalOwnTallyPalette
 import owntally.ui.theme.OwnTallyColors
 
 /** The app mark from the mockups: a dark rounded square with a mint tick. */
 @Composable
 fun LogoMark(size: Int = 40) {
+    // The mark is the brand: a dark square with a mint tick on a light page; on a dark page the square is the green of the buttons.
+    val square = if (LocalOwnTallyPalette.current.dark) DarkPalette.green else LightPalette.ink
+    val tickColour = OwnTallyColors.Mint
     Canvas(Modifier.size(size.dp).semantics { contentDescription = "OwnTally" }) {
         val s = this.size.minDimension
-        drawRoundRect(OwnTallyColors.Ink, cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.25f, s * 0.25f))
+        drawRoundRect(square, cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.25f, s * 0.25f))
         val tick = Path().apply {
             moveTo(s * 0.28f, s * 0.52f)
             lineTo(s * 0.44f, s * 0.68f)
             lineTo(s * 0.74f, s * 0.34f)
         }
-        drawPath(tick, OwnTallyColors.Mint, style = Stroke(width = s * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(tick, tickColour, style = Stroke(width = s * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -81,7 +88,8 @@ fun OwnTallyField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            // The label above is drawn as separate text, so the field is named for TalkBack here (a field that has a value shows no placeholder to name it).
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
             placeholder = { Text(placeholder, color = OwnTallyColors.TextHint) },
             isError = error != null,
             singleLine = singleLine,
@@ -89,13 +97,13 @@ fun OwnTallyField(
             shape = RoundedCornerShape(16.dp),
             textStyle = MaterialTheme.typography.bodyLarge,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                errorContainerColor = Color.White,
-                focusedBorderColor = OwnTallyColors.Green,
+                focusedContainerColor = OwnTallyColors.Card,
+                unfocusedContainerColor = OwnTallyColors.Card,
+                errorContainerColor = OwnTallyColors.Card,
+                focusedBorderColor = OwnTallyColors.Accent,
                 unfocusedBorderColor = OwnTallyColors.Border,
                 errorBorderColor = OwnTallyColors.Red,
-                cursorColor = OwnTallyColors.Green,
+                cursorColor = OwnTallyColors.Accent,
             ),
         )
         if (error != null) {
@@ -111,7 +119,7 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
-        modifier = modifier.fillMaxWidth().height(54.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 54.dp),
         shape = RoundedCornerShape(27.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
@@ -128,7 +136,7 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
 @Composable
 fun TextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     TextButton(onClick = onClick, modifier = modifier.fillMaxWidth()) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Green)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent)
     }
 }
 
@@ -143,4 +151,17 @@ fun Notice(text: String, modifier: Modifier = Modifier, background: Color = OwnT
 @Composable
 fun CenteredNote(text: String, modifier: Modifier = Modifier) {
     Text(text, modifier = modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+}
+
+/**
+ * Buttons that sit side by side, or one under the other when the font is large (at 150% and more two labels no longer fit in a row without being
+ * broken in the middle of a word). [content] draws each button with the modifier it is given.
+ */
+@Composable
+fun ButtonRow(content: @Composable (Modifier) -> Unit) {
+    if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.4f) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content(Modifier.fillMaxWidth()) }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { content(Modifier.weight(1f)) }
+    }
 }

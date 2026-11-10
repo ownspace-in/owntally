@@ -29,7 +29,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Build, test and lint the Android app
         run: >
-          ./gradlew :app:app:assembleDebug
+          ./gradlew :app:app:assembleDebug :app:app:assembleRelease
           :app:app:testDebugUnitTest :app:ui:testDebugUnitTest :app:data:testDebugUnitTest
           :app:app:lintDebug :app:ui:lintDebug :app:data:lintDebug --console=plain
 

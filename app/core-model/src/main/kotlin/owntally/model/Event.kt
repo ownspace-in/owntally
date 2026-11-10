@@ -42,8 +42,10 @@ private fun checkEpoch(epoch: Long) = require(epoch in 1..0xFFFF_FFFFL) { "an ep
 
 private fun checkSealedKeys(keys: Map<PublicKey, SealedKey>) = require(keys.size <= 65_535) { "too many sealed keys" }
 
-private fun checkName(name: String) =
+private fun checkName(name: String) {
     require(name.isNotBlank() && name.length in 1..40) { "name must be 1 to 40 characters" }
+    NameText.problem(name)?.let { throw IllegalArgumentException(it) } // F4: no invisible or direction-changing characters
+}
 
 private fun checkPhone(phone: String) =
     require(
@@ -126,7 +128,7 @@ sealed class EventBody {
         }
     }
 
-    /** A new group key epoch without removing anyone, written by an admin (docs/CRYPTO.md section 6). */
+    /** A new group key epoch without removing anyone, written by the owner (docs/CRYPTO.md section 6; owner decision, 4 Nov 2026). */
     data class KeyRotated(val newEpoch: Long, val sealedKeys: Map<PublicKey, SealedKey>) : EventBody() {
         init {
             checkEpoch(newEpoch)
