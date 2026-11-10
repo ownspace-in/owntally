@@ -29,7 +29,7 @@ data class ProfileCheck(val name: String, val phone: String, val nameProblem: St
                 name.isEmpty() -> "Type your name."
                 name.length > 40 -> "Use at most 40 letters."
                 isNameTaken(view.state, name, except = view.me) -> "That name is already taken in this group"
-                else -> null
+                else -> owntally.model.NameText.problem(name)
             }
             val phoneProblem = when (OnboardingRules.phoneProblem(phone)) {
                 null -> null

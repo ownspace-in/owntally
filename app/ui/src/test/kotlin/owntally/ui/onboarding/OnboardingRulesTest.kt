@@ -66,4 +66,13 @@ class OnboardingRulesTest {
         val asked = (1..500).flatMap { OnboardingRules.confirmPositions(kotlin.random.Random(it)) }.toSet()
         assertEquals((1..12).toSet(), asked)
     }
+
+    // F4 (docs/SECURITY_REVIEW.md): any language, but no invisible or direction-changing characters.
+    @Test fun aNameWithAHiddenOrDirectionCharacterIsRefusedButOtherScriptsAreFine() {
+        val rlo = 0x202E.toChar(); val zwnj = 0x200C.toChar(); val zwsp = 0x200B.toChar()
+        assertEquals(NameProblem.BAD_CHARACTERS, OnboardingRules.nameProblem("Ro" + rlo + "han"))
+        assertEquals(NameProblem.BAD_CHARACTERS, OnboardingRules.nameProblem("Ro" + zwsp + "han"))
+        assertNull(OnboardingRules.nameProblem("\u0645\u06CC" + zwnj + "\u062E\u0648\u0627\u0647\u0645"))
+        assertNull(OnboardingRules.nameProblem("\u0930\u092E\u0947\u0936"))
+    }
 }

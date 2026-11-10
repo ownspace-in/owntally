@@ -114,7 +114,8 @@ class WireCodecTest {
 
     @Test
     fun aStringWithAnUnpairedSurrogateCannotBeEncoded() {
-        val e = Event(1, key(1), 1, emptyMap(), 0, EventBody.ProfileUpdated("bad\uD800", "12345"))
+        // A description is not checked as a name is (F4), so this reaches the encoder, which must still refuse it.
+        val e = Event(1, key(1), 1, emptyMap(), 0, EventBody.ExpenseAdded("bad\uD800", Money(100), key(1), 0, Split.Equal(setOf(key(1)))))
         assertFailsWith<IllegalArgumentException> { EventCodec.encodePayload(e) }
     }
 

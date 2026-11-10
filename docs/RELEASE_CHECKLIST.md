@@ -3,7 +3,7 @@
 What a person must do because a test cannot. Tick each, with the date. The automated side is in `docs/tasks/M10-hardening-release.md` (T10.9 result); the signing steps are in `docs/RELEASE.md`.
 
 ## Decisions and text only you can give
-- [ ] Decide the open security findings **F2, F4, F8** and the notes **N2, N3, N4** in `docs/SECURITY_REVIEW.md` (F1, F3 and F7 are fixed).
+- [x] Security decisions made on 10 Nov 2026: F2 known limit for 1.0, F8 later update, N3 is M12, F4 and N2 fixed (`docs/SECURITY_REVIEW.md`). Still to decide, if you want them before 1.0: the notes N4 (Nearby digits) and anything the human review finds.
 - [ ] A person has read the security-relevant files and signed the gate at the end of `docs/SECURITY_REVIEW.md` (BUILD_PLAN rule 8).
 - [ ] The operator's name and contact address in `PrivacyFacts.kt`; rewrite the page with `OWNTALLY_WRITE_PRIVACY_PAGE=1`; deploy `site/privacy/`.
 - [ ] Look at the wording of the nine privacy sections (they are in `PrivacyFacts.kt`) and at the two light-theme colour changes of T10.4 (placeholder text 66716A, control outlines 7F8D85).

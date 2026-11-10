@@ -42,8 +42,10 @@ private fun checkEpoch(epoch: Long) = require(epoch in 1..0xFFFF_FFFFL) { "an ep
 
 private fun checkSealedKeys(keys: Map<PublicKey, SealedKey>) = require(keys.size <= 65_535) { "too many sealed keys" }
 
-private fun checkName(name: String) =
+private fun checkName(name: String) {
     require(name.isNotBlank() && name.length in 1..40) { "name must be 1 to 40 characters" }
+    NameText.problem(name)?.let { throw IllegalArgumentException(it) } // F4: no invisible or direction-changing characters
+}
 
 private fun checkPhone(phone: String) =
     require(

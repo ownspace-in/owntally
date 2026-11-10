@@ -52,16 +52,23 @@ class Invites(
         return me.role == Role.OWNER || me.role == Role.ADMIN
     }
 
+    /**
+     * True if [ticket] was made for the key the group uses now. A key change (a member removed, or a new key by the owner) cancels every invitation
+     * made before it (N2, docs/SECURITY_REVIEW.md): it would carry the old key. Judged by the group as this phone knows it, so every admin's phone
+     * stops honouring its own open invitations as soon as it has learned of the change.
+     */
+    fun isForCurrentKey(group: GroupId, ticket: Ticket): Boolean = ticket.epoch == sessions.session(group).view.value.state.epoch
+
     /** The newest invitation that still works, if there is one. */
     fun current(group: GroupId): Invite? {
         if (!canInvite(group)) return null
-        return registry(group)?.open(group)?.firstOrNull()?.let { Invite(it) }
+        return registry(group)?.open(group)?.firstOrNull { isForCurrentKey(group, it) }?.let { Invite(it) }
     }
 
     /** Every invitation that still works, newest first (the list on the Join requests screen). */
     fun open(group: GroupId): List<Invite> {
         if (!canInvite(group)) return emptyList()
-        return registry(group)?.open(group)?.map { Invite(it) }.orEmpty()
+        return registry(group)?.open(group)?.filter { isForCurrentKey(group, it) }?.map { Invite(it) }.orEmpty()
     }
 
     /** A new invitation for the group's current key. Null if this person may not invite or the phone has no current key. */

@@ -76,6 +76,7 @@ object OnboardingText {
     fun nameError(p: NameProblem) = when (p) {
         NameProblem.EMPTY -> "Enter your name."
         NameProblem.TOO_LONG -> "Use 40 characters or fewer."
+        NameProblem.BAD_CHARACTERS -> "Remove hidden or direction-changing characters from the name."
     }
 
     fun phoneError(p: PhoneProblem) = when (p) {

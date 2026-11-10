@@ -208,8 +208,8 @@ enum class Tab(val label: String, val enabled: Boolean) {
 /** The Create group form: a name, a colour for the icon (kept only on this phone), and rupees as the only currency for now. */
 data class CreateGroupModel(val name: String = "", val colourIndex: Int = 0) {
     val trimmedName: String get() = name.trim()
-    val canCreate: Boolean get() = trimmedName.isNotEmpty() && trimmedName.length <= MAX_NAME
-    val problem: String? get() = if (trimmedName.length > MAX_NAME) "Use at most $MAX_NAME letters" else null
+    val canCreate: Boolean get() = trimmedName.isNotEmpty() && trimmedName.length <= MAX_NAME && owntally.model.NameText.problem(trimmedName) == null
+    val problem: String? get() = if (trimmedName.length > MAX_NAME) "Use at most $MAX_NAME letters" else owntally.model.NameText.problem(trimmedName)
 
     fun withName(text: String) = copy(name = text.take(INPUT_LIMIT))
     fun withColour(index: Int) = if (index in 0 until COLOURS) copy(colourIndex = index) else this

@@ -4,7 +4,7 @@ import kotlin.random.Random
 import owntally.crypto.RecoveryPhrase
 
 enum class Step { WELCOME, PHRASE, CONFIRM, DONE }
-enum class NameProblem { EMPTY, TOO_LONG }
+enum class NameProblem { EMPTY, TOO_LONG, BAD_CHARACTERS }
 enum class PhoneProblem { EMPTY, BAD_CHARACTERS, BAD_LENGTH, TOO_FEW_DIGITS }
 enum class SaveProblem { COULD_NOT_SAVE }
 
@@ -51,6 +51,7 @@ object OnboardingRules {
         return when {
             t.isEmpty() -> NameProblem.EMPTY
             t.length > 40 -> NameProblem.TOO_LONG
+            owntally.model.NameText.problem(t) != null -> NameProblem.BAD_CHARACTERS // the core's rule (F4)
             else -> null
         }
     }

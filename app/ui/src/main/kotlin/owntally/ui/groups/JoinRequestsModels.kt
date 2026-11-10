@@ -74,7 +74,7 @@ data class ApproveCheck(val name: String, val problem: String?) {
                 name.isEmpty() -> "Type a name."
                 name.length > 40 -> "Use at most 40 letters."
                 isNameTaken(view.state, name) -> "Someone in this group already has this name. Try adding an initial, like Rohan V."
-                else -> null
+                else -> owntally.model.NameText.problem(name)
             }
             return ApproveCheck(name, problem)
         }
