@@ -60,8 +60,21 @@ class IrohTransportTest {
         override suspend fun close() { out.end() }
     }
 
+    private class Ready(private val conn: IrohConnection) : IncomingIroh {
+        override suspend fun open() = conn
+        override fun abandon() {}
+    }
+
+    /** An incoming connection whose other end never opens its stream: [open] waits until it is cancelled. */
+    private class Silent : IncomingIroh {
+        @Volatile var abandoned = false
+        @Volatile var opened = false
+        override suspend fun open(): IrohConnection { opened = true; kotlinx.coroutines.awaitCancellation() }
+        override fun abandon() { abandoned = true }
+    }
+
     private class FakePort(val key: PublicKey, private val world: World, var publishedAtMs: Long = 0, var claimsRemote: PublicKey? = null, var failStart: Boolean = false, var answersAs: PublicKey? = null) : IrohPort {
-        private val accepted = Channel<IrohConnection>(Channel.UNLIMITED)
+        private val accepted = Channel<IncomingIroh>(Channel.UNLIMITED)
         @Volatile var started = false
         @Volatile var stopped = false
         val startedAtNanos = System.nanoTime()
@@ -78,11 +91,13 @@ class IrohTransportTest {
             val target = world.ports[peer]
             if (target == null || !target.started || (System.nanoTime() - target.startedAtNanos) / 1_000_000 < target.publishedAtMs) throw IOException("no address for the peer yet")
             val a = Pipe(world); val b = Pipe(world)
-            target.accepted.trySend(FakeConnection(claimsRemote ?: key, world, out = b, inn = a))
+            target.accepted.trySend(Ready(FakeConnection(claimsRemote ?: key, world, out = b, inn = a)))
             return FakeConnection(target.answersAs ?: peer, world, out = a, inn = b)
         }
 
-        override fun incoming(): Flow<IrohConnection> = accepted.receiveAsFlow()
+        override fun incoming(): Flow<IncomingIroh> = accepted.receiveAsFlow()
+        /** Someone who connects and never opens the stream (F7). */
+        fun silentStranger(): Silent = Silent().also { accepted.trySend(it) }
         override suspend fun stop() { stopped = true; world.ports.remove(key) }
     }
 
@@ -222,5 +237,39 @@ class IrohTransportTest {
         t.incoming(room); delay(100)
         t.stop()
         assertTrue(p.stopped)
+    }
+
+    // --- finding F7 (docs/SECURITY_REVIEW.md): a stranger who connects and says nothing must not hold up the others ---------------------
+
+    @Test fun aSilentStrangerDoesNotHoldUpALaterConnection() = run {
+        val pb = FakePort(b, world)
+        val tb = transport(pb); val incoming = tb.incoming(room)
+        delay(100)
+        val stranger = pb.silentStranger()
+        delay(100)
+        val link = transport(FakePort(a, world)).connect(room, b)
+        val got = withTimeout(2_000) { incoming.first() } // the default window is 10 s: this must not wait for it
+        assertEquals(a, got.peer)
+        assertTrue(stranger.opened && !stranger.abandoned)
+        link.close()
+    }
+
+    @Test fun aStrangerWhoNeverOpensTheStreamIsDroppedAfterTheWindow() = run {
+        val pb = FakePort(b, world)
+        val tb = IrohTransport(pb, scope, IrohConfig(acceptWindowMs = 300)); tb.incoming(room)
+        delay(100)
+        val stranger = pb.silentStranger()
+        delay(1_000)
+        assertTrue(stranger.abandoned, "dropped once the window had passed")
+    }
+
+    @Test fun moreSilentStrangersThanTheLimitAreDroppedAtOnce() = run {
+        val pb = FakePort(b, world)
+        val tb = IrohTransport(pb, scope, IrohConfig(acceptWindowMs = 5_000, maxPendingAccepts = 2)); tb.incoming(room)
+        delay(100)
+        val strangers = List(5) { pb.silentStranger() }
+        delay(500)
+        assertEquals(3, strangers.count { it.abandoned }, "two wait, the other three are dropped without waiting")
+        assertEquals(2, strangers.count { it.opened })
     }
 }

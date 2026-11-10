@@ -3,7 +3,7 @@
 What a person must do because a test cannot. Tick each, with the date. The automated side is in `docs/tasks/M10-hardening-release.md` (T10.9 result); the signing steps are in `docs/RELEASE.md`.
 
 ## Decisions and text only you can give
-- [ ] Decide the open security findings **F2, F4, F7, F8** and the notes **N2, N3, N4** in `docs/SECURITY_REVIEW.md` (F1 and F3 are fixed).
+- [ ] Decide the open security findings **F2, F4, F8** and the notes **N2, N3, N4** in `docs/SECURITY_REVIEW.md` (F1, F3 and F7 are fixed).
 - [ ] A person has read the security-relevant files and signed the gate at the end of `docs/SECURITY_REVIEW.md` (BUILD_PLAN rule 8).
 - [ ] The operator's name and contact address in `PrivacyFacts.kt`; rewrite the page with `OWNTALLY_WRITE_PRIVACY_PAGE=1`; deploy `site/privacy/`.
 - [ ] Look at the wording of the nine privacy sections (they are in `PrivacyFacts.kt`) and at the two light-theme colour changes of T10.4 (placeholder text 66716A, control outlines 7F8D85).
@@ -24,4 +24,5 @@ What a person must do because a test cannot. Tick each, with the date. The autom
 - [ ] **Install from a file** (the signed APK sent to a friend) and **from Play's internal test track**.
 - [ ] **The invite link on two phones:** made on one, tapped on the other, with and without the app installed; the verified fingerprints.
 - [ ] **The privacy page** loads at `https://joinowntally.ownspace.in/privacy`, and the in-app Privacy screen says the same.
+- [ ] **Two real phones over mobile networks:** a sync in both directions through Iroh, and while a third device (or a script) opens an Iroh connection to a phone and sends nothing, the phone still accepts the others (F7's real-device check).
 - [ ] Read Iroh's release notes for the version in use (the vulnerability scan cannot see inside its Rust code).

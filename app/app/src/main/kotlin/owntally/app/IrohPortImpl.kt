@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import owntally.crypto.GroupIdentity
 import owntally.model.PublicKey
 import owntally.sync.IrohConnection
+import owntally.sync.IncomingIroh
 import owntally.sync.IrohPort
 
 /**
@@ -58,16 +59,24 @@ class IrohPortImpl(private val context: Context, private val identity: GroupIden
         }
     }
 
-    override fun incoming(): Flow<IrohConnection> = flow {
+    override fun incoming(): Flow<IncomingIroh> = flow {
         val ep = bound()
         while (true) {
             val incoming = ep.acceptNext() ?: break
-            // One that fails to complete is dropped: it must not stop the others being accepted.
-            val conn = try { incoming.accept().connect() } catch (e: Exception) { continue }
-            val bi = try { conn.acceptBi() } catch (e: Exception) { continue }
-            emit(Wrapped(conn, bi))
+            emit(Pending(incoming))
         }
     }.flowOn(Dispatchers.IO)
+
+    /** Accepted by Iroh but not yet handshaken or given its stream: [IrohTransport] waits for that, one by one and with a time limit (F7). */
+    private class Pending(private val incoming: computer.iroh.Incoming) : IncomingIroh {
+        @Volatile private var connection: Connection? = null
+        override suspend fun open(): IrohConnection {
+            val conn = incoming.accept().connect()
+            connection = conn
+            return Wrapped(conn, conn.acceptBi())
+        }
+        override fun abandon() { runCatching { connection?.close(0, ByteArray(0)) } }
+    }
 
     override suspend fun stop() {
         val ep = synchronized(this) { endpoint.also { endpoint = null } } ?: return
