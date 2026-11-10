@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,10 +14,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import owntally.ui.components.Glyph
 import owntally.ui.components.GlyphIcon
+import owntally.ui.components.ButtonRow
 import owntally.ui.components.Notice
 import owntally.model.DisputeReason
 import owntally.model.Money
@@ -49,7 +53,7 @@ private val cardShape = RoundedCornerShape(24.dp)
 @Composable
 private fun BackHeader(title: String, subtitle: String?, onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = Role.Button }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = Role.Button }, contentAlignment = Alignment.Center) {
             GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
         }
         Spacer(Modifier.width(8.dp))
@@ -76,13 +80,13 @@ sealed interface SettleAction {
 private fun ActionButton(text: String, modifier: Modifier, filled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
     val colour = if (danger) OwnTallyColors.Red else OwnTallyColors.Green
     Box(
-        modifier.height(48.dp)
+        modifier.heightIn(min = 48.dp)
             .background(if (filled) colour else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(24.dp))
             .border(BorderStroke(1.dp, colour), RoundedCornerShape(24.dp))
-            .clickable(onClick = onClick)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { role = Role.Button },
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.labelLarge, color = if (filled) OwnTallyColors.OnDark else colour) }
+    ) { Text(text, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge, color = if (filled) OwnTallyColors.OnDark else colour, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
 }
 
 @Composable
@@ -139,15 +143,15 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
                 val main = p.actions.filter { it == PaymentAction.I_PAID || it == PaymentAction.MARK_RECEIVED }
                 if (p.actions.isNotEmpty()) Spacer(Modifier.height(12.dp))
                 if (p.role == PaymentRole.TO_ME) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ActionButton("Send reminder", Modifier.weight(1f), filled = false) { onAction(SettleAction.Reminder(p)) }
-                        ActionButton("Mark received", Modifier.weight(1f), filled = true) { onAction(SettleAction.MarkReceived(p)) }
+                    ButtonRow { m ->
+                        ActionButton("Send reminder", m, filled = false) { onAction(SettleAction.Reminder(p)) }
+                        ActionButton("Mark received", m, filled = true) { onAction(SettleAction.MarkReceived(p)) }
                     }
                 } else if (p.role == PaymentRole.FROM_ME) {
                     if (top.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (PaymentAction.COPY_NUMBER in top) ActionButton("Copy number", Modifier.weight(1f), filled = false) { onAction(SettleAction.Copy(p)) }
-                            if (PaymentAction.CALL in top) ActionButton("Call", Modifier.weight(1f), filled = false) { onAction(SettleAction.Call(p)) }
+                        ButtonRow { m ->
+                            if (PaymentAction.COPY_NUMBER in top) ActionButton("Copy number", m, filled = false) { onAction(SettleAction.Copy(p)) }
+                            if (PaymentAction.CALL in top) ActionButton("Call", m, filled = false) { onAction(SettleAction.Call(p)) }
                         }
                         Spacer(Modifier.height(12.dp))
                     }
@@ -169,9 +173,9 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
                 }
                 if (w.canRespond) {
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (notReceivedAvailable) ActionButton("Not received", Modifier.weight(1f), filled = false, danger = true) { onAction(SettleAction.NotReceived(w)) }
-                        ActionButton("Confirm received", Modifier.weight(1f), filled = true) { onAction(SettleAction.Confirm(w.id)) }
+                    ButtonRow { m ->
+                        if (notReceivedAvailable) ActionButton("Not received", m, filled = false, danger = true) { onAction(SettleAction.NotReceived(w)) }
+                        ActionButton("Confirm received", m, filled = true) { onAction(SettleAction.Confirm(w.id)) }
                     }
                 }
             }
@@ -208,64 +212,69 @@ fun SettleUpScreen(model: SettleUpModel, onBack: () -> Unit, onAction: (SettleAc
     }
 }
 
-/** "Payment not received" (design/15 and 15b). The reason is chosen here; [onTell] writes it. */
+/**
+ * "Payment not received" (design/15 and 15b). The reason is chosen here; [onTell] writes it. The content scrolls and the buttons stay at the bottom, so
+ * at a large font size nothing is out of reach.
+ */
 @Composable
 fun NotReceivedScreen(model: NotReceivedModel, onBack: () -> Unit, onTell: (DisputeReason) -> Unit, message: String? = null) {
     var chosen by remember { mutableStateOf(DisputeReason.NOTHING_RECEIVED) }
     Column(Modifier.fillMaxSize().padding(20.dp, 8.dp, 20.dp, 24.dp)) {
-        BackHeader(model.screenTitle, null, onBack)
-        Spacer(Modifier.height(16.dp))
-        when (model) {
-            is NotReceivedModel.Unavailable -> {
-                Text(model.message, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
-                Spacer(Modifier.weight(1f))
-                ActionButton("Back to settle up", Modifier.fillMaxWidth(), filled = true, onClick = onBack)
-            }
-            is NotReceivedModel.Form -> {
-                CardBox { PersonLine(model.title, model.markedAgo, model.amount, OwnTallyColors.Ink, 3) }
-                Spacer(Modifier.height(8.dp))
-                Text("WHAT HAPPENED?", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
-                Spacer(Modifier.height(10.dp))
-                for (r in model.reasons) {
-                    val selected = chosen == r.reason
-                    Row(
-                        Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp))
-                            .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.CardBorder), RoundedCornerShape(20.dp))
-                            .clickable { chosen = r.reason }.padding(16.dp)
-                            .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = selected },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(24.dp).border(BorderStroke(2.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.Border), CircleShape), contentAlignment = Alignment.Center) {
-                            if (selected) Box(Modifier.size(12.dp).background(OwnTallyColors.Accent, CircleShape))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(r.label, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
-                    }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            BackHeader(model.screenTitle, null, onBack)
+            Spacer(Modifier.height(16.dp))
+            when (model) {
+                is NotReceivedModel.Unavailable -> Text(model.message, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
+                is NotReceivedModel.Form -> {
+                    CardBox { PersonLine(model.title, model.markedAgo, model.amount, OwnTallyColors.Ink, 3) }
+                    Spacer(Modifier.height(8.dp))
+                    Text("WHAT HAPPENED?", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
                     Spacer(Modifier.height(10.dp))
+                    for (r in model.reasons) {
+                        val selected = chosen == r.reason
+                        Row(
+                            Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp))
+                                .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.CardBorder), RoundedCornerShape(20.dp))
+                                .clickable { chosen = r.reason }.padding(16.dp)
+                                .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = selected },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(24.dp).border(BorderStroke(2.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.Border), CircleShape), contentAlignment = Alignment.Center) {
+                                if (selected) Box(Modifier.size(12.dp).background(OwnTallyColors.Accent, CircleShape))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(r.label, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Ink)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(model.explanation, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                    if (message != null) { Spacer(Modifier.height(12.dp)); Notice(message) }
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(model.explanation, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
-                if (message != null) { Spacer(Modifier.height(12.dp)); Notice(message) }
-                Spacer(Modifier.weight(1f))
+                is NotReceivedModel.Sent -> {
+                    CardBox { PersonLine(model.title, model.markedAgo, model.amount, OwnTallyColors.Ink, 3) }
+                    Column(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, cardShape).padding(18.dp)) {
+                        Text(model.bannerTitle, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.WarningText)
+                        Spacer(Modifier.height(6.dp))
+                        Text(model.bannerBody, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    CardBox { Text(model.tip, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary) }
+                    Text(model.laterNote, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        when (model) {
+            is NotReceivedModel.Unavailable -> ActionButton("Back to settle up", Modifier.fillMaxWidth(), filled = true, onClick = onBack)
+            is NotReceivedModel.Form -> {
                 ActionButton(model.tellLabel, Modifier.fillMaxWidth(), filled = true, danger = true) { onTell(chosen) }
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onBack).semantics { role = Role.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { role = Role.Button }, contentAlignment = Alignment.Center) {
                     Text("Cancel", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent)
                 }
             }
-            is NotReceivedModel.Sent -> {
-                CardBox { PersonLine(model.title, model.markedAgo, model.amount, OwnTallyColors.Ink, 3) }
-                Column(Modifier.fillMaxWidth().background(OwnTallyColors.WarningBackground, cardShape).padding(18.dp)) {
-                    Text(model.bannerTitle, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.WarningText)
-                    Spacer(Modifier.height(6.dp))
-                    Text(model.bannerBody, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.WarningText)
-                }
-                Spacer(Modifier.height(12.dp))
-                CardBox { Text(model.tip, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary) }
-                Text(model.laterNote, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
-                Spacer(Modifier.weight(1f))
-                ActionButton(model.backLabel, Modifier.fillMaxWidth(), filled = true, onClick = onBack)
-            }
+            is NotReceivedModel.Sent -> ActionButton(model.backLabel, Modifier.fillMaxWidth(), filled = true, onClick = onBack)
         }
     }
 }

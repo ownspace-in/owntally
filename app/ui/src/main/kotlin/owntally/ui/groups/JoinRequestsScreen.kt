@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,7 +55,7 @@ fun JoinRequestsScreen(
         LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 16.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                         GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                     }
                     Spacer(Modifier.width(8.dp))
@@ -89,13 +90,13 @@ fun JoinRequestsScreen(
                         Text(row.ago, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
                     }
                     Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    owntally.ui.components.ButtonRow { m ->
                         OutlinedButton(
-                            onClick = { onDecline(row) }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(24.dp),
+                            onClick = { onDecline(row) }, modifier = m.heightIn(min = 48.dp), shape = RoundedCornerShape(24.dp),
                             border = BorderStroke(1.dp, OwnTallyColors.Red),
                         ) { Text("Decline", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Red) }
                         Button(
-                            onClick = { onApprove(row) }, enabled = !model.full, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(24.dp),
+                            onClick = { onApprove(row) }, enabled = !model.full, modifier = m.heightIn(min = 48.dp), shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = OwnTallyColors.Green, contentColor = OwnTallyColors.OnDark),
                         ) { Text("Approve", style = MaterialTheme.typography.labelLarge) }
                     }
@@ -118,12 +119,12 @@ fun JoinRequestsScreen(
                             Text(row.title, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
                             Text(row.detail, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
                         }
-                        Text("Revoke", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Red, modifier = Modifier.clickable { onRevoke(row) }.padding(8.dp).semantics { role = SemanticsRole.Button })
+                        Text("Revoke", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Red, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { onRevoke(row) }).padding(8.dp).semantics { role = SemanticsRole.Button })
                     }
                     Spacer(Modifier.height(10.dp))
                 }
                 item {
-                    Text(model.newInviteLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onNewInvite).padding(8.dp).semantics { role = SemanticsRole.Button })
+                    Text(model.newInviteLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onNewInvite).padding(8.dp).semantics { role = SemanticsRole.Button })
                 }
             }
         }

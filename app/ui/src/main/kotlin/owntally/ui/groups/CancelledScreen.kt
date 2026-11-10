@@ -36,7 +36,7 @@ fun CancelledScreen(model: CancelledListModel, onBack: () -> Unit, onAddAgain: (
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -64,7 +64,7 @@ fun CancelledScreen(model: CancelledListModel, onBack: () -> Unit, onAddAgain: (
                 }
                 Text(
                     "Add again", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Accent,
-                    modifier = Modifier.clickable { onAddAgain(row) }.padding(8.dp).semantics { role = SemanticsRole.Button },
+                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { onAddAgain(row) }).padding(8.dp).semantics { role = SemanticsRole.Button },
                 )
             }
             Spacer(Modifier.height(12.dp))

@@ -160,7 +160,7 @@ fun SettingsScreen(controller: LockController, onBack: () -> Unit, leftGroups: L
     }
     Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp, 8.dp, 20.dp, 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = Role.Button }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = Role.Button }, contentAlignment = Alignment.Center) {
                 GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
             }
             Spacer(Modifier.width(8.dp))

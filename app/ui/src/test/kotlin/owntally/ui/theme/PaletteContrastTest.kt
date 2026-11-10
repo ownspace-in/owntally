@@ -38,17 +38,14 @@ class PaletteContrastTest {
         Pair("control outline on card", { it.border }, { it.card }, 3.0), Pair("control outline on page", { it.border }, { it.background }, 3.0),
     )
 
-    /** What is still below its minimum in the light theme: T10.4 removes these one by one and then this set must be empty. */
-    private val lightKnownShortfalls = setOf("hint on card", "hint on page", "control outline on card", "control outline on page")
-
     private fun failures(p: OwnTallyPalette) = pairs.filter { contrast(it.text(p), it.background(p)) < it.minimum }.map { it.name }.toSet()
 
     @Test fun theDarkThemeKeepsEveryContrast() {
         assertEquals(emptySet(), failures(DarkPalette))
     }
 
-    @Test fun theLightThemeFailsOnlyWhereTheAccessibilityPassHasNotYetReached() {
-        assertEquals(lightKnownShortfalls, failures(LightPalette))
+    @Test fun theLightThemeKeepsEveryContrastToo() {
+        assertEquals(emptySet(), failures(LightPalette))
     }
 
     @Test fun theTextOnTheGroupIconsReadsOnEveryPastelInBothThemes() {
@@ -57,6 +54,8 @@ class PaletteContrastTest {
 
     @Test fun everyColourRoleDiffersBetweenTheThemesWhereItMustAndTheLightOnesAreUnchanged() {
         assertEquals(0xFFF3F5F1.toInt(), LightPalette.background.toArgb(), "the mockups' page colour")
+        assertEquals(0xFF66716A.toInt(), LightPalette.textHint.toArgb(), "the placeholder text, darkened from the mockups' 7B867F to reach AA")
+        assertEquals(0xFF7F8D85.toInt(), LightPalette.border.toArgb(), "the control outline, darkened from the mockups' D5DAD3 to reach AA")
         assertEquals(0xFF0E6B5C.toInt(), LightPalette.green.toArgb())
         assertEquals(0xFF10231F.toInt(), LightPalette.ink.toArgb())
         assertTrue(LightPalette.dark.not() && DarkPalette.dark)

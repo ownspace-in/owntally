@@ -51,7 +51,7 @@ fun MembersScreen(
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 32.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -60,7 +60,7 @@ fun MembersScreen(
                     Text(model.subtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
                 }
                 if (model.canInvite && onInvite != null) {
-                    Box(Modifier.size(44.dp).clickable(onClick = onInvite).semantics { contentDescription = "Invite"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onInvite).semantics { contentDescription = "Invite"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                         GlyphIcon(Glyph.PERSON_ADD, OwnTallyColors.Ink)
                     }
                 }
@@ -69,7 +69,7 @@ fun MembersScreen(
             if (model.joinRequestsCount != null) {
                 Row(
                     Modifier.fillMaxWidth().background(OwnTallyColors.Green, RoundedCornerShape(24.dp))
-                        .then(if (onJoinRequests != null) Modifier.clickable(onClick = onJoinRequests) else Modifier)
+                        .then(if (onJoinRequests != null) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onJoinRequests) else Modifier)
                         .padding(horizontal = 24.dp, vertical = 22.dp)
                         .semantics { contentDescription = "Join requests, ${model.joinRequestsCount} waiting"; role = SemanticsRole.Button },
                     verticalAlignment = Alignment.CenterVertically,
@@ -107,7 +107,7 @@ fun MembersScreen(
                 Text(
                     "Leave group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.Red,
                     modifier = Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(20.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(20.dp))
-                        .clickable(onClick = onLeave).padding(horizontal = 20.dp, vertical = 16.dp).semantics { role = SemanticsRole.Button },
+                        .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onLeave).padding(horizontal = 20.dp, vertical = 16.dp).semantics { role = SemanticsRole.Button },
                 )
             }
             if (model.removed.isNotEmpty()) {
@@ -116,7 +116,7 @@ fun MembersScreen(
                 Spacer(Modifier.height(10.dp))
                 for (r in model.removed) {
                     Row(
-                        Modifier.fillMaxWidth().then(if (r.tappable && onRemovedTap != null) Modifier.clickable { onRemovedTap(r) } else Modifier).padding(vertical = 6.dp),
+                        Modifier.fillMaxWidth().then(if (r.tappable && onRemovedTap != null) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { onRemovedTap(r) }) else Modifier).padding(vertical = 6.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(r.name, style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.TextHint)
@@ -133,7 +133,7 @@ fun MembersScreen(
 
 @Composable
 private fun MemberRow(row: MemberRowModel, onMenu: ((MemberRowModel) -> Unit)?, onTap: (() -> Unit)?) {
-    Row(Modifier.fillMaxWidth().then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().then(if (onTap != null) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onTap) else Modifier).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).background(OwnTallyColors.GroupPastels[row.colourIndex % OwnTallyColors.GroupPastels.size], CircleShape), contentAlignment = Alignment.Center) {
             Text(row.initial, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnPastel)
         }
@@ -151,7 +151,7 @@ private fun MemberRow(row: MemberRowModel, onMenu: ((MemberRowModel) -> Unit)?, 
         }
         if (row.hasMenu && onMenu != null) {
             Box(
-                Modifier.size(40.dp).clickable { onMenu(row) }.semantics { contentDescription = "Actions for ${row.label}"; role = SemanticsRole.Button },
+                Modifier.size(40.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { onMenu(row) }).semantics { contentDescription = "Actions for ${row.label}"; role = SemanticsRole.Button },
                 contentAlignment = Alignment.Center,
             ) { GlyphIcon(Glyph.MORE, OwnTallyColors.TextSecondary) }
         }

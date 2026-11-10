@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,7 +55,7 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
     Column(Modifier.fillMaxSize().padding(20.dp, 8.dp, 20.dp, 20.dp)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -81,7 +82,7 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
                 Text("SEND TO A FRIEND", style = MaterialTheme.typography.labelMedium, color = OwnTallyColors.TextSecondary)
                 Spacer(Modifier.height(10.dp))
                 Button(
-                    onClick = onShare, enabled = model.canShare, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(20.dp),
+                    onClick = onShare, enabled = model.canShare, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = OwnTallyColors.Green, contentColor = OwnTallyColors.OnDark),
                 ) { Text("Share invite link", style = MaterialTheme.typography.titleMedium) }
                 Spacer(Modifier.height(12.dp))
@@ -104,13 +105,13 @@ fun InviteScreen(model: InviteModel, onBack: () -> Unit, onShare: () -> Unit, on
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        owntally.ui.components.ButtonRow { m ->
             OutlinedButton(
-                onClick = onRevoke, enabled = model.canRevoke, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(24.dp),
+                onClick = onRevoke, enabled = model.canRevoke, modifier = m.heightIn(min = 56.dp), shape = RoundedCornerShape(24.dp),
                 border = BorderStroke(1.dp, if (model.canRevoke) OwnTallyColors.Red else OwnTallyColors.Border),
             ) { Text("Revoke invite", style = MaterialTheme.typography.titleMedium, color = if (model.canRevoke) OwnTallyColors.Red else OwnTallyColors.TextHint) }
             OutlinedButton(
-                onClick = { copied = false; onNew() }, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(24.dp),
+                onClick = { copied = false; onNew() }, modifier = m.heightIn(min = 56.dp), shape = RoundedCornerShape(24.dp),
                 border = BorderStroke(1.dp, OwnTallyColors.Accent),
             ) { Text(model.newLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent) }
         }

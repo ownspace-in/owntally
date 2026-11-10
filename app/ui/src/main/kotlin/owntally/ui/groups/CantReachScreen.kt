@@ -36,7 +36,7 @@ fun CantReachScreen(model: CantReachModel, onBack: () -> Unit, onTryNow: () -> U
         item {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -64,7 +64,7 @@ fun CantReachScreen(model: CantReachModel, onBack: () -> Unit, onTryNow: () -> U
                 val enabled = !model.trying
                 Box(
                     Modifier.fillMaxWidth().background(OwnTallyColors.Green, RoundedCornerShape(24.dp))
-                        .then(if (enabled) Modifier.clickable(onClick = onTryNow) else Modifier).padding(vertical = 14.dp)
+                        .then(if (enabled) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onTryNow) else Modifier).padding(vertical = 14.dp)
                         .semantics { role = SemanticsRole.Button },
                     contentAlignment = Alignment.Center,
                 ) { Text(model.tryNowLabel, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.OnDark) }
@@ -73,7 +73,7 @@ fun CantReachScreen(model: CantReachModel, onBack: () -> Unit, onTryNow: () -> U
                 Spacer(Modifier.height(12.dp))
                 Column(
                     Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp))
-                        .clickable(onClick = onNearby).semantics { role = SemanticsRole.Button }.padding(18.dp),
+                        .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onNearby).semantics { role = SemanticsRole.Button }.padding(18.dp),
                 ) {
                     Text(model.nearbyTitle, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Ink)
                     Text(model.nearbySubtitle, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)

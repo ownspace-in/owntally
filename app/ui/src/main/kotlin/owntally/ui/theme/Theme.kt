@@ -16,7 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Every colour of the app for one theme (M10, T10.3). The light values are the ones read from the mockups in design/ and are unchanged; the dark ones
+ * Every colour of the app for one theme (M10, T10.3). The light values are the ones read from the mockups in design/, except two that the accessibility pass
+ * (T10.4) darkened to reach AA: the placeholder text (was 7B867F, 3.4:1 on the page) and the outline of a control (was D5DAD3, 1.3:1); the dark ones
  * are chosen so that every pair of text and background the app uses keeps its contrast (PaletteContrastTest checks them all, in both themes).
  *
  * [green] is the fill of buttons and of the dark hero cards, with [onDark] text on it; [accent] is the same green as text, outline and icon on the
@@ -37,8 +38,8 @@ class OwnTallyPalette(
 private val Pastels = listOf(Color(0xFFBFE8DA), Color(0xFFFFD9CC), Color(0xFFF6E3A6), Color(0xFFD6DDF5), Color(0xFFE7ECE7))
 
 val LightPalette = OwnTallyPalette(
-    background = Color(0xFFF3F5F1), card = Color.White, chip = Color(0xFFF3F5F1), cardBorder = Color(0xFFE1E7E2), border = Color(0xFFD5DAD3),
-    ink = Color(0xFF10231F), textSecondary = Color(0xFF45524C), textHint = Color(0xFF7B867F),
+    background = Color(0xFFF3F5F1), card = Color.White, chip = Color(0xFFF3F5F1), cardBorder = Color(0xFFE1E7E2), border = Color(0xFF7F8D85),
+    ink = Color(0xFF10231F), textSecondary = Color(0xFF45524C), textHint = Color(0xFF66716A),
     green = Color(0xFF0E6B5C), accent = Color(0xFF0E6B5C), mint = Color(0xFF7FE0C4), onMint = Color(0xFF10231F), hero = Color(0xFF10231F),
     infoBackground = Color(0xFFE3EDE8), warningBackground = Color(0xFFFFF1D0), warningText = Color(0xFF6B4A00), red = Color(0xFFB4412B),
     onDark = Color.White, onDarkMuted = Color(0xFFB9C7C1), peachOnDark = Color(0xFFFFB4A0), onPastel = Color(0xFF10231F),

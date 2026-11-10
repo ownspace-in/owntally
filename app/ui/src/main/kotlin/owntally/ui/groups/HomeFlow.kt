@@ -194,7 +194,7 @@ private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
                 val on = t == selected
                 val colour = if (on) OwnTallyColors.Accent else OwnTallyColors.TextSecondary
                 Column(
-                    Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 6.dp)
+                    Modifier.weight(1f).clickable(onClick = { onSelect(t) }).padding(vertical = 6.dp)
                         .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = on; contentDescription = t.label },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -405,7 +405,7 @@ private fun SettleUpRoute(sessions: Sessions, id: GroupId, onBack: () -> Unit, o
     Column(Modifier.fillMaxSize()) {
         if (message != null) {
             Box(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp)) {
-                owntally.ui.components.Notice(message!!, modifier = Modifier.clickable { message = null })
+                owntally.ui.components.Notice(message!!, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { message = null }))
             }
         }
         Box(Modifier.weight(1f)) {

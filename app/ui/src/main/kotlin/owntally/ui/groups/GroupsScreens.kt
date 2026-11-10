@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -106,7 +107,7 @@ fun GroupsScreen(
             if (onJoin != null) {
                 item {
                     Spacer(Modifier.height(6.dp))
-                    Text("Have an invite? Join a group", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onJoin).padding(8.dp).semantics { role = SemanticsRole.Button })
+                    Text("Have an invite? Join a group", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onJoin).padding(8.dp).semantics { role = SemanticsRole.Button })
                 }
             }
         }
@@ -118,7 +119,7 @@ fun GroupsScreen(
 @Composable
 private fun InvitationCard(card: PendingCardModel, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp)).clickable(onClick = onClick).padding(16.dp),
+        Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp)).border(1.dp, OwnTallyColors.CardBorder, RoundedCornerShape(24.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).background(OwnTallyColors.GroupPastels[0], RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
@@ -135,7 +136,7 @@ private fun InvitationCard(card: PendingCardModel, onClick: () -> Unit) {
 @Composable
 private fun NewGroupButton(onClick: () -> Unit, modifier: Modifier) {
     Row(
-        modifier.background(OwnTallyColors.Green, RoundedCornerShape(30.dp)).clickable(onClick = onClick).padding(horizontal = 22.dp, vertical = 16.dp),
+        modifier.background(OwnTallyColors.Green, RoundedCornerShape(30.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick).padding(horizontal = 22.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GlyphIcon(Glyph.PLUS, androidx.compose.ui.graphics.Color.White)
@@ -169,7 +170,7 @@ fun GroupCard(card: GroupCardModel, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().background(OwnTallyColors.Card, RoundedCornerShape(24.dp))
             .border(BorderStroke(1.dp, OwnTallyColors.CardBorder), RoundedCornerShape(24.dp))
-            .clickable(onClick = onClick).padding(16.dp),
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GroupIcon(card.initials, card.colourIndex)
@@ -223,7 +224,7 @@ fun GroupScreen(
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 8.dp, 20.dp, 112.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -231,11 +232,11 @@ fun GroupScreen(
                     Text(model.name, style = MaterialTheme.typography.titleLarge, color = OwnTallyColors.Ink)
                     Text(
                         model.roleText, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary,
-                        modifier = if (onProfile != null) Modifier.clickable(onClick = onProfile) else Modifier,
+                        modifier = if (onProfile != null) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onProfile) else Modifier,
                     )
                 }
                 if (onMembers != null) {
-                    Box(Modifier.size(44.dp).clickable(onClick = onMembers).semantics { contentDescription = "Members"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onMembers).semantics { contentDescription = "Members"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                         GlyphIcon(Glyph.GROUPS, OwnTallyColors.Ink)
                     }
                 }
@@ -255,13 +256,13 @@ fun GroupScreen(
             }
         }
         items(model.expenses, key = { it.id.author.toHex() + it.id.counter }) { row ->
-            ExpenseRowView(row, Modifier.clickable { onOpenExpense(row) })
+            ExpenseRowView(row, Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = { onOpenExpense(row) }))
             Spacer(Modifier.height(14.dp))
         }
     }
     if (onAdd != null) {
         Box(
-            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(64.dp).background(OwnTallyColors.Green, CircleShape).clickable(onClick = onAdd)
+            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(64.dp).background(OwnTallyColors.Green, CircleShape).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onAdd)
                 .semantics { contentDescription = "Add expense"; role = SemanticsRole.Button },
             contentAlignment = Alignment.Center,
         ) { GlyphIcon(Glyph.PLUS, androidx.compose.ui.graphics.Color.White, 28.dp) }
@@ -303,7 +304,7 @@ private fun BalanceCard(model: GroupScreenModel, onSettle: (() -> Unit)?) {
         if (onSettle != null && model.memberLines.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             Box(
-                Modifier.fillMaxWidth().height(52.dp).background(OwnTallyColors.Mint, RoundedCornerShape(20.dp)).clickable(onClick = onSettle)
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).background(OwnTallyColors.Mint, RoundedCornerShape(20.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSettle)
                     .semantics { role = SemanticsRole.Button },
                 contentAlignment = Alignment.Center,
             ) { Text("Settle up the group", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnMint) }
@@ -346,7 +347,7 @@ private fun ExpenseRowView(row: ExpenseRow, modifier: Modifier = Modifier) {
 fun CreateGroupScreen(model: CreateGroupModel, onChange: (CreateGroupModel) -> Unit, onCreate: () -> Unit, onBack: () -> Unit, error: String?) {
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
                 GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
             }
             Spacer(Modifier.width(8.dp))
@@ -363,7 +364,7 @@ fun CreateGroupScreen(model: CreateGroupModel, onChange: (CreateGroupModel) -> U
                 Box(
                     Modifier.size(44.dp).background(OwnTallyColors.GroupPastels[i], CircleShape)
                         .border(BorderStroke(if (selected) 3.dp else 1.dp, if (selected) OwnTallyColors.Accent else OwnTallyColors.Border), CircleShape)
-                        .clickable { onChange(model.withColour(i)) }
+                        .clickable(onClick = { onChange(model.withColour(i)) })
                         .semantics { role = SemanticsRole.RadioButton; this.selected = selected; contentDescription = "Colour ${i + 1}" },
                 )
             }
@@ -400,11 +401,11 @@ fun OwnershipBanner(banner: OwnershipBannerModel, onAccept: () -> Unit, onDeclin
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
-                Modifier.background(OwnTallyColors.Green, RoundedCornerShape(50)).clickable(onClick = onAccept).padding(horizontal = 20.dp, vertical = 10.dp)
+                Modifier.background(OwnTallyColors.Green, RoundedCornerShape(50)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onAccept).padding(horizontal = 20.dp, vertical = 10.dp)
                     .semantics { role = SemanticsRole.Button },
             ) { Text("Accept", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.OnDark) }
             Box(
-                Modifier.border(1.dp, OwnTallyColors.WarningText, RoundedCornerShape(50)).clickable(onClick = onDecline).padding(horizontal = 20.dp, vertical = 10.dp)
+                Modifier.border(1.dp, OwnTallyColors.WarningText, RoundedCornerShape(50)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onDecline).padding(horizontal = 20.dp, vertical = 10.dp)
                     .semantics { role = SemanticsRole.Button },
             ) { Text("Decline", style = MaterialTheme.typography.labelLarge, color = OwnTallyColors.WarningText) }
         }

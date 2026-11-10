@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,7 +69,7 @@ private fun InvitedCard(heading: String, initials: String, title: String, subtit
 @Composable
 private fun BackRow(title: String?, onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clickable(onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).semantics { contentDescription = "Back"; role = SemanticsRole.Button }, contentAlignment = Alignment.Center) {
             GlyphIcon(Glyph.BACK, OwnTallyColors.Ink)
         }
         if (title != null) {
@@ -96,7 +97,7 @@ fun PasteInviteScreen(text: String, onText: (String) -> Unit, problem: String?, 
             ),
         )
         Spacer(Modifier.height(10.dp))
-        Text("Paste from clipboard", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onPaste).padding(8.dp).semantics { role = SemanticsRole.Button })
+        Text("Paste from clipboard", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onPaste).padding(8.dp).semantics { role = SemanticsRole.Button })
         if (problem != null) {
             Spacer(Modifier.height(6.dp))
             Text(problem, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.Red)
@@ -119,7 +120,7 @@ fun JoinFormScreen(
             if (model.unreachableNote != null) {
                 Spacer(Modifier.height(14.dp))
                 Notice(model.unreachableNote)
-                if (onTryAgain != null) Text("Try to reach them again", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(onClick = onTryAgain).padding(8.dp).semantics { role = SemanticsRole.Button })
+                if (onTryAgain != null) Text("Try to reach them again", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onTryAgain).padding(8.dp).semantics { role = SemanticsRole.Button })
             }
             if (problem != null) {
                 Spacer(Modifier.height(14.dp))
@@ -136,7 +137,7 @@ fun JoinFormScreen(
         PrimaryButton(model.button, onRequest, Modifier.fillMaxWidth(), enabled = !busy, loading = busy)
         Spacer(Modifier.height(8.dp))
         Text(model.footnote, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary, modifier = Modifier.fillMaxWidth())
-        Text("Not for me", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Red, modifier = Modifier.clickable(onClick = onDiscard).padding(8.dp).semantics { role = SemanticsRole.Button })
+        Text("Not for me", style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Red, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onDiscard).padding(8.dp).semantics { role = SemanticsRole.Button })
     }
 }
 
@@ -171,7 +172,7 @@ fun JoinWaitingScreen(model: JoinWaitingModel, note: String?, busy: Boolean, onR
         }
         if (model.retry != null) {
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onRetry, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(28.dp), border = BorderStroke(1.dp, OwnTallyColors.Accent)) {
+            OutlinedButton(onClick = onRetry, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), shape = RoundedCornerShape(28.dp), border = BorderStroke(1.dp, OwnTallyColors.Accent)) {
                 Text(if (busy) "Checking…" else model.retry, style = MaterialTheme.typography.titleMedium, color = OwnTallyColors.Accent)
             }
         }

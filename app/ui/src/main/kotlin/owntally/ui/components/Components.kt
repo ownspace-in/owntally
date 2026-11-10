@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,7 +88,8 @@ fun OwnTallyField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            // The label above is drawn as separate text, so the field is named for TalkBack here (a field that has a value shows no placeholder to name it).
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
             placeholder = { Text(placeholder, color = OwnTallyColors.TextHint) },
             isError = error != null,
             singleLine = singleLine,
@@ -117,7 +119,7 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
-        modifier = modifier.fillMaxWidth().height(54.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 54.dp),
         shape = RoundedCornerShape(27.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
@@ -149,4 +151,17 @@ fun Notice(text: String, modifier: Modifier = Modifier, background: Color = OwnT
 @Composable
 fun CenteredNote(text: String, modifier: Modifier = Modifier) {
     Text(text, modifier = modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium, color = OwnTallyColors.TextSecondary)
+}
+
+/**
+ * Buttons that sit side by side, or one under the other when the font is large (at 150% and more two labels no longer fit in a row without being
+ * broken in the middle of a word). [content] draws each button with the modifier it is given.
+ */
+@Composable
+fun ButtonRow(content: @Composable (Modifier) -> Unit) {
+    if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.4f) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content(Modifier.fillMaxWidth()) }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { content(Modifier.weight(1f)) }
+    }
 }
