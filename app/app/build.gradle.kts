@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     kotlin("android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// The version, in one place (version.properties): Play needs VERSION_CODE to rise with every upload.
+val versionProps = Properties().apply { file("version.properties").inputStream().use { load(it) } }
+
+// The upload key (decision S1, Google Play App Signing) is the owner's, and it is never in the repository: each setting is read from the owner's own
+// Gradle properties (~/.gradle/gradle.properties) or from the environment. Without them the release build is simply not signed (CI builds it that way).
+fun uploadSetting(name: String): String? = (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() } ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+val uploadKey: String? = uploadSetting("OWNTALLY_UPLOAD_STORE_FILE")
 
 android {
     // The code lives in the owntally.* packages, like every other module: `in` is a Kotlin keyword, so the
@@ -15,8 +25,19 @@ android {
         applicationId = "in.ownspace.owntally"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionProps.getProperty("VERSION_CODE").toInt()
+        versionName = versionProps.getProperty("VERSION_NAME")
+    }
+
+    signingConfigs {
+        if (uploadKey != null) {
+            create("upload") {
+                storeFile = file(uploadKey)
+                storePassword = uploadSetting("OWNTALLY_UPLOAD_STORE_PASSWORD")
+                keyAlias = uploadSetting("OWNTALLY_UPLOAD_KEY_ALIAS")
+                keyPassword = uploadSetting("OWNTALLY_UPLOAD_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -26,6 +47,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Signed with the owner's upload key when it is given (docs/RELEASE.md); otherwise left unsigned. Never the debug key.
+            signingConfig = signingConfigs.findByName("upload")
             // Iroh's native library is about 14 MB for each architecture: a release build carries only the two that real phones use (the debug
             // build keeps them all so that the emulator, an x86_64 phone, can run it).
             ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
@@ -67,12 +90,14 @@ android {
     testOptions {
         // The rule tests read these files directly. Declaring them makes Gradle re-run the tests when one changes.
         unitTests.all { test ->
-            test.inputs.files("../../build.gradle.kts", "../../gradle/libs.versions.toml", "../core-model/build.gradle.kts", "../crypto/build.gradle.kts", "../sync/build.gradle.kts", "../data/build.gradle.kts", "../ui/build.gradle.kts", "build.gradle.kts", "proguard-rules.pro", "proguard-releasetest-rules.pro")
+            test.inputs.files("../../build.gradle.kts", "../../gradle/libs.versions.toml", "../core-model/build.gradle.kts", "../crypto/build.gradle.kts", "../sync/build.gradle.kts", "../data/build.gradle.kts", "../ui/build.gradle.kts", "build.gradle.kts", "version.properties", "proguard-rules.pro", "proguard-releasetest-rules.pro")
             // ManifestRulesTest reads the merged manifest of the release build, which is what a phone gets.
             test.dependsOn("processReleaseManifest")
             test.systemProperty("user.language", "en")
             test.systemProperty("user.country", "IN")
             test.inputs.dir("src/main")
+            test.inputs.file("../../.gitignore")
+            test.inputs.file("../../docs/RELEASE.md")
             test.inputs.dir("../../site") // InviteSiteTest reads the invite page
             test.inputs.dir("../../relay") // RelayConfigTest reads the relay's service files and runbooks
             test.inputs.dir("../ui/src/main")

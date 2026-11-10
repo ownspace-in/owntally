@@ -31,7 +31,11 @@ class ReleaseGateTest {
     @Test fun anAssetlinksFileIfOneIsHereIsNotATemplate() {
         asked()
         val real = File("../../site/.well-known/assetlinks.json")
-        if (real.exists()) assertFalse("REPLACE" in real.readText())
+        if (real.exists()) {
+            val text = real.readText()
+            assertFalse("REPLACE" in text)
+            assertEquals(2, Regex("""([0-9A-F]{2}:){31}[0-9A-F]{2}""").findAll(text).map { it.value }.toSet().size, "assetlinks.json holds two fingerprints: Play's app signing key and the upload key (docs/RELEASE.md)")
+        }
     }
 
     @Test fun theVersionIsARealOne() {
