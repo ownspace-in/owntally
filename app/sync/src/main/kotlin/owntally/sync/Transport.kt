@@ -49,3 +49,15 @@ interface Transport {
     /** Links opened by other members in this group. */
     fun incoming(room: GroupRoom): Flow<Link>
 }
+
+/**
+ * How many received messages may wait for the code that reads them (finding F3, docs/SECURITY_REVIEW.md). A reader that can wait (the engines, a
+ * socket) lets the queue fill and the sender waits; a transport that is called back and cannot wait ends the link instead. Messages are at most
+ * 256 KB (a sync batch) and mostly a few KB, so the most a queue holds is a few tens of megabytes.
+ */
+object LinkQueue {
+    const val CAPACITY = 64
+
+    /** For transports that are called back by a library and cannot make the sender wait: frames there are at most 64 KB. */
+    const val CALLBACK_CAPACITY = 256
+}

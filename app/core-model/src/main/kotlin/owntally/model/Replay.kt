@@ -96,6 +96,8 @@ private class Run(private val forced: Set<EventId>) {
                 if (existing != null) return if (existing.removed) IgnoreReason.NOT_ALLOWED else IgnoreReason.ALREADY_DONE
                 if (members.values.count { !it.removed } >= MAX_MEMBERS) return IgnoreReason.NOT_ALLOWED
                 if (nameTaken(body.name, except = null)) return IgnoreReason.INVALID
+                // A key nobody can seal to would make every later key change fail, including this member's own removal (F1).
+                if (LowOrderKeys.isLowOrder(body.encryptionKey)) return IgnoreReason.INVALID
                 members[body.member] = Member(body.member, body.name, body.phone, Role.MEMBER, removed = false, encryptionKey = body.encryptionKey)
                 joinedBy[body.member] = event.id
                 null
@@ -240,6 +242,7 @@ private class Run(private val forced: Set<EventId>) {
         // The group id must have been made for this author (GroupIds), so only the real creator can create the group: a member
         // holding the group key cannot write a rival creating event and take over (owner decision, 4 Nov 2026).
         if (!GroupIds.isCreatedBy(body.groupId, event.author)) return IgnoreReason.INVALID
+        if (LowOrderKeys.isLowOrder(body.encryptionKey)) return IgnoreReason.INVALID // nobody could seal a new group key to the owner (F1)
         if (owner != null) return IgnoreReason.ALREADY_DONE
         groupId = body.groupId
         name = body.name

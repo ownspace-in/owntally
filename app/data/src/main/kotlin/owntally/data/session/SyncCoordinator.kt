@@ -349,7 +349,7 @@ class SyncCoordinator(
         val peer = link.peer
         val outcome: SyncResult? = try {
             kotlinx.coroutines.coroutineScope {
-                val inbox = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                val inbox = kotlinx.coroutines.channels.Channel<ByteArray>(owntally.sync.LinkQueue.CAPACITY)
                 val pump = launch { try { link.received.collect { inbox.send(it) } } finally { inbox.close() } }
                 try {
                     val first = kotlinx.coroutines.withTimeoutOrNull(config.stallTimeoutMs) { inbox.receiveCatching().getOrNull() }

@@ -71,3 +71,15 @@ class JoinMessagesTest {
         assertFalse(runCatching { JoinRequestBody(body.joinerKey, body.encryptionKey, "x".repeat(161), "1").encode() }.isSuccess, "name too long")
     }
 }
+
+class JoinRequestLowOrderKeyTest {
+    @Test fun aRequestWithALowOrderEncryptionKeyIsNotKept() {
+        val joiner = owntally.model.PublicKey(ByteArray(32) { 5 })
+        val ok = JoinRequestBody(joiner, owntally.model.EncryptionKey(ByteArray(32) { 7 }), "Asha", "+91 98765 43210").encode()
+        kotlin.test.assertNotNull(JoinRequestBody.decode(ok))
+        for (low in listOf(ByteArray(32), ByteArray(32).also { it[0] = 1 })) {
+            val bad = JoinRequestBody(joiner, owntally.model.EncryptionKey(low), "Asha", "+91 98765 43210").encode()
+            kotlin.test.assertNull(JoinRequestBody.decode(bad), "a key nobody can seal a group key to")
+        }
+    }
+}

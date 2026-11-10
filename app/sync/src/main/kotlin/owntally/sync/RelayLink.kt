@@ -50,7 +50,7 @@ internal class FramePacer(
 
 /** One logical byte stream between two phones, carried in the frames of a [StreamMux]. */
 internal class LogicalStream(val id: Int, private val mux: StreamMux) {
-    val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+    val inbox = Channel<ByteArray>(LinkQueue.CALLBACK_CAPACITY)
     @Volatile var closed = false
 
     suspend fun write(bytes: ByteArray) {
@@ -107,7 +107,7 @@ internal class StreamMux(
             if (streams.putIfAbsent(id, s) != null) return receive(frame)
             onNew(s)
         }
-        stream.inbox.trySend(data)
+        if (stream.inbox.trySend(data).isFailure) stream.remoteEnded() // the peer outran us by a whole queue: end the stream (F3)
     }
 
     fun open(): LogicalStream {

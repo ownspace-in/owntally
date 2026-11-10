@@ -121,7 +121,7 @@ internal class SocketLink(
     firstInput: InputStream? = null,
     override val security: LinkSecurity? = LinkSecurity.PLAIN,
 ) : Link {
-    private val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+    private val inbox = Channel<ByteArray>(LinkQueue.CAPACITY) // the reader waits, so TCP makes the sender wait (F3)
     private val writeLock = Mutex()
     private val reader: Job
 

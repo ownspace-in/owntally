@@ -9,7 +9,7 @@ import owntally.model.GroupId
 /**
  * M10, T10.8, finding F1 (docs/SECURITY_REVIEW.md): a member's encryption key is whatever 32 bytes the joiner sent, and nothing refuses a
  * low-order X25519 point. Sealing a new group key to such a key throws, as the documentation of [KeyRotation.seal] says. This test records that
- * behaviour; the owner decides the fix (refuse such a key when the member joins), and when it is made this test stays true.
+ * behaviour and checks that every encoding in `LowOrderKeys` (which replay and the join host refuse, the fix) really is one HPKE refuses.
  */
 class KeyRotationUnusableKeyTest {
     private fun hex(s: String) = s.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
@@ -22,7 +22,7 @@ class KeyRotationUnusableKeyTest {
             ByteArray(32).also { it[0] = 1 },
             hex("e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800"),
         )
-        for (k in lowOrder) {
+        for (k in lowOrder + owntally.model.LowOrderKeys.ALL) {
             assertFailsWith<GeneralSecurityException> { KeyRotation.seal(me.publicKey, group, 2, GroupKey.generate(), mapOf(me.publicKey to EncryptionKey(k))) }
         }
     }

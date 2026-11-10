@@ -3,7 +3,7 @@
 What a person must do because a test cannot. Tick each, with the date. The automated side is in `docs/tasks/M10-hardening-release.md` (T10.9 result); the signing steps are in `docs/RELEASE.md`.
 
 ## Decisions and text only you can give
-- [ ] Decide the security findings **F1 to F4** and **N2, N3** in `docs/SECURITY_REVIEW.md` (F1 is the one not to ship without).
+- [ ] Decide the open security findings **F2, F4** and the notes **N2, N3** in `docs/SECURITY_REVIEW.md` (F1 and F3 are fixed).
 - [ ] A person has read the security-relevant files and signed the gate at the end of `docs/SECURITY_REVIEW.md` (BUILD_PLAN rule 8).
 - [ ] The operator's name and contact address in `PrivacyFacts.kt`; rewrite the page with `OWNTALLY_WRITE_PRIVACY_PAGE=1`; deploy `site/privacy/`.
 - [ ] Look at the wording of the nine privacy sections (they are in `PrivacyFacts.kt`) and at the two light-theme colour changes of T10.4 (placeholder text 66716A, control outlines 7F8D85).

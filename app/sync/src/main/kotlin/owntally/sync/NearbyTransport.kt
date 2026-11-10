@@ -71,7 +71,7 @@ class NearbyTransport(
     private val random: java.security.SecureRandom = java.security.SecureRandom(),
 ) : Transport {
     private class Endpoint(val id: String) {
-        val inbox = Channel<ByteArray>(Channel.UNLIMITED)
+        val inbox = Channel<ByteArray>(LinkQueue.CALLBACK_CAPACITY)
         val reassembler = Reassembler()
         var initiated = CompletableDeferred<String>() // the name it gave
         var result = CompletableDeferred<Boolean>()
@@ -106,7 +106,7 @@ class NearbyTransport(
                         if (e.endpoint !in dialled && room != null) scope.launch { answer(room, ep) }
                     }
                     is NearbyEvent.Result -> endpoint(e.endpoint).result.complete(e.ok)
-                    is NearbyEvent.Payload -> endpoint(e.endpoint).reassembler.add(e.bytes)?.let { endpoint(e.endpoint).inbox.trySend(it) }
+                    is NearbyEvent.Payload -> endpoint(e.endpoint).reassembler.add(e.bytes)?.let { endpoint(e.endpoint).let { ep -> if (ep.inbox.trySend(it).isFailure) ep.inbox.close() } }
                     is NearbyEvent.Disconnected -> endpoints.remove(e.endpoint)?.let { it.disconnected = true; it.result.complete(false); it.inbox.close() }
                 }
             }
