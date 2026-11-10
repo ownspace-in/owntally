@@ -108,6 +108,10 @@ Consequences and rules:
 - RAM about 80 to 150 MB idle, plus 10 to 30 MB while syncing.
 - A sync sends a few KB. Receipt photos are out of scope; if added, store them separately from the log.
 
+## Privacy
+
+One text, in three places: the Privacy screen under About, the page `joinowntally.ownspace.in/privacy` and the draft of the store's data-safety answers (`docs/STORE_LISTING_DRAFT.md`), built from the sentences in `PrivacyFacts` (M10). It says: nothing but encrypted entries leaves the phone and only to the group's members; who runs the relay and that it sees public keys, a hash of the group id, addresses, timing and sizes but never content; that **n0's public discovery learns a public key the phone uses in each group, its internet address and when it is online** (decision I1); that Google's Nearby Connections is used only when the person starts it; what the permissions are for; no analytics, ads or tracking; backups never hold the keys. The operator's name and a contact address are the owner's to supply before release.
+
 ## Recovery
 
 The recovery phrase restores your identity, not your data. Expense data is re-synced from other members.
@@ -115,7 +119,9 @@ The recovery phrase restores your identity, not your data. Expense data is re-sy
 First run:
 1. The app creates the master seed and shows a 12-word recovery phrase (BIP39-style word list), derived from it.
 2. The user must write it down. The app then asks for 3 of the words to confirm before continuing.
-3. The phrase is never stored by the app after this screen, never sent anywhere. Screenshots are not blocked on that screen (owner decision, 4 Nov 2026).
+3. The phrase is never stored by the app after this screen, never sent anywhere. Screenshots are not blocked on that screen (owner decision, 4 Nov 2026), and the screen says not to keep the words in a screenshot or a notes app.
+
+**Status (owner decision X1, 9 Nov 2026): restoring from the phrase is NOT built; it is milestone M11.** Until then the app, its How it works text, the privacy text and the store text say plainly that restoring is not available yet. What follows is the design for M11.
 
 Restoring on a new phone:
 1. Enter the 12 words. The master seed and all per-group keypairs are re-derived (group keys come from numbered slots of the seed; `MemberJoined` records which slot a group used).

@@ -71,7 +71,7 @@ class OnboardingScreensInstrumentedTest {
     fun welcomeShowsTheMockupTextsAndIsNotSecure() {
         start()
         rule.onNodeWithText("Split expenses.\nKeep your data.").assertExists()
-        rule.onNodeWithText("No account and no server. Everything stays on your phone and moves straight to your friends' phones.").assertExists()
+        rule.onNodeWithText("No account, and no server that keeps your data. Everything stays on your phone and moves, encrypted, to your friends' phones.").assertExists()
         rule.onNodeWithText("Your name").assertExists()
         rule.onNodeWithText("Phone number").assertExists()
         rule.onNodeWithText("Continue").assertIsEnabled()

@@ -402,5 +402,5 @@ object HowItWorks {
         InfoCard("3", "Friends swap notes directly", "Join with a shared link or QR code, then sync nearby or over the internet. Each phone adds the notes it is missing, then works out the same balances."),
         InfoCard("4", "Settling is a handoff", "OwnTally suggests a short list of payments. You pay however you like, outside the app. It never holds or moves money."),
     )
-    val note = InfoCard("", "Worth knowing", "If you lose your phone, your data goes with it unless you saved your 12-word recovery phrase. Other members can then send your groups back to you.")
+    val note = InfoCard("", "Worth knowing", "If you lose your phone, your groups on it are gone unless other members still have them: they can invite you back, and an admin approves you again. Your 12-word recovery phrase is your identity in every group; restoring from it on a new phone is not available yet.")
 }

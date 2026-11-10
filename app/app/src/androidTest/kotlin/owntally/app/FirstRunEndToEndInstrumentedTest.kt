@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onRoot
@@ -167,6 +168,13 @@ class FirstRunEndToEndInstrumentedTest {
             rule.onNodeWithText("How OwnTally works").performClick()
             rule.onNodeWithText("Everything lives on your phone").assertExists()
             rule.onNodeWithText("Settling is a handoff").assertExists()
+            rule.onNode(hasContentDescription("Back")).performClick()
+            // Privacy: who runs the relay and what n0 learns, in the app (the same text as the web page).
+            rule.onNodeWithText("Privacy").performClick()
+            rule.waitUntilExactlyOneExists(hasText("Where your data lives"), 5_000)
+            rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(hasText("restoring from it on a new phone is not available yet.", substring = true))
+            rule.onNodeWithText("restoring from it on a new phone is not available yet.", substring = true).assertExists()
+            rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(hasContentDescription("Back"))
             rule.onNode(hasContentDescription("Back")).performClick()
             rule.onNode(hasContentDescription("Groups")).performClick()
 

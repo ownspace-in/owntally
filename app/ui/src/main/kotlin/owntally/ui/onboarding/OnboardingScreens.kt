@@ -51,7 +51,7 @@ import owntally.ui.theme.OwnTallyColors
 /** The texts of the first-run screens, as in the mockups (design/07, 08 and 08b). */
 object OnboardingText {
     const val HEADLINE = "Split expenses.\nKeep your data."
-    const val INTRO = "No account and no server. Everything stays on your phone and moves straight to your friends' phones."
+    const val INTRO = "No account, and no server that keeps your data. Everything stays on your phone and moves, encrypted, to your friends' phones."
     const val NAME_LABEL = "Your name"
     const val NAME_HINT = "For example, Asha"
     const val PHONE_LABEL = "Phone number"
@@ -62,8 +62,8 @@ object OnboardingText {
 
     const val STEP = "Step 2 of 2"
     const val PHRASE_TITLE = "Save your recovery phrase"
-    const val PHRASE_BODY = "These 12 words restore your identity on a new phone. They are the only backup of who you are in your groups."
-    const val PHRASE_WARNING = "Write these on paper. Anyone with them can act as you in every group, and we can't recover them for you. Screenshots are blocked on this screen."
+    const val PHRASE_BODY = "These 12 words are your identity in every group. Keep them safe: they are the only proof that you are you. Restoring from them on a new phone is not available yet."
+    const val PHRASE_WARNING = "Write these on paper, not in a notes app or a screenshot. Anyone with them can act as you in every group, and we can't recover them for you."
     const val WRITTEN = "I've written it down"
 
     const val CONFIRM_TITLE = "Check you wrote it down"

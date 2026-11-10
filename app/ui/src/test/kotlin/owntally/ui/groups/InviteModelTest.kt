@@ -31,7 +31,7 @@ class InviteModelTest {
         assertEquals(link, m.link)
         assertNotNull(m.qr)
         assertEquals("For friends in the same room", m.qrTitle)
-        assertEquals("They scan this with OwnTally", m.qrHint)
+        assertEquals("They scan this with their phone's camera", m.qrHint)
         assertTrue(m.canShare && m.canCopy && m.canRevoke)
         assertEquals("Anyone with this link can ask to join. Send it only in private chats. You still approve each request.", m.warning)
     }
