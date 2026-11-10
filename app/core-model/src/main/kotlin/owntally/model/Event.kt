@@ -126,7 +126,7 @@ sealed class EventBody {
         }
     }
 
-    /** A new group key epoch without removing anyone, written by an admin (docs/CRYPTO.md section 6). */
+    /** A new group key epoch without removing anyone, written by the owner (docs/CRYPTO.md section 6; owner decision, 4 Nov 2026). */
     data class KeyRotated(val newEpoch: Long, val sealedKeys: Map<PublicKey, SealedKey>) : EventBody() {
         init {
             checkEpoch(newEpoch)

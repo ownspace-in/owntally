@@ -1,0 +1,91 @@
+# Security review (prepared for the owner's human review)
+
+M10, T10.8. **BUILD_PLAN rule 8 needs a human to review the security-relevant files; this document prepares that review and does not replace it.** It is written by the builder (Claude) after reading the files below in full or in the parts named, running mutation tests against the guards, and probing one suspicion with a test. **The gate stays open until the owner (or a person they choose) has read the files and signed it off at the end of this document.**
+
+Date of the review: 10 Nov 2026, commit after `71391b6`. Reviewed by the builder only, by reading and by mutation testing: no external tool, no penetration test, no fuzzing, no review of the Rust code of Iroh or of the relay.
+
+## 1. Findings (read these first)
+
+None is a way to read a group's data without its key, or to forge another member's entry. Four are real weaknesses against a **malicious member** (or a former member) and need the owner's decision; two I fixed; three are notes.
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| F1 | Medium to high | **One member can make key changes impossible, including their own removal.** A member's encryption key is whatever 32 bytes the joiner's request holds (`JoinRequestBody.decode` only checks the size). If it is a low-order X25519 point (all zeros, 1, or the other small-order encodings), `KeyRotation.seal` throws `InvalidKeyException` for everyone: the owner's "Remove" and "Change key" then fail while that member is in the group, and `GroupSession.rotating` lets the exception out. Probed and now recorded by `KeyRotationUnusableKeyTest` (all three encodings throw). Replay cannot skip such a member because a rotation must seal to exactly the members the author knew (`sealedKeys.keys == knownTo(event)`). Needs an admin to approve the request, so the attacker is someone the group let in. | **Open: owner's decision.** Proposed fix (a protocol rule, so not made without approval): replay ignores a `MemberJoined` whose encryption key is a low-order point (INVALID), and the host refuses such a request at the door; the list is the seven X25519 encodings; both are deterministic and need no new cryptography. Also catch the exception in `rotating` and return an error instead of throwing. |
+| F2 | Medium | **Any validly signed envelope from any key is stored and passed on.** `EnvelopeCheck`/`GroupRepository.appendEnvelope` check the group and the signature against the envelope's own author, not that the author is a member (the author check is made later, when opening). A current or former member can push any number of envelopes signed by throwaway keys (each up to 64 KB): they are stored on every phone that syncs with them and relayed onward, so storage grows on all phones and nothing removes it. Strangers cannot do this: a peer that was never a member is refused before anything is read (`Admission.Refuse`). | **Open: owner's decision.** Proposal: a cap on stored bytes per group and per author, and not storing an envelope from an author the log has not admitted after a delay (the "UnknownAuthor" case needs patience for sync order, so this is a design question). |
+| F3 | Medium to low | **A peer's messages queue without limit.** `SyncEngine`, `JoinHost`, `JoinClient` and `SocketLink` copy what a link delivers into `Channel.UNLIMITED` while the engine works through it (each envelope is a database write). A member peer that sends faster than the phone stores grows the phone's memory; frames are up to 64 KB (relay) or 1 MB (local). The 30-second stall timeout does not help against a peer that keeps sending. | **Open.** Proposal: a bounded channel so the link's reading waits (backpressure); the engines and their tests are otherwise unchanged. Small and local, but touches every sync test, so not made in this pass. |
+| F4 | Low | **Member names can imitate each other and can contain direction-changing characters.** The owner decided (4 Nov) that look-alike letters are not "the same name". `NameKey` strips invisible characters only to compare names; the name shown keeps them, so a name with a right-to-left override can display reversed. In an app that moves money between friends, a member named like another is a social-engineering path. | **Open.** Proposal: refuse the bidirectional control characters and zero-width characters in `checkName` (the characters `NameKey` already strips), a rule in `EventBody`; the phone number is not affected. |
+| F5 | Low | The privacy text said a backup holds "encrypted entries". The backup rules include the database, which also holds the name and phone number given at set-up (settings, plain text; `IdentityRepository`). | **Fixed:** the sentence now says so; the page was rewritten from the facts; all tests pass. |
+| F6 | Cosmetic | Two stale comments (`KeyRotated` "written by an admin": the rule is owner only; a duplicated KDoc in `Ticket.fromShared`). | **Fixed.** |
+| N1 | Note | **The member's signing seed is also Iroh's secret key** (decision I2): one Ed25519 key is used by two protocols. Signatures made by the app all start with their own label (`owntally/v1/...`) and Iroh's start with theirs, so a signature for one cannot be taken for the other, but a flaw in Iroh's use of the key would touch the member's key. Accepted by the owner in I2; listed for the human reviewer. | Accepted. |
+| N2 | Note | **Open invitations survive a key change.** `Invites.revoke` is manual; nothing revokes the open tickets when a member is removed or the key changes. A ticket carries the key of the epoch it was made in, so someone who joins with it can read that epoch (and any admin approval is still needed). Low, because the link is a secret that expires in 8 hours. | Open, for decision. |
+| N3 | Note | **The relay has no client authentication** (M9 finding, carried since). The relay sees public keys, a code from the group id, addresses, timing and sizes (the privacy text says so); anyone who knows the address can connect and, with a valid TLS binding, reach a room only if they know a member's key. | The owner's decision, unchanged. |
+
+Not found: a nonce reuse (Tink makes a fresh 24-byte nonce for every call), a signature that can be moved between groups, epochs, authors, counters or purposes, a secret in a log or `toString` (`NoLoggingTest`, `KeySecrecyGuardTest`), a network call other than sync (`NetworkUseGuardTest`), a key that reaches the backup (the extraction rules take the database only; I did not check on a device what Android actually backs up), or a component exported besides the launcher activity.
+
+## 2. The files, what each must guarantee, how it is guarded
+
+"Mutations" are changes I made to the shipped code to check that a test notices; each was undone with `git checkout` (the tree was clean afterwards). 15 first-round mutations plus 3 follow-ups are in section 3.
+
+| File | Must guarantee | Guarded by | Mutations tried |
+|---|---|---|---|
+| `crypto/EventSealing.kt` | An entry is encrypted with XChaCha20-Poly1305 under the epoch's key, bound (as associated data) to group, epoch, author and counter; `open` checks the group, then the signature, then (if members are given) the author, and only then decrypts; never throws on bad input. | `EventSealingTest` and the tests of `GroupSession` | M1 (no signature check), M3 (counter out of the associated data): caught |
+| `crypto/EnvelopeSigning.kt`, `WeakKeys.kt` | Ed25519 over a fixed prefix and every byte before the signature; small-order keys refused first (found in T6.8). | `EnvelopeSigningTest`, `WeakKeysTest` | M2 (weak keys accepted): caught |
+| `crypto/KeyDerivation.kt`, `Bip39.kt` | HKDF-SHA256 keys per slot from the BIP39 seed; the word list is hashed before use; published test vectors pass. | `KeyDerivationTest`, `Bip39Test` (vectors) | none (pure functions against published vectors) |
+| `crypto/KeyRotation.kt` | A new key is sealed (HPKE) to each staying member, bound to sender, group and epoch; a key is taken only from the event replay says started the epoch. | `KeyRotationTest`, `GroupSession` tests | M4 (any event may deliver a key), M5 (not bound to the sender): caught. **F1** is here. |
+| `crypto/Ticket.kt` | A ticket is a secret; accepted once, before it expires, only if this host issued exactly it; one text per ticket; the record holds no key. | `TicketTest` | M6 (reusable): caught; M7, M7b, M7c (expiry): see section 3 |
+| `crypto/JoinCrypto.kt`, `LinkAuth.kt` | Every signature and sealed message has its own label and covers the group, the host and a per-connection nonce, so none can be replayed or used for another purpose. | `JoinCryptoTest`, `LinkAuthTest`, `JoinProtocolTest` | none directly; the label separation is covered by tests that use one proof for another purpose |
+| `core-model/Replay.kt`, `EventLog.kt`, `Permissions.kt` | The rules of PROTOCOL.md section 4 in a deterministic order; who may do what; a removal cancels the remover's unseen later events; only the creator can create the group; only the owner changes the key or removes others. | `ReplayTest`, `PermissionsTest` (every action by every role) | M10 (any member changes the key), M11 (rotation to the wrong set), M12 (anyone creates the group), M13 (a member removes others): all caught |
+| `core-model/WireFormat.kt`, `Event.kt`, `Types.kt` | Exactly one valid encoding per event; sizes and ranges checked; overflow becomes a decode error. | `WireCodecTest` | none |
+| `sync/TlsLinks.kt`, `TlsCertificates.kt` | TLS 1.3 only; each side's certificate carries its member key and that member's signature over the certificate key; the caller's expected key is checked. | `TlsLinkTest`, `TlsCertificatesTest`, `LocalLinkTest` | M8 (binding not verified): caught; M9, M9b, M9c: see section 3 |
+| `sync/JoinProtocol.kt`, `JoinMessages.kt` | The host proves its key before the joiner sends anything; a request is sealed with the ticket's key and bound to the connection; every failure looks the same. | `JoinProtocolTest` | none directly |
+| `sync/SyncEngine.kt`, `SyncStore.kt`, `Chunking.kt` | What is stored is checked (group, size, signature); a non-member is refused before anything is read; too many bad envelopes ends the sync. **F2, F3** are here. | `SyncEngineTest`, `SyncMessagesTest` | none |
+| `sync/RelayLink.kt`, `WebSocketTransport.kt`, `IrohTransport.kt`, `NearbyTransport.kt`, `LocalLink.kt` (handshake part read) | A link is to the key that was asked for; a frame has a size limit; messages are passed on unopened. | transport and link tests | none; **not read in full: `RelayLink`, `WebSocketTransport`, `IrohTransport`, `NearbyTransport`** (see section 4) |
+| `data/secrets/SecretStore.kt`, `SecretBox.kt`, `KeystoreSecretBox.kt`, `BlobStore.kt` | The seed and each epoch's key are sealed with an AES-GCM key in the Android Keystore, each bound to its own slot, never in the database or a backup. `BlobStore` read only for its use. | `SecretStoreTest`, `ManifestRulesTest` (backup rules) | M15 (seed not bound to its slot): caught |
+| `data/session/GroupSession.kt` | A new key is saved before the event that announces it and forgotten if the rules refuse it; a stored key is replaced only by the one from the accepted epoch start; own entries are sealed again if their key is dropped. | `GroupSessionTest`, rotation tests | none directly |
+| `data/session/JoinGroup.kt` | The group key from an invitation is kept from the moment it is opened; the host's "approved" is a hint and the real proof is the sync letting this phone in. | `JoinGroupTest` | none |
+| `data/session/InviteLinks.kt`, `AndroidManifest.xml` | Only `https://joinowntally.ownspace.in/j#...` opens the app; one exported activity; no cleartext; backups hold the database only. | `InviteLinksTest`, `ManifestRulesTest` (the merged manifest), `NetworkUseGuardTest` | M14 (any host): caught |
+| `app/proguard-rules.pro`, `ShrinkingSafetyTest` | Shrinking keeps only JNA and Iroh and our code looks nothing up by name. | `ShrinkingSafetyTest`, the smoke test of the shipped APK | in T10.2 |
+
+## 3. The mutations, in full
+
+First round (a change to the shipped code, tests run for the module and for `:app:data` where the code is used there):
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | `EventSealing.open` does not check the signature | caught |
+| M2 | `EnvelopeSigning.verify` accepts small-order keys | caught |
+| M3 | the counter is left out of the associated data | caught |
+| M4 | a key may be delivered by any event, not only the one that started the epoch | caught |
+| M5 | key delivery not bound to the sender | caught |
+| M6 | a ticket can be used again | caught |
+| M7 | the host's own expiry check in `accept` removed | **survived**: `find()` checks the expiry first, so this check is redundant (not a hole) |
+| M8 | the TLS certificate is not tied to the member's signature | caught |
+| M9 | `MemberTrust` does not compare the member with the one called | **survived**: `TlsLinks.client` compares again after the handshake |
+| M10 | a plain member may change the group key | caught |
+| M11 | a rotation may seal to the wrong set | caught |
+| M12 | anyone may create the group | caught |
+| M13 | a plain member may remove others | caught |
+| M14 | invite links from any host | caught |
+| M15 | the seed's sealed blob is not bound to its slot | caught |
+
+Follow-ups for the survivors: **M7b** (`find()` ignores expiry as well) caught, so a ticket's expiry is tested through `find()`; **M9b** (only the second comparison removed) survived because `MemberTrust` still refuses, and **M9c** (both comparisons removed) was caught. So both survivors are two-layer checks where either layer alone is enough and the tests notice when both go. The mutation script is not kept in the repository.
+
+## 4. What was not reviewed
+
+- **Read in full:** all of `app/crypto` and `app/core-model/Replay`, `EventLog`, `Permissions`, `Removal`, `GroupState`, `WireFormat`, `Event`, `NameKey`, `Names`; `TlsLinks`, `TlsCertificates`, `JoinProtocol`, `SyncEngine`, `SyncStore`, `Chunking`; `SecretStore`, `SecretBox`, `KeystoreSecretBox`; the repository's append path; `JoinGroup`; the manifest, `InviteLinks`, the backup rules.
+- **Read in part:** `GroupSession` (rotation, key adoption, repair paths; not the rest), `LocalLink` (framing, discovery names, the start of the link), `JoinMessages` (limits and the request body).
+- **Not read:** `RelayLink`, `WebSocketTransport`, `IrohTransport`, `NearbyTransport`, `SyncCoordinator`, `NearbySession`, `Sessions`, `OwnTallyDatabase`, `RoomStores` and the rest of `app/data`; the UI; `relay/` (the Rust relay and the WebSocket relay); the Rust code inside Iroh (the vulnerability scan cannot see it: read Iroh's release notes at each release).
+- **Not tested at all:** a real device's Keystore (hardware backing varies; the emulator's does not tell), TalkBack, a hostile network, fuzzing of the decoders.
+
+## 5. For the owner
+
+1. **Decide F1, F2, F3, F4** (and N2). F1 is the one I would not ship without: it lets one member keep a group from ever changing its key or removing them. F1 and F4 are protocol rules, so I will not change them without your approval; F3 is local and I can do it on a go-ahead.
+2. **Have a person read** the files marked "read in full" and, above all, the ones marked "not read". Reading `Replay.kt`, `EventSealing.kt`, `KeyRotation.kt`, `Ticket.kt` and `TlsCertificates.kt` first covers most of the risk.
+3. **Decide N3** (relay authentication), carried from M9.
+4. Sign the gate below when done.
+
+```
+Security review gate (BUILD_PLAN rule 8)
+Reviewer: ____________________   Date: ____________   Files read: ____________________
+Findings F1 to F4 and N2, N3 decided: ____________________
+```
