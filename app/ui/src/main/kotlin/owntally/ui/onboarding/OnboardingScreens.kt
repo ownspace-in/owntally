@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import owntally.crypto.PhraseProblem
 import owntally.crypto.RecoveryPhrase
 import owntally.ui.components.CenteredNote
 import owntally.ui.components.Notice
@@ -73,6 +74,21 @@ object OnboardingText {
     const val MISMATCH = "Those words don't match what we showed. Check your paper, or show the words again."
     const val COULD_NOT_SAVE = "Couldn't save on this phone. Try again."
 
+    // Restoring (M11): the person already has a recovery phrase.
+    const val HAVE_PHRASE = "I already have a recovery phrase"
+    const val RESTORE_TITLE = "Restore with your recovery phrase"
+    const val RESTORE_BODY = "Type or paste your 12 words, in order. You get your identity back. Your groups come back when a friend sends you an invitation: you join each one as the same member, without anyone approving you again, and its history syncs."
+    const val RESTORE_LABEL = "Your 12 words"
+    const val RESTORE_HINT = "word1 word2 word3 ..."
+    const val RESTORE = "Restore"
+    const val BACK_TO_START = "Back to the start"
+
+    fun restoreError(p: PhraseProblem): String = when (p) {
+        is PhraseProblem.WrongWordCount -> "Enter all 12 words. You entered ${p.count}."
+        is PhraseProblem.UnknownWord -> "Word ${p.position} isn't in the word list. Check how it is spelled."
+        PhraseProblem.BadChecksum -> "These words don't make a valid phrase. Check the spelling and the order."
+    }
+
     fun nameError(p: NameProblem) = when (p) {
         NameProblem.EMPTY -> "Enter your name."
         NameProblem.TOO_LONG -> "Use 40 characters or fewer."
@@ -96,7 +112,7 @@ private fun ScreenFrame(content: @Composable (Modifier) -> Unit, actions: @Compo
 }
 
 @Composable
-fun WelcomeScreen(state: OnboardingState, onName: (String) -> Unit, onPhone: (String) -> Unit, onContinue: () -> Unit) {
+fun WelcomeScreen(state: OnboardingState, onName: (String) -> Unit, onPhone: (String) -> Unit, onContinue: () -> Unit, onRestore: () -> Unit = {}) {
     ScreenFrame(
         content = { modifier ->
             Column(modifier) {
@@ -133,6 +149,39 @@ fun WelcomeScreen(state: OnboardingState, onName: (String) -> Unit, onPhone: (St
             PrimaryButton(OnboardingText.CONTINUE, onContinue)
             Spacer(Modifier.height(10.dp))
             CenteredNote(OnboardingText.NEXT)
+            TextAction(OnboardingText.HAVE_PHRASE, onRestore)
+        },
+    )
+}
+
+/** Typing the 12 words of an existing recovery phrase (M11). The words are shown as typed; the message names a position or a count, never a word. */
+@Composable
+fun RestoreScreen(state: OnboardingState, onWords: (String) -> Unit, onRestore: () -> Unit, onBack: () -> Unit) {
+    ScreenFrame(
+        content = { modifier ->
+            Column(modifier) {
+                Spacer(Modifier.height(32.dp))
+                Text(OnboardingText.RESTORE_TITLE, style = MaterialTheme.typography.headlineLarge, color = OwnTallyColors.Ink)
+                Spacer(Modifier.height(16.dp))
+                Text(OnboardingText.RESTORE_BODY, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.TextSecondary)
+                Spacer(Modifier.height(28.dp))
+                OwnTallyField(
+                    label = OnboardingText.RESTORE_LABEL,
+                    value = state.restoreWords.text,
+                    onValueChange = onWords,
+                    placeholder = OnboardingText.RESTORE_HINT,
+                    error = state.restoreProblem?.let(OnboardingText::restoreError),
+                    // No suggestions, no auto-correct and no learning of the words by the keyboard.
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    singleLine = false,
+                )
+                state.saveProblem?.let { Text(OnboardingText.COULD_NOT_SAVE, style = MaterialTheme.typography.bodyLarge, color = OwnTallyColors.Red) }
+                Spacer(Modifier.height(16.dp))
+            }
+        },
+        actions = {
+            PrimaryButton(OnboardingText.RESTORE, onRestore, enabled = state.canRestore, loading = state.saving)
+            TextAction(OnboardingText.BACK_TO_START, onBack)
         },
     )
 }
@@ -248,12 +297,13 @@ fun ConfirmScreen(state: OnboardingState, onAnswer: (Int, String) -> Unit, onFin
 @Composable
 fun OnboardingFlow(viewModel: OnboardingViewModel, onFinished: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    BackHandler(enabled = state.step == Step.PHRASE || state.step == Step.CONFIRM) { viewModel.back() }
+    BackHandler(enabled = state.step == Step.PHRASE || state.step == Step.CONFIRM || state.step == Step.RESTORE) { viewModel.back() }
     LaunchedEffect(state.step) { if (state.step == Step.DONE) onFinished() }
     when (state.step) {
-        Step.WELCOME -> WelcomeScreen(state, viewModel::onNameChange, viewModel::onPhoneChange, viewModel::continueFromWelcome)
+        Step.WELCOME -> WelcomeScreen(state, viewModel::onNameChange, viewModel::onPhoneChange, viewModel::continueFromWelcome, viewModel::startRestore)
         Step.PHRASE -> state.phrase?.let { PhraseScreen(it, viewModel::phraseWritten) }
         Step.CONFIRM -> ConfirmScreen(state, viewModel::onAnswerChange, viewModel::finish, viewModel::showWordsAgain)
+        Step.RESTORE -> RestoreScreen(state, viewModel::onRestoreTextChange, viewModel::restore, viewModel::back)
         Step.DONE -> Unit
     }
 }

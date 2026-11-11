@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import owntally.crypto.Bip39
+import owntally.crypto.PhraseProblem
 import owntally.crypto.RecoveryPhrase
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -282,5 +283,119 @@ class OnboardingViewModelTest {
         fun leaks(t: String) = words.zipWithNext().flatMap { (x, y) -> listOf("$x $y", "$x,$y", "$x, $y", "\"$x\",\"$y\"", "$x\n$y", "$x$y") }.filter { it in t }
         assertEquals(emptyList(), leaks(text), "two phrase words side by side were printed")
         assertTrue(leaks("State(words=" + words.joinToString(", ") + ")").isNotEmpty(), "the check must find a planted phrase")
+    }
+
+    // ---- M11, T11.3: restoring from a recovery phrase ---------------------------------------------------------------------------
+
+    private val phrase = Bip39.fromEntropy(ByteArray(16) { 3 })
+    private val phraseText = phrase.words().joinToString(" ")
+
+    private fun OnboardingViewModel.toRestore(name: String = "Asha", phone: String = "98765 43210") {
+        onNameChange(name); onPhoneChange(phone); startRestore()
+    }
+
+    @Test fun startingARestoreChecksTheNameAndNumberFirstLikeANewStart() {
+        val vm = vm()
+        vm.startRestore()
+        assertEquals(Step.WELCOME, vm.s.step)
+        assertEquals(NameProblem.EMPTY, vm.s.nameProblem)
+        assertEquals(PhoneProblem.EMPTY, vm.s.phoneProblem)
+        vm.toRestore()
+        assertEquals(Step.RESTORE, vm.s.step)
+        assertNull(vm.s.nameProblem)
+        assertEquals(0, firstRun.phrases, "a restore never makes a new phrase")
+    }
+
+    @Test fun aGoodPhraseTypedInAnyCaseAndSpacingRestoresAndFinishes() {
+        val vm = vm()
+        vm.toRestore("  Asha  ", " 98765 43210 ")
+        vm.onRestoreTextChange("  " + phraseText.uppercase().replace(" ", "\n ") + " \n")
+        vm.restore()
+        assertEquals(Step.DONE, vm.s.step)
+        assertEquals(listOf(Triple(phrase, "Asha", "98765 43210")), firstRun.completed)
+        assertEquals("", vm.s.restoreWords.text, "the words are forgotten once they are used")
+        assertFalse(vm.s.saving)
+    }
+
+    @Test fun aPhraseWithTheWrongNumberOfWordsIsRefusedAndNothingIsSaved() {
+        val vm = vm()
+        vm.toRestore()
+        vm.onRestoreTextChange(phrase.words().take(11).joinToString(" "))
+        vm.restore()
+        assertEquals(PhraseProblem.WrongWordCount(11), vm.s.restoreProblem)
+        assertEquals(Step.RESTORE, vm.s.step)
+        assertEquals(emptyList(), firstRun.completed)
+    }
+
+    @Test fun aWordThatIsNotInTheListIsNamedByItsPositionNotRepeated() {
+        val vm = vm()
+        vm.toRestore()
+        vm.onRestoreTextChange(phrase.words().toMutableList().also { it[4] = "zzzzzz" }.joinToString(" "))
+        vm.restore()
+        assertEquals(PhraseProblem.UnknownWord(5), vm.s.restoreProblem)
+        assertEquals(emptyList(), firstRun.completed)
+    }
+
+    @Test fun twelveRealWordsInTheWrongOrderFailTheChecksum() {
+        val vm = vm()
+        vm.toRestore()
+        val words = phrase.words()
+        // swapping two different words changes the check bits for all but a freak chance; find a swap that does
+        val swapped = (0 until 11).map { i -> words.toMutableList().also { w -> w[i] = w[i + 1].also { w[i + 1] = w[i] } } }.first { Bip39.check(it) != null }
+        vm.onRestoreTextChange(swapped.joinToString(" "))
+        vm.restore()
+        assertEquals(PhraseProblem.BadChecksum, vm.s.restoreProblem)
+        assertEquals(emptyList(), firstRun.completed)
+    }
+
+    @Test fun editingTheWordsClearsTheMessage() {
+        val vm = vm()
+        vm.toRestore()
+        vm.onRestoreTextChange("one two")
+        vm.restore()
+        assertNotNull(vm.s.restoreProblem)
+        vm.onRestoreTextChange("one two three")
+        assertNull(vm.s.restoreProblem)
+    }
+
+    @Test fun ifSavingFailsThePersonStaysOnTheWordsWithTheirWordsAndCanTryAgain() {
+        val vm = vm()
+        vm.toRestore()
+        vm.onRestoreTextChange(phraseText)
+        firstRun.failWith = java.io.IOException("keystore")
+        vm.restore()
+        assertEquals(Step.RESTORE, vm.s.step)
+        assertEquals(SaveProblem.COULD_NOT_SAVE, vm.s.saveProblem)
+        assertFalse(vm.s.saving)
+        assertEquals(phraseText, vm.s.restoreWords.text)
+        firstRun.failWith = null
+        vm.restore()
+        assertEquals(Step.DONE, vm.s.step)
+    }
+
+    @Test fun backFromTheWordsGoesToTheStartAndForgetsThem() {
+        val vm = vm()
+        vm.toRestore()
+        vm.onRestoreTextChange(phraseText)
+        assertTrue(vm.back())
+        assertEquals(Step.WELCOME, vm.s.step)
+        assertEquals("", vm.s.restoreWords.text)
+        assertNull(vm.s.restoreProblem)
+    }
+
+    @Test fun theWordsTypedNeverShowInTheStatesText() {
+        val vm = vm()
+        vm.toRestore()
+        vm.onRestoreTextChange(phraseText)
+        val shown = vm.s.toString()
+        for (w in phrase.words().distinct().filter { it.length > 4 }) assertFalse(w in shown, "the state's text shows a word of the phrase: $w")
+    }
+
+    @Test fun restoreDoesNothingOutsideTheWordsStep() {
+        val vm = vm()
+        vm.onRestoreTextChange(phraseText)
+        vm.restore()
+        assertEquals(Step.WELCOME, vm.s.step)
+        assertEquals(emptyList(), firstRun.completed)
     }
 }

@@ -118,7 +118,8 @@ interface OwnTallyDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertGroup(group: GroupEntity)
 
-    @Query("SELECT * FROM groups ORDER BY created_at, key_slot")
+    // Groups made in the same second keep the order they were made in (the key slot is a hash of the group id since M11, so it cannot break a tie).
+    @Query("SELECT * FROM groups ORDER BY created_at, rowid")
     fun groups(): List<GroupEntity>
 
     @Query("SELECT * FROM groups WHERE group_id = :id")

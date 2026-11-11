@@ -1,5 +1,6 @@
 package owntally.ui.onboarding
 
+import androidx.compose.ui.test.onNodeWithContentDescription
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsEnabled
@@ -86,6 +87,66 @@ class OnboardingScreensInstrumentedTest {
         rule.onNodeWithText("Enter your name.").assertExists()
         rule.onNodeWithText("Enter your phone number.").assertExists()
         rule.onNodeWithText("Save your recovery phrase").assertDoesNotExist()
+    }
+
+    // ---- M11: restoring from a recovery phrase --------------------------------------------------------------------------------------
+
+    private fun toRestore() {
+        rule.onNodeWithText("For example, Asha").performTextInput("Asha")
+        rule.onNodeWithText("+91 98765 43210").performTextInput("98765 43210")
+        rule.onNodeWithText("I already have a recovery phrase").performClick()
+    }
+
+    @Test
+    fun theWelcomeScreenOffersToRestoreAndAsksForTheDetailsFirst() {
+        start()
+        rule.onNodeWithText("I already have a recovery phrase").assertExists()
+        rule.onNodeWithText("I already have a recovery phrase").performClick()
+        rule.onNodeWithText("Enter your name.").assertExists()
+        rule.onNodeWithText("Restore with your recovery phrase").assertDoesNotExist()
+    }
+
+    @Test
+    fun theRestoreScreenWaitsForWordsThenNamesTheProblemWithoutRepeatingWords() {
+        start()
+        toRestore()
+        rule.onNodeWithText("Restore with your recovery phrase").assertExists()
+        rule.onNodeWithText("Restore").assertIsNotEnabled()
+        owntally.ui.A11yChecks.assertAccessible(rule, "Restore")
+        rule.onNodeWithContentDescription("Your 12 words").performTextInput("one two three")
+        rule.onNodeWithText("Restore").assertIsEnabled().performClick()
+        rule.onNodeWithText("Enter all 12 words. You entered 3.").assertExists()
+        assertEquals(emptyList(), completed)
+    }
+
+    @Test
+    fun anUnknownWordIsNamedByPositionAndAWrongOrderSaysTheWordsDoNotMakeAPhrase() {
+        start()
+        toRestore()
+        val words = phrase.words()
+        rule.onNodeWithContentDescription("Your 12 words").performTextInput(words.toMutableList().also { it[2] = "qqqqqq" }.joinToString(" "))
+        rule.onNodeWithText("Restore").performClick()
+        rule.onNodeWithText("Word 3 isn't in the word list. Check how it is spelled.").assertExists()
+        assertEquals(emptyList(), completed)
+    }
+
+    @Test
+    fun theRightWordsRestoreSaveTheIdentityAndFinish() {
+        start()
+        toRestore()
+        rule.onNodeWithContentDescription("Your 12 words").performTextInput(phrase.words().joinToString(" "))
+        rule.onNodeWithText("Restore").performClick()
+        rule.waitUntil(5_000) { finished == 1 }
+        assertEquals(listOf(Triple(phrase, "Asha", "98765 43210")), completed)
+    }
+
+    @Test
+    fun systemBackFromTheRestoreScreenReturnsToTheStart() {
+        start()
+        toRestore()
+        rule.onNodeWithText("Back to the start").performClick()
+        rule.onNodeWithText("Split expenses.\nKeep your data.").assertExists()
+        assertEquals(emptyList(), completed)
     }
 
     @Test

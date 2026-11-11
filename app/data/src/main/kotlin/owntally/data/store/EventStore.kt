@@ -59,7 +59,7 @@ class InMemoryEventStore : EventStore {
     }
 
     @Synchronized
-    override fun groups(): List<GroupRow> = rows.values.sortedWith(compareBy({ it.createdAtSeconds }, { it.keySlot }))
+    override fun groups(): List<GroupRow> = rows.values.sortedBy { it.createdAtSeconds } // a stable sort: the same second keeps the order the groups were added in
 
     @Synchronized
     override fun group(id: GroupId): GroupRow? = rows[id]
