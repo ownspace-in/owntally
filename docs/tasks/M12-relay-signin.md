@@ -29,13 +29,12 @@ In the app `WebSocketTransport` signs the challenge with the member's key (`Rela
 
 What this does not do: it does not hide anything from the relay (it already sees the key, the room, addresses, timing and sizes: the privacy text is right as it is), and it does not stop someone who holds a member's key (they are that member). It also does not stop a stranger from using up connections on the relay with keys of their own: that is the per-address limit's job, unchanged.
 
-## Decisions needed (owner)
+## Decisions made (owner, 11 Nov 2026)
 
-**D1. Transition for the relay already running on the VM.** The relay in production and the app builds on your test phones speak today's protocol. (A) **Required from the start (recommended):** the new relay refuses a client that does not sign; you update the relay and the app on your phones together. Nothing is released, so there is no one else to keep working. (B) **A switch `-auth=optional|required`:** the relay accepts both for a while (an old client is recognised by sending a normal frame instead of a signature, which costs a 5-second wait and keeps the hole open for that client), then you set `required`. More code, more tests, and a mode that is the old hole.
+- **D1 = A: required from the start.** The new relay refuses any client that does not sign. The owner updates the relay on the VM and the app on their phones together; nothing is released, so nobody else is affected. There is no optional mode.
+- **D2 = yes: M12 is finished before 1.0.** The first release has no known way for a stranger who knows a room and a member's key to knock that member off the relay.
 
-**D2. Does M12 block the first release?** The review (N3) called relay authentication "not in 1.0 unless M12 is done first". With Iroh and the local network unaffected, the exposure is denial of service on one of the three paths. (A) **M12 before 1.0:** the first release has no known way to knock a member off the relay. (B) **1.0 first, M12 as an update:** the relay path stays open to a knowledgeable stranger (they need a room and a member key) and the privacy text says nothing about it. Your call; it only changes the order of work.
-
-## Tasks (written for D1 = A)
+## Tasks
 
 - **T12.1 Documents first.** `relay/ws-relay/README.md` (the exchange, the close code, the 5-second limit, the weak keys), `CRYPTO.md` (a section "Relay sign-in": label, message, why the room and the nonce), `SECURITY_REVIEW.md` N3 (status when done).
 - **T12.2 The signature in the app's crypto module.** `RelayAuth.sign/verify` (Tink, refuses small-order keys); independent test vectors from Python (`crypto_vectors.py`) that the Kotlin tests check byte for byte **and the Go relay's tests also check** (one vector file read by both sides, so the two implementations cannot disagree).
@@ -46,4 +45,4 @@ What this does not do: it does not hide anything from the relay (it already sees
 
 ## Open questions
 
-D1 and D2 above. Nothing else is blocking.
+None at the moment. What only the owner can do: deploy the new relay to the VM and install the new app together, and the review of the relay's sign-in code.
