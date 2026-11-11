@@ -278,21 +278,7 @@ class JoinGroupTest {
 
     // ---- a restored phone -----------------------------------------------------------------------------------------------------------
 
-    @Test fun aRestoredPhoneFindsWhichOfItsKeySlotsIsAlreadyAMemberByTryingThemInOrder() = runTest {
-        hostServes()
-        // Rohan was admitted before, with the key of slot 3 of his recovery phrase; Asha knows him.
-        val phrase = owntally.crypto.Bip39.fromEntropy(ByteArray(16) { 7 })
-        val old = TestEnv().also { it.identity.completeFirstRun(phrase, "Rohan", "98765 43210") }
-        val k3 = old.identity.groupIdentity(3)!!
-        assertTrue(asha.session.approveJoin(k3.publicKey, k3.encryptionKey, "Rohan", "98765 43210") is owntally.data.session.AddResult.Added)
-        // The new phone, restored from the same phrase, has nothing but the invitation.
-        val restored = TestEnv().also { it.identity.completeFirstRun(phrase, "Rohan", "98765 43210") }
-        val join = JoinGroup(restored.groups, restored.secrets, restored.identity, InMemoryPendingJoinStore(), Sessions(restored.groups, restored.secrets, restored.identity, restored.clock, restored.settings), restored.clock, { _, key -> net.transportFor(key) }, connectTimeoutMs = 1_000)
-        val ticket = Ticket.fromShared(link())!!
-        assertEquals(3L, join.findMySlot(ticket))
-        // A phone that was never in the group finds none.
-        assertNull(rohan().findMySlot(Ticket.fromShared(link())!!, maxSlots = 5))
-    }
+    // The M6 test of findMySlot (a search over numbered slots) is gone: finding a restored phone's key is RestoreRejoinTest (M11).
 
     @Test fun aPhoneWhoseClockIsALittleAheadStillOpensAnInviteThatJustRanOutButNotOneLongGone() = runTest {
         hostServes()
