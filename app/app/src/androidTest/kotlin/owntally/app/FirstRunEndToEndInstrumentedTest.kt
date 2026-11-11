@@ -78,7 +78,10 @@ class FirstRunEndToEndInstrumentedTest {
             assertTrue(!secure(), "the welcome screen may be captured")
             rule.onNodeWithText("For example, Asha").performTextInput("Asha")
             rule.onNodeWithText("+91 98765 43210").performTextInput("98765 43210")
-            rule.onNodeWithText("Continue").performClick()
+            // Pressed through its accessibility action, not by screen coordinates: the buttons at the bottom of the screen move while the keyboard
+            // area settles, and a coordinate tap that lands during that move can hit the link under the button instead.
+            rule.waitForIdle()
+            rule.onNodeWithText("Continue").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
 
             // Phrase: not secure either. Read the twelve words from the screen like a person would.
             rule.waitUntilExactlyOneExists(hasText("Save your recovery phrase"), 5_000)
@@ -172,8 +175,8 @@ class FirstRunEndToEndInstrumentedTest {
             // Privacy: who runs the relay and what n0 learns, in the app (the same text as the web page).
             rule.onNodeWithText("Privacy").performClick()
             rule.waitUntilExactlyOneExists(hasText("Where your data lives"), 5_000)
-            rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(hasText("restoring from it on a new phone is not available yet.", substring = true))
-            rule.onNodeWithText("restoring from it on a new phone is not available yet.", substring = true).assertExists()
+            rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(hasText("you rejoin each group as the same member, with no approval", substring = true))
+            rule.onNodeWithText("you rejoin each group as the same member, with no approval", substring = true).assertExists()
             rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(hasContentDescription("Back"))
             rule.onNode(hasContentDescription("Back")).performClick()
             rule.onNode(hasContentDescription("Groups")).performClick()

@@ -191,4 +191,20 @@ class RestoreRejoinTest {
         assertEquals(emptyList(), ashaHost.requests.waiting(group))
         assertEquals(listOf(group), approved)
     }
+
+    /** A transport whose host never answers: every connect waits until the join gives up (the real timeout is 15 seconds). */
+    private object HangingTransport : owntally.sync.Transport {
+        override suspend fun connect(room: GroupRoom, peer: owntally.model.PublicKey): owntally.sync.Link = kotlinx.coroutines.awaitCancellation()
+        override fun incoming(room: GroupRoom) = kotlinx.coroutines.flow.emptyFlow<owntally.sync.Link>()
+    }
+
+    @Test fun aHostThatNeverAnswersCostsOneWaitNotTwoWhenTheInviteIsOpened() = runTest {
+        val env = phone()
+        val join = JoinGroup(env.groups, env.secrets, env.identity, InMemoryPendingJoinStore(), Sessions(env.groups, env.secrets, env.identity, env.clock, env.settings), env.clock, { _, _ -> HangingTransport }, connectTimeoutMs = 1_000)
+        val opened = assertIs<OpenResult.Opened>(join.open(ashaHost.link()))
+        assertEquals(PreviewState.HOST_UNREACHABLE, opened.preview)
+        assertTrue(testScheduler.currentTime <= 1_200, "the person waited ${testScheduler.currentTime} ms: the host is asked about the key and then again for the description, but a host that did not answer the first is not asked the second")
+        // The description can still be asked for later, and the request asks again which key to use.
+        assertEquals(KeySlots.member(group, 0), opened.join.keySlot)
+    }
 }

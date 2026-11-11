@@ -26,3 +26,11 @@ What a person must do because a test cannot. Tick each, with the date. The autom
 - [ ] **The privacy page** loads at `https://joinowntally.ownspace.in/privacy`, and the in-app Privacy screen says the same.
 - [ ] **Two real phones over mobile networks:** a sync in both directions through Iroh, and while a third device (or a script) opens an Iroh connection to a phone and sends nothing, the phone still accepts the others (F7's real-device check).
 - [ ] Read Iroh's release notes for the version in use (the vulnerability scan cannot see inside its Rust code).
+
+## Added for M11 (restoring from the recovery phrase)
+- [ ] **A real wipe and restore:** on a real phone with a group that has had a removal or a key change, install, choose "I already have a recovery phrase", type the phrase, then have a friend send an invitation to each group: you are back as the same member with no approval, and the balances equal your friends'. Do it once as the person who made a group and once as an admin.
+- [ ] A wrong phrase and a typo in one word give the messages on the restore screen and save nothing.
+- [ ] Look at the restore screen and the changed texts (the recovery-phrase screen, About, the "can't be opened" screen, the Privacy screen) in both themes and at a large text size; read the new sentences for wording.
+- [ ] Read `docs/SECURITY_REVIEW.md` section 6 (R1 to R6), above all **R1**: a leaked phrase lets anyone with an invitation into every group as you, without approval. Decide whether the app should say so in one sentence on the phrase screen.
+- [ ] The human review of the M11 files listed in that section (`KeySlots`, `GroupSession` key chaining, `JoinGroup.resolve`, `AppContainer.identityOf`, the restore screens).
+

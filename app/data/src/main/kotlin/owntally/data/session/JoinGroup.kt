@@ -200,7 +200,9 @@ class JoinGroup(
             PendingState.OPENED, "", "", 0, earlier?.openedAtSeconds ?: clock.nowSeconds(),
         )
         pending.put(base)
-        val state = fetchPreview(base, ticket)
+        // A host that did not answer the question about the key (resolution is null) will not answer a second one now: do not make the person wait
+        // for another timeout. The description is asked for again by "Try again", and the key again when the request is sent.
+        val state = if (resolution == null) PreviewState.HOST_UNREACHABLE else fetchPreview(base, ticket)
         return OpenResult.Opened(pending.get(ticket.groupId) ?: base, state)
     }
 
