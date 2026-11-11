@@ -1,0 +1,49 @@
+# M12 tasks: relay sign-in (a signed challenge when connecting)
+
+Parent: [BUILD_PLAN.md](../BUILD_PLAN.md), milestone M12. Rules: [DESIGN.md](../DESIGN.md), [CRYPTO.md](../CRYPTO.md), `relay/ws-relay/README.md` (the relay's wire protocol), [SECURITY_REVIEW.md](../SECURITY_REVIEW.md) finding N3. Tests first. Owner decision (10 Nov 2026): a signed challenge at connect.
+
+Goal (BUILD_PLAN): the WebSocket relay accepts a connection for a member key only from the holder of that key. Acceptance: a client that names a key it does not hold is refused and cannot replace the real member's connection; tests with a wrong signature, a replayed signature (other nonce, other room) and a good one; the privacy text and `SECURITY_REVIEW.md` N3 updated.
+
+## The problem (finding N3, read in the third review pass)
+
+The relay takes the sender id from the address the client gives (`?id=<member key>`), stamps every forwarded frame with it, and lets a new connection with the same id **replace** the old one. So anyone who knows a room (the hash of a group id) and a member's public key can (a) knock that member off the relay, again each time they reconnect, (b) flood that member until the relay drops them as "too slow", and (c) send frames that say they come from that member. (c) cannot make anyone a member: the app checks the sender against the TLS certificate in `SecureOverCarrier`. (a) and (b) are denial of service on the relay path only; Iroh and the local network are unaffected.
+
+## What exists
+
+- `relay/ws-relay` (Go, `main.go`, `hub.go`, `relay_test.go` 14 tests): a hub of rooms, per-address connect limits, per-connection rate limit, ping, "too slow" kick; `go` 1.27 is installed here, so the relay can be built and tested.
+- `WebSocketTransport` (Kotlin, `app/sync`): one WebSocket per group room, `?room=...&id=...`, status `CONNECTING/OPEN/RECONNECTING/CLOSED`; `SecureOverCarrier` runs TLS end to end between the members over it.
+- Tests: `WebSocketTransportTest` (a MockWebServer stand-in for the relay), `RealRelayTest` (the real Go binary through `RELAY_BIN`; skipped without it), `RelayLimitsTest`.
+- Member keys are Ed25519 (Tink); `LinkAuth`/`JoinCrypto` already sign labelled messages and refuse small-order keys (`WeakKeys`).
+
+## Design (proposed)
+
+After the WebSocket upgrade the relay and the client make a three-step exchange **before the relay treats the client as being in the room** (until then it forwards nothing to it and nothing from it):
+
+1. relay to client: `[0x01][nonce, 32 random bytes]` (33 bytes), the challenge, a fresh nonce for this connection.
+2. client to relay: `[0x02][signature, 64 bytes]` over the ASCII label `owntally/v1/relay-auth`, then the room bytes (as given in `?room=`), the member key (as given in `?id=`) and the nonce. Ed25519 by the member key.
+3. relay to client: `[0x03]` (ready), after verifying the signature with the key named in `?id=`; or the relay closes the connection with a WebSocket close code (4401, "not the holder of this key").
+
+Only after step 3 does the relay put the client in the room (the replacement of an old connection with the same id happens then, and only the key's holder can do it), and from then on the protocol is exactly today's. States make the frames unambiguous (before "ready" the relay sends nothing but the challenge). Rules in the relay: the whole exchange must finish within 5 seconds or the connection is closed; a signature from a small-order key (the seven encodings the app refuses, `WeakKeys`) is refused; the nonce comes from `crypto/rand`; a signature is good for one connection only because the nonce differs; the room in the message stops a signature being used in another room. The relay needs only the standard library (`crypto/ed25519`).
+
+In the app `WebSocketTransport` signs the challenge with the member's key (`RelayAuth` in the crypto module, same pattern as `LinkAuth`) and reports `OPEN` only after "ready"; a refusal (close code 4401) is recorded as the last error.
+
+What this does not do: it does not hide anything from the relay (it already sees the key, the room, addresses, timing and sizes: the privacy text is right as it is), and it does not stop someone who holds a member's key (they are that member). It also does not stop a stranger from using up connections on the relay with keys of their own: that is the per-address limit's job, unchanged.
+
+## Decisions needed (owner)
+
+**D1. Transition for the relay already running on the VM.** The relay in production and the app builds on your test phones speak today's protocol. (A) **Required from the start (recommended):** the new relay refuses a client that does not sign; you update the relay and the app on your phones together. Nothing is released, so there is no one else to keep working. (B) **A switch `-auth=optional|required`:** the relay accepts both for a while (an old client is recognised by sending a normal frame instead of a signature, which costs a 5-second wait and keeps the hole open for that client), then you set `required`. More code, more tests, and a mode that is the old hole.
+
+**D2. Does M12 block the first release?** The review (N3) called relay authentication "not in 1.0 unless M12 is done first". With Iroh and the local network unaffected, the exposure is denial of service on one of the three paths. (A) **M12 before 1.0:** the first release has no known way to knock a member off the relay. (B) **1.0 first, M12 as an update:** the relay path stays open to a knowledgeable stranger (they need a room and a member key) and the privacy text says nothing about it. Your call; it only changes the order of work.
+
+## Tasks (written for D1 = A)
+
+- **T12.1 Documents first.** `relay/ws-relay/README.md` (the exchange, the close code, the 5-second limit, the weak keys), `CRYPTO.md` (a section "Relay sign-in": label, message, why the room and the nonce), `SECURITY_REVIEW.md` N3 (status when done).
+- **T12.2 The signature in the app's crypto module.** `RelayAuth.sign/verify` (Tink, refuses small-order keys); independent test vectors from Python (`crypto_vectors.py`) that the Kotlin tests check byte for byte **and the Go relay's tests also check** (one vector file read by both sides, so the two implementations cannot disagree).
+- **T12.3 The relay (Go).** Tests first: a good signature is admitted and can talk; a wrong signature, another key's signature, a signature for another room, a signature for another nonce (replay), a small-order key, a short or malformed answer, a frame sent before answering, and no answer within the time limit are all refused or closed and the old connection of the real member is untouched; two clients naming the same key cannot both end up in the room; an unauthenticated client receives nothing and cannot send. Then `main.go`/`hub.go`, the flag defaults, `RUNBOOK.md` (build, copy, restart; the order of steps; how to see a refusal in the counts), `deploy/` unchanged unless the unit file needs a flag.
+- **T12.4 The app's transport.** Tests first: `WebSocketTransportTest`'s stand-in learns the exchange (and refuses a bad signature); `RealRelayTest` runs the real binary with real keys: two members talk, a stranger naming a member's key is refused and cannot replace them, the real member stays connected; `RelayLimitsTest` and the other relay tests updated. Then `WebSocketTransport` (the exchange, `OPEN` after ready, a refusal recorded), `InternetWays` passes the member's identity.
+- **T12.5 Texts.** Nothing in the privacy text changes (the relay sees the same things); `SECURITY_REVIEW.md` N3 and the privacy facts are checked for a sentence that is now wrong; the release checklist gets the deploy step.
+- **T12.6 Hand back.** All unit tests (Kotlin and Go), lint, release build and bundle, the vulnerability check (`go.mod` is not covered by the script: `govulncheck` or `go list -m -u` result written down), the emulator suites, the smoke test, the real relay test, the owner's checklist (deploy the new relay, then the app; a test with a phone and a second client naming its key), the pull request.
+
+## Open questions
+
+D1 and D2 above. Nothing else is blocking.
