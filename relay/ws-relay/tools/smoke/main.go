@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"flag"
@@ -11,11 +12,11 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/ownspace-in/owntally/relay/ws-relay/tools/signin"
 )
 
-func dial(ctx context.Context, base, room string, id []byte) (*websocket.Conn, error) {
-	c, _, err := websocket.Dial(ctx, fmt.Sprintf("%s?room=%s&id=%s", base, room, hex.EncodeToString(id)), nil)
-	return c, err
+func dial(ctx context.Context, base, room string, priv ed25519.PrivateKey) (*websocket.Conn, error) {
+	return signin.Dial(ctx, base, room, priv)
 }
 
 func main() {
@@ -26,18 +27,19 @@ func main() {
 	defer cancel()
 
 	room := make([]byte, 16)
-	idA, idB := make([]byte, 32), make([]byte, 32)
-	for _, b := range [][]byte{room, idA, idB} {
-		_, _ = rand.Read(b)
-	}
+	_, _ = rand.Read(room)
+	// Each client is a real key pair: the relay admits a connection only to the holder of the key it names (M12).
+	pubA, privA, _ := ed25519.GenerateKey(rand.Reader)
+	_, privB, _ := ed25519.GenerateKey(rand.Reader)
+	idA := []byte(pubA)
 
 	start := time.Now()
-	a, err := dial(ctx, *url, hex.EncodeToString(room), idA)
+	a, err := dial(ctx, *url, hex.EncodeToString(room), privA)
 	if err != nil {
 		fail("client A could not connect: %v", err)
 	}
 	defer a.CloseNow()
-	b, err := dial(ctx, *url, hex.EncodeToString(room), idB)
+	b, err := dial(ctx, *url, hex.EncodeToString(room), privB)
 	if err != nil {
 		fail("client B could not connect: %v", err)
 	}

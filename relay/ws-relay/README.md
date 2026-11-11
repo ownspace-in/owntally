@@ -15,6 +15,7 @@ wss://<host>/ws?room=<roomHex>&id=<publicKeyHex>
 - `room`: 16 to 32 bytes as hex. Clients derive it from the group id with a hash, so the relay never learns the real group id.
 - `id`: the member's 32 byte public key as hex.
 - Only binary frames are allowed. Text frames close the connection.
+- **Sign-in (M12).** The relay takes `id` as a claim and makes the client prove it holds that key before it is in the room (docs/CRYPTO.md section 7a): the relay sends `[0x01][nonce 32]`; the client answers `[0x02][Ed25519 signature 64]` over `owntally/v1/relay-auth`, one byte for the room's length, the room, the key and the nonce; the relay sends `[0x03]` (ready), or closes with code **4401** (wrong signature, a small-order key, a malformed answer, or any frame other than the answer) or **4408** (no valid answer within 5 seconds). Until `[0x03]` the relay forwards nothing to the client and nothing from it, and the client counts in no room. A client that does not sign is refused: there is no optional mode.
 - Maximum frame size is 64 KB, including the header below.
 
 Frames sent to the relay:
@@ -26,7 +27,7 @@ Frames sent to the relay:
 
 Frames received from the relay are `[sender key, 32 bytes][payload]`. Anything else, an unknown first byte or a short targeted frame, closes the connection.
 
-Reconnecting with the same `id` in the same room replaces the old connection.
+Reconnecting with the same `id` in the same room replaces the old connection, but only a client that has signed in for that key can do it.
 
 The relay does not queue messages. A message for a client that is not connected is lost, and the sync protocol above it recovers on the next sync.
 

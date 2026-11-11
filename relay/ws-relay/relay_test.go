@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -17,8 +18,10 @@ import (
 const roomA = "00112233445566778899aabbccddeeff"
 const roomB = "ffeeddccbbaa99887766554433221100"
 
-func keyHex(n byte) string   { return strings.Repeat(fmt.Sprintf("%02x", n), 32) }
-func keyBytes(n byte) []byte { return bytes.Repeat([]byte{n}, 32) }
+// A test client n is a real Ed25519 key pair made from a fixed seed (the relay admits only the holder of the key it is told).
+func testPriv(n byte) ed25519.PrivateKey { return ed25519.NewKeyFromSeed(bytes.Repeat([]byte{n}, 32)) }
+func keyBytes(n byte) []byte             { return []byte(testPriv(n).Public().(ed25519.PublicKey)) }
+func keyHex(n byte) string               { return hex.EncodeToString(keyBytes(n)) }
 
 func startServer(t *testing.T, maxPerRoom int) (*server, *httptest.Server) {
 	t.Helper()
@@ -38,11 +41,75 @@ func dial(t *testing.T, ts *httptest.Server, room string, id byte) *websocket.Co
 	return conn
 }
 
+// dialErr connects as client id and signs in as that client (M12): the connection is returned once the relay has said it is ready.
 func dialErr(ts *httptest.Server, room string, id byte) (*websocket.Conn, *http.Response, error) {
-	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?room=" + room + "&id=" + keyHex(id)
+	conn, resp, err := dialRaw(ts, room, keyHex(id))
+	if err != nil {
+		return nil, resp, err
+	}
+	if err := signIn(conn, room, keyBytes(id), testPriv(id)); err != nil {
+		_ = conn.CloseNow()
+		return nil, resp, err
+	}
+	return conn, resp, nil
+}
+
+// dialRaw only opens the WebSocket: the caller makes the sign-in exchange (or does not).
+func dialRaw(ts *httptest.Server, room, idHex string) (*websocket.Conn, *http.Response, error) {
+	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?room=" + room + "&id=" + idHex
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	return websocket.Dial(ctx, url, nil)
+}
+
+// authMessageFor is the message of docs/CRYPTO.md section 7a, written out here on its own (not taken from the relay's code).
+func authMessageFor(room, id, nonce []byte) []byte {
+	m := []byte("owntally/v1/relay-auth")
+	m = append(m, byte(len(room)))
+	m = append(m, room...)
+	m = append(m, id...)
+	return append(m, nonce...)
+}
+
+// answerFor makes the client's answer, [0x02][signature], for a challenge nonce.
+func answerFor(roomHex string, id []byte, priv ed25519.PrivateKey, nonce []byte) []byte {
+	room, _ := hex.DecodeString(roomHex)
+	return append([]byte{0x02}, ed25519.Sign(priv, authMessageFor(room, id, nonce))...)
+}
+
+// readChallenge reads the relay's first frame and returns its nonce.
+func readChallenge(c *websocket.Conn) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, data, err := c.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) != 33 || data[0] != 0x01 {
+		return nil, fmt.Errorf("not a challenge: %x", data)
+	}
+	return data[1:], nil
+}
+
+// signIn does the whole exchange with the given key pair, whatever key the connection names.
+func signIn(c *websocket.Conn, roomHex string, id []byte, priv ed25519.PrivateKey) error {
+	nonce, err := readChallenge(c)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := c.Write(ctx, websocket.MessageBinary, answerFor(roomHex, id, priv, nonce)); err != nil {
+		return err
+	}
+	_, ready, err := c.Read(ctx)
+	if err != nil {
+		return err
+	}
+	if len(ready) != 1 || ready[0] != 0x03 {
+		return fmt.Errorf("not ready: %x", ready)
+	}
+	return nil
 }
 
 func read(t *testing.T, c *websocket.Conn) []byte {
