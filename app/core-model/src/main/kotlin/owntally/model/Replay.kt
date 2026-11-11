@@ -32,6 +32,7 @@ private class Run(private val forced: Set<EventId>) {
     var declinedOffer: PublicKey? = null
     var epoch = 0L
     val epochStarts = LinkedHashMap<Long, EventId>()
+    val keyLinks = LinkedHashMap<Long, EventId>()
     val expenses = LinkedHashMap<EventId, Expense>()
     val settlements = LinkedHashMap<EventId, Settlement>()
     val removals = LinkedHashMap<PublicKey, Removal>()
@@ -45,7 +46,7 @@ private class Run(private val forced: Set<EventId>) {
     private val removedBy = HashMap<PublicKey, MutableList<EventId>>()
 
     fun state(held: List<EventId>) =
-        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, declinedOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held)
+        GroupState(groupId, name, currency, members.toMap(), owner, pendingOffer, declinedOffer, epoch, epochStarts.toMap(), expenses.toMap(), settlements.toMap(), removals.toMap(), ignored.toList(), held, keyLinks.toMap())
 
     /** Names are unique in a group (owner decision, 4 Nov 2026): the rule lives in [isNameTaken], shared with the screens. */
     private fun nameTaken(name: String, except: PublicKey?): Boolean = isNameTaken(members.values, name, except)
@@ -199,6 +200,14 @@ private class Run(private val forced: Set<EventId>) {
                 if (body.newEpoch != epoch + 1 || body.sealedKeys.keys != knownTo(event)) return IgnoreReason.INVALID
                 epoch = body.newEpoch
                 epochStarts[epoch] = event.id
+                null
+            }
+            is EventBody.KeyLinked -> {
+                // Key chaining (M11): only the owner, only for the epoch the author was in, and only the first one counts.
+                if (role != Role.OWNER) return IgnoreReason.NOT_ALLOWED
+                if (body.epoch != epochSeenBy(event)) return IgnoreReason.INVALID
+                if (body.epoch in keyLinks) return IgnoreReason.ALREADY_DONE
+                keyLinks[body.epoch] = event.id
                 null
             }
             is EventBody.MemberRemoved -> {

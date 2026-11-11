@@ -100,9 +100,12 @@ class NearbySessionTest {
     }
 
     @Test fun aMemberNotFoundIsMarkedNotFoundWhicheverPhoneHasTheLargerKey() = runTest {
-        val (x, y) = phones(2)
-        // One of them holds the larger key and so waits to be called: it can only learn "not found" from the wait running out.
-        for (lonely in listOf(x, y)) {
+        // One of them holds the larger key and so waits to be called: it can only learn "not found" from the wait running out. Each case gets
+        // its own phones and air: a phone that has started once has a mailbox the other would find, and which phone has the larger key is
+        // random (a group's keys come from its id), so the two cases must not depend on each other.
+        for (largerKey in listOf(true, false)) {
+            val byKey = phones(2).sortedBy { it.device.key }
+            val lonely = if (largerKey) byKey.last() else byKey.first()
             lonely.nearby.start()
             runCurrent(); advanceTimeBy(16_000)
             assertEquals(setOf(NearbyPeer.NOT_FOUND), lonely.nearby.status.value.peers.values.toSet(), lonely.device.name)

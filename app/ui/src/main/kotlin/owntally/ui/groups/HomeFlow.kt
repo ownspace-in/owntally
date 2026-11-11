@@ -100,7 +100,7 @@ fun HomeFlow(
             is Screen.SettleUp -> SettleUpRoute(sessions, screen.id, onBack = back, onNotReceived = { ui.nav = ui.nav.push(Screen.NotReceived(screen.id, it)) })
             is Screen.NotReceived -> NotReceivedRoute(sessions, screen.id, screen.settlement, onBack = back)
             is Screen.Invite -> InviteRoute(sessions, invites, screen.id, onBack = back)
-            Screen.JoinPaste -> JoinPasteRoute(joinGroup, onBack = back, onOpened = { ui.nav = ui.nav.pop().push(Screen.Join(it)) })
+            Screen.JoinPaste -> JoinPasteRoute(joinGroup, onBack = back, onOpened = { ui.nav = ui.nav.pop().push(Screen.Join(it)) }, onOpenGroup = { ui.nav = ui.nav.home().push(Screen.Group(it)) })
             is Screen.Join -> JoinRoute(joinGroup, screen.id, onBack = back, onOpenGroup = { ui.nav = ui.nav.home().push(Screen.Group(screen.id)) })
             is Screen.Members -> MembersRoute(sessions, joinRequests, invites, screen.id, onBack = back, onInvite = { ui.nav = ui.nav.push(Screen.Invite(screen.id)) }, onMenu = { ui.nav = ui.nav.push(Screen.MemberActions(screen.id, it)) }, onJoinRequests = { ui.nav = ui.nav.push(Screen.JoinRequests(screen.id)) }, onMyProfile = { ui.nav = ui.nav.push(Screen.Profile(screen.id)) }, onLeave = { ui.nav = ui.nav.push(Screen.Leave(screen.id)) }, onRemovedTap = { ui.nav = ui.nav.push(Screen.Cancelled(screen.id, it)) })
             is Screen.Cancelled -> CancelledRoute(
@@ -855,7 +855,7 @@ private fun InviteRoute(sessions: Sessions, invites: owntally.data.session.Invit
 
 /** Join a group: paste the invite, open it (the host is asked what the group is), then the form. */
 @Composable
-private fun JoinPasteRoute(joinGroup: owntally.data.session.JoinGroup?, onBack: () -> Unit, onOpened: (GroupId) -> Unit) {
+private fun JoinPasteRoute(joinGroup: owntally.data.session.JoinGroup?, onBack: () -> Unit, onOpened: (GroupId) -> Unit, onOpenGroup: (GroupId) -> Unit) {
     if (joinGroup == null) { Box(Modifier.fillMaxSize()); return }
     val context = androidx.compose.ui.platform.LocalContext.current
     var text by remember { mutableStateOf("") }
@@ -879,6 +879,7 @@ private fun JoinPasteRoute(joinGroup: owntally.data.session.JoinGroup?, onBack: 
                         val bad = JoinModels.previewProblem(result.preview)
                         if (bad != null) { withContext(Dispatchers.IO) { joinGroup.discard(result.join.group) }; problem = bad } else onOpened(result.join.group)
                     }
+                    is owntally.data.session.OpenResult.Restored -> onOpenGroup(result.group)
                     else -> problem = JoinModels.pasteProblem(result)
                 }
             }
@@ -935,6 +936,7 @@ private fun JoinRoute(joinGroup: owntally.data.session.JoinGroup?, id: GroupId, 
                             val r = withContext(Dispatchers.IO) { joinGroup.request(id, name, phone) }
                             busy = false
                             problem = JoinModels.problem(j, r)
+                            if (r is owntally.data.session.RequestResult.Restored) onOpenGroup() // the host knew this phone's key: the group is here already
                             version++
                         }
                     }
@@ -1022,6 +1024,7 @@ private fun InviteLinkEffect(pending: owntally.data.session.PendingInvites?, joi
                 if (bad != null) { withContext(Dispatchers.IO) { joinGroup.discard(result.join.group) }; message = bad } else onOpenInvitation(result.join.group)
             }
             is owntally.data.session.OpenResult.AlreadyInGroup -> { message = JoinModels.pasteProblem(result); onOpenGroup(result.group) }
+            is owntally.data.session.OpenResult.Restored -> { message = JoinModels.pasteProblem(result); onOpenGroup(result.group) }
             else -> message = JoinModels.pasteProblem(result)
         }
     }

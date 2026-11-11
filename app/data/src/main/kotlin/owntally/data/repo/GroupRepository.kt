@@ -5,6 +5,7 @@ import owntally.crypto.Clock
 import owntally.crypto.EnvelopeSigning
 import owntally.crypto.EventSealing
 import owntally.crypto.GroupKey
+import owntally.crypto.KeySlots
 import owntally.data.secrets.SecretStore
 import owntally.data.store.EventStore
 import owntally.data.store.GroupRow
@@ -57,10 +58,12 @@ class GroupRepository(
         val profile = checkNotNull(identity.defaultProfile()) { "no default profile" }
         EventBody.GroupCreated(GroupId(ByteArray(16)), name, currency, EncryptionKey(ByteArray(32))) // validates name and currency before anything is used up
 
-        val slot = identity.reserveSlot(events.groups().map { it.keySlot })
+        // The creator's key comes from the 8 random bytes that begin the group's id (M11, KeySlots), and the id then holds a check of that key
+        // (GroupIds), so nobody else can write a creating event for it, and a phone restored from the phrase derives the same key from the id alone.
+        val idRandom = ByteArray(8).also { random.nextBytes(it) }
+        val slot = KeySlots.creator(idRandom)
         val me = checkNotNull(identity.groupIdentity(slot)) { "no usable seed" }
-        // The group id is made for this creator (GroupIds), so nobody else can write a creating event for it.
-        val groupId = GroupIds.create(me.publicKey, ByteArray(8).also { random.nextBytes(it) })
+        val groupId = GroupIds.create(me.publicKey, idRandom)
         val key = GroupKey.generate(random)
         val nowMillis = clock.nowSeconds() * 1000
         val created = Event(1, me.publicKey, 1, emptyMap(), nowMillis, EventBody.GroupCreated(groupId, name, currency, me.encryptionKey))

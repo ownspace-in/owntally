@@ -121,12 +121,12 @@ First run:
 2. The user must write it down. The app then asks for 3 of the words to confirm before continuing.
 3. The phrase is never stored by the app after this screen, never sent anywhere. Screenshots are not blocked on that screen (owner decision, 4 Nov 2026), and the screen says not to keep the words in a screenshot or a notes app.
 
-**Status (owner decision X1, 9 Nov 2026): restoring from the phrase is NOT built; it is milestone M11.** Until then the app, its How it works text, the privacy text and the store text say plainly that restoring is not available yet. What follows is the design for M11.
+**Status: built in M11 (11 Nov 2026; owner decisions D1 and D2, docs/tasks/M11-restore.md).** On a new phone the Welcome screen has "I already have a recovery phrase"; the app, its How it works text, the privacy text and the store text say what works: the phrase gives back the identity, the groups come back through a friend's invitation as the same member with no approval, and the history syncs. What the phrase does not do: it does not hold any data, and it does not bring a group back without a friend's invitation.
 
 Restoring on a new phone:
-1. Enter the 12 words. The master seed and all per-group keypairs are re-derived (group keys come from numbered slots of the seed; `MemberJoined` records which slot a group used).
+1. Enter the 12 words. The master seed is re-derived, and with it every per-group keypair: a group's key comes from the seed and the group's id (CRYPTO.md section 2), so the phone needs only the id, which an invitation carries.
 2. The phone does not yet know its groups or the group keys, because those are random and not derived from the seed.
-3. A member of each group sends a fresh ticket. Because the restored public key is already a member, the group recognises it without an approval step, sends the current group key encrypted to that key, and the phone syncs the full history.
+3. A member of each group sends a fresh ticket. The ticket names the group id, from which the phone derives the keys it used there (CRYPTO.md section 2); the host recognises one of them as a member, so there is no approval step, the ticket carries the current group key, the earlier keys follow from the `KeyLinked` events (key chaining, CRYPTO.md section 6), and the phone syncs the full history.
 4. If the phrase is lost, the user rejoins as a new member and an admin links the new key to the old name.
 
 Limits:

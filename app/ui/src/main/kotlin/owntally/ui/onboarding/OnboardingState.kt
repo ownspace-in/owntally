@@ -1,9 +1,11 @@
 package owntally.ui.onboarding
 
 import kotlin.random.Random
+import owntally.crypto.PhraseProblem
 import owntally.crypto.RecoveryPhrase
 
-enum class Step { WELCOME, PHRASE, CONFIRM, DONE }
+/** [RESTORE]: the person already has a recovery phrase and types it instead of being given a new one (M11). */
+enum class Step { WELCOME, PHRASE, CONFIRM, RESTORE, DONE }
 enum class NameProblem { EMPTY, TOO_LONG, BAD_CHARACTERS }
 enum class PhoneProblem { EMPTY, BAD_CHARACTERS, BAD_LENGTH, TOO_FEW_DIGITS }
 enum class SaveProblem { COULD_NOT_SAVE }
@@ -32,7 +34,12 @@ data class OnboardingState(
     val mismatch: Boolean = false,
     val saving: Boolean = false,
     val saveProblem: SaveProblem? = null,
+    /** The words typed to restore (M11): redacted like the answers; forgotten once used or left. */
+    val restoreWords: Answer = Answer(""),
+    /** What is wrong with the typed phrase; it names a position or a count, never a word. */
+    val restoreProblem: PhraseProblem? = null,
 ) {
+    val canRestore: Boolean get() = step == Step.RESTORE && !saving && restoreWords.text.isNotBlank()
     val canFinish: Boolean get() = step == Step.CONFIRM && !saving && answers.isNotEmpty() && answers.all { it.text.isNotBlank() }
 }
 

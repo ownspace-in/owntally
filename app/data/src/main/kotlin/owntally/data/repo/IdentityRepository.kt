@@ -60,12 +60,11 @@ class IdentityRepository(private val secrets: SecretStore, private val settings:
     }
 
     /**
-     * Hands out a key slot that has never been handed out before, even if the group that used it was deleted: a reused slot
-     * would give a new group the same member key as an old one and let people who were in both link them. [usedSlots] are the
-     * groups that exist now; the counter in the settings only goes up.
+     * For tests: a key slot that has never been handed out, for a made-up member who is not tied to a group id. The app does not use it any more:
+     * since M11 a group's slot is made from the group's id ([owntally.crypto.KeySlots]), so nothing has to be counted or remembered.
      */
     @Synchronized
-    fun reserveSlot(usedSlots: Collection<Long>): Long {
+    internal fun reserveSlot(usedSlots: Collection<Long>): Long {
         val counter = settings.get(NEXT_SLOT)?.toLongOrNull() ?: 0L
         val slot = maxOf(counter, nextFreeSlot(usedSlots))
         check(slot <= MAX_SLOT) { "no key slots left" }
@@ -80,7 +79,7 @@ class IdentityRepository(private val secrets: SecretStore, private val settings:
         private const val MAX_SLOT = 0xFFFF_FFFFL
 
         /** One above the highest slot in use, or 0. Throws rather than wrap around. */
-        fun nextFreeSlot(used: Collection<Long>): Long {
+        internal fun nextFreeSlot(used: Collection<Long>): Long {
             val next = if (used.isEmpty()) 0L else used.max() + 1
             check(next <= MAX_SLOT) { "no key slots left" }
             return next

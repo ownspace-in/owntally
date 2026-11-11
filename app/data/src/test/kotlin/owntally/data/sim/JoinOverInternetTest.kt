@@ -68,20 +68,24 @@ class JoinOverInternetTest {
         val invites = Invites(owntally.crypto.InMemoryTicketRecords(), asha.env.groups, asha.env.secrets, asha.env.identity, ashaSessions, clock)
         val requests = JoinRequests(InMemoryJoinRequestStore(), ashaSessions, clock)
         val ashaSync = SyncCoordinator(
-            ashaSessions, asha.env.groups, { _, self -> chainFor(asha.env, self) }, SyncRecorder(InMemorySyncProblemLog(), clock), clock, scope,
+            ashaSessions, asha.env.groups, { g, self -> chainFor(asha.env, g, self) }, SyncRecorder(InMemorySyncProblemLog(), clock), clock, scope,
             joinBackend = { id -> GroupJoinBackend(id, asha.env.identity.groupIdentity(asha.env.groups.group(id)!!.keySlot)!!, invites, requests, ashaSessions) },
         )
         val rohanEnv = TestEnv().also { it.firstRun("Rohan", "98765 43210") }
         val rohanSessions = Sessions(rohanEnv.groups, rohanEnv.secrets, rohanEnv.identity, rohanEnv.clock, rohanEnv.settings)
-        val rohanSync = SyncCoordinator(rohanSessions, rohanEnv.groups, { _, self -> chainFor(rohanEnv, self) }, SyncRecorder(InMemorySyncProblemLog(), clock), clock, scope)
+        val rohanSync = SyncCoordinator(rohanSessions, rohanEnv.groups, { g, self -> chainFor(rohanEnv, g, self) }, SyncRecorder(InMemorySyncProblemLog(), clock), clock, scope)
         val rohanJoin = JoinGroup(
-            rohanEnv.groups, rohanEnv.secrets, rohanEnv.identity, InMemoryPendingJoinStore(), rohanSessions, clock, { _, self -> chainFor(rohanEnv, self) },
+            rohanEnv.groups, rohanEnv.secrets, rohanEnv.identity, InMemoryPendingJoinStore(), rohanSessions, clock, { g, self -> chainFor(rohanEnv, g, self) },
             onApproved = { g, host -> rohanSync.startWith(g, host) }, connectTimeoutMs = 10_000,
         )
 
         private val chains = HashMap<PublicKey, Transport>()
-        private fun chainFor(env: TestEnv, key: PublicKey): Transport = synchronized(chains) {
-            chains.getOrPut(key) { val slot = (0L..20L).first { env.identity.groupIdentity(it)?.publicKey == key }; chain(env, slot) }
+        /** The slot of a key in a group is made from the group's id (M11): the creator's, the first join's, or what the phone stored for the group. */
+        private fun chainFor(env: TestEnv, group: owntally.model.GroupId, key: PublicKey): Transport = synchronized(chains) {
+            chains.getOrPut(key) {
+                val candidates = listOfNotNull(env.groups.group(group)?.keySlot, owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(group)), owntally.crypto.KeySlots.member(group, 0))
+                chain(env, candidates.first { env.identity.groupIdentity(it)?.publicKey == key })
+            }
         }
     }
 

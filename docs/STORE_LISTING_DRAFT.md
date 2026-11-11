@@ -34,5 +34,5 @@ No camera, contacts, storage, microphone, SMS or background location. The app op
 - **User-generated content:** members enter names and expense descriptions that the other members of the same group see; nothing is public.
 - **Financial features:** none; the app records who owes whom and never moves money.
 - **Target audience:** not made for children. **TO FILL IN** (the owner's).
-- **Restore:** the store text must not say restoring from the recovery phrase works (it is M11).
+- **Restore:** restoring from the recovery phrase works since M11 (11 Nov 2026): the text may say that on a new phone the 12 words give back the identity and that a friend's invitation brings each group back as the same member, with no approval. It must not say that the phrase restores data or groups by itself.
 - **Open-source libraries and licences:** listed in the release notes **TO FILL IN** (Tink, Room, Compose, OkHttp, Iroh, WorkManager, Play services, the QR generator).

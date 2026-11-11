@@ -103,6 +103,7 @@ object JoinModels {
     /** What to tell the person when asking to join did not end in "waiting". */
     fun problem(j: PendingJoin, r: RequestResult): String? = when (r) {
         RequestResult.Waiting -> null
+        is RequestResult.Restored -> null
         RequestResult.HostUnreachable -> unreachable(j)
         RequestResult.NoLongerValid -> "This invite was already used, has expired or was cancelled. Ask an admin for a new one."
         RequestResult.NotVerified -> "This invite could not be checked, so nothing was sent. Ask an admin for a new one."
@@ -133,6 +134,7 @@ object JoinModels {
         OpenResult.NotAnInvite -> "That doesn't look like an OwnTally invite. Paste the whole link or code."
         OpenResult.Expired -> "This invite has expired. Ask an admin for a new one."
         is OpenResult.AlreadyInGroup -> "You are already in this group."
+        is OpenResult.Restored -> "You're back in this group. Its history is on its way."
         is OpenResult.Opened -> null
     }
 
