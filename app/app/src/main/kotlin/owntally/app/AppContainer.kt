@@ -56,8 +56,15 @@ class AppContainer(private val context: Context) {
 
     /** The key this phone uses in the group: its own group's, or the one reserved for an invitation it opened and has not been admitted through yet. */
     private fun identityOf(group: owntally.model.GroupId, key: owntally.model.PublicKey): owntally.crypto.GroupIdentity? {
-        val slot = groups.group(group)?.keySlot ?: pendingJoins.get(group)?.keySlot ?: return null
-        return identity.groupIdentity(slot)?.takeIf { it.publicKey == key }
+        // A group of this phone, an invitation it opened, or, while a restored phone is still finding out which key it had in a group, any key
+        // derived from the group's id (M11: the creator's, then the member keys of generation 0, 1, ...).
+        val known = listOfNotNull(groups.group(group)?.keySlot, pendingJoins.get(group)?.keySlot)
+        val derived = sequence {
+            yield(owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(group)))
+            for (generation in 0L until 32L) yield(owntally.crypto.KeySlots.member(group, generation))
+        }
+        for (slot in known + derived) identity.groupIdentity(slot)?.takeIf { it.publicKey == key }?.let { return it }
+        return null
     }
 
     /**

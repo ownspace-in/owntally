@@ -224,4 +224,25 @@ class WireCodecTest {
     }
 
     private fun ByteArray.toHex() = joinToString("") { "%02x".format(it) }
+
+    @Test
+    fun keyLinkedIsTagSeventeenWithTheEpochAndThe32ByteKey() {
+        val v = vectors.getValue("payloads").jsonArray.map { it.jsonObject }.first { it.str("name") == "key-linked" }
+        val event = decode(v)
+        val body = event.body as EventBody.KeyLinked
+        assertEquals(3L, body.epoch)
+        assertEquals(v.str("hex"), EventCodec.encodePayload(event).toHex())
+        // tag 17 is a known event now: 18 and above are the unknown ones
+        assertFailsWith<IllegalArgumentException> { EventCodec.encodePayload(Event(1, key(1), 1, emptyMap(), 0, EventBody.Unknown(17, ByteArray(0)))) }
+        EventCodec.encodePayload(Event(1, key(1), 1, emptyMap(), 0, EventBody.Unknown(18, ByteArray(0))))
+    }
+
+    @Test
+    fun aPreviousKeyShowsNothingInToStringAndMustBe32Bytes() {
+        val k = PreviousKey(ByteArray(32) { 0x5A })
+        assertEquals("PreviousKey([redacted])", k.toString())
+        assertEquals("KeyLinked(epoch=2, [redacted])", EventBody.KeyLinked(2, k).toString())
+        assertFailsWith<IllegalArgumentException> { PreviousKey(ByteArray(31)) }
+        assertFailsWith<IllegalArgumentException> { EventBody.KeyLinked(1, k) } // epoch 1 has no epoch before it
+    }
 }

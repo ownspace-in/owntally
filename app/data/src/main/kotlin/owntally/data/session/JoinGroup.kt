@@ -4,6 +4,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import owntally.crypto.Clock
+import owntally.crypto.KeySlots
 import owntally.crypto.Ticket
 import owntally.data.repo.GroupRepository
 import owntally.data.repo.IdentityRepository
@@ -13,6 +14,7 @@ import owntally.data.store.PendingJoinStore
 import owntally.data.store.PendingState
 import owntally.model.EventBody
 import owntally.model.GroupId
+import owntally.model.GroupIds
 import owntally.sync.GroupRoom
 import owntally.sync.JoinClient
 import owntally.sync.JoinOutcome
@@ -29,6 +31,12 @@ sealed class OpenResult {
     data object Expired : OpenResult()
 
     data class AlreadyInGroup(val group: GroupId) : OpenResult()
+
+    /**
+     * The host knows this phone's key as a member already (a phone restored from the recovery phrase, M11): the group was made on this phone with
+     * that key, nobody has to approve anything, and the history is on its way.
+     */
+    data class Restored(val group: GroupId) : OpenResult()
 
     /** Opened. [preview] says whether the host described the group (decision J1); [join] has what it said (empty names if it could not be asked). */
     data class Opened(val join: PendingJoin, val preview: PreviewState) : OpenResult()
@@ -56,6 +64,9 @@ sealed class RequestResult {
 
     /** The name or number would not be accepted by the group; nothing was sent. */
     data object InvalidDetails : RequestResult()
+
+    /** As [OpenResult.Restored], found when the request was about to be sent (the host was away when the invitation was opened). */
+    data class Restored(val group: GroupId) : RequestResult()
     data object NoSuchInvitation : RequestResult()
 }
 
@@ -79,6 +90,9 @@ sealed class CheckResult {
  * database ([pending]) so closing the app loses nothing, and the group key is kept with the other keys from the moment the invitation is
  * opened, so the history can be read as soon as it arrives.
  */
+/** How many generations of member keys one phone can have used in one group (leaving and coming back) before the search stops (M11). */
+private const val MAX_GENERATIONS = 32L
+
 class JoinGroup(
     private val groups: GroupRepository,
     private val secrets: SecretStore,
@@ -117,6 +131,54 @@ class JoinGroup(
         }
     }
 
+    /** What asking the host about this phone's candidate keys for a group found (M11, docs/CRYPTO.md section 2). */
+    private sealed class Resolution(val slot: Long) {
+        /** The host knows this key as a member: a restored phone. */
+        class Member(slot: Long) : Resolution(slot)
+
+        /** Nobody the host knows has used this key: it is the one to ask to join with. */
+        class Free(slot: Long) : Resolution(slot)
+    }
+
+    /**
+     * Which key this phone uses in the group of [ticket]. The key is not remembered but derived from the group's id: the creator's key if the id
+     * vouches for it, then generation 0, 1, 2, ... of the member keys. The host is asked about each in turn (it answers only the holder of the key)
+     * until one is a member (a restored phone), or nobody it knows (a new join), skipping removed or declined ones (a person who left comes back
+     * under the next generation). Most joins ask once. Null if the host cannot be reached.
+     */
+    private suspend fun resolve(ticket: Ticket): Resolution? {
+        val group = ticket.groupId
+        val candidates = sequence {
+            yield(KeySlots.creator(GroupIds.randomPart(group)))
+            for (generation in 0L until MAX_GENERATIONS) yield(KeySlots.member(group, generation))
+        }
+        for (slot in candidates) {
+            val me = identity.groupIdentity(slot) ?: return null
+            if (slot == KeySlots.creator(GroupIds.randomPart(group)) && !GroupIds.isCreatedBy(group, me.publicKey)) continue // not this group's creator
+            val link = connect(group, slot, ticket.hostId) ?: return null
+            val status = try {
+                JoinClient(ticket, me, "", "").status(link).status
+            } finally {
+                runCatching { link.close() }
+            } ?: return null
+            when (status) {
+                JoinStatus.APPROVED -> return Resolution.Member(slot)
+                JoinStatus.UNKNOWN, JoinStatus.PENDING -> return Resolution.Free(slot)
+                JoinStatus.DECLINED -> continue
+            }
+        }
+        return Resolution.Free(KeySlots.member(group, MAX_GENERATIONS)) // all of those were used before: do not search for ever
+    }
+
+    /** A restored phone is already a member: make the group on this phone with that key, keep the invitation's key, and start the sync with the host. */
+    private fun restoreInto(ticket: Ticket, slot: Long) {
+        secrets.saveGroupKey(ticket.groupId, ticket.epoch, ticket.groupKey)
+        groups.joinGroup(ticket.groupId, slot)
+        pending.delete(ticket.groupId)
+        sessions.refresh()
+        onApproved(ticket.groupId, ticket.hostId)
+    }
+
     /** Opens what the person pasted or scanned: an invitation link or the bare ticket. */
     suspend fun open(text: String): OpenResult {
         val ticket = Ticket.fromShared(text) ?: return OpenResult.NotAnInvite
@@ -125,14 +187,22 @@ class JoinGroup(
         val earlier = pending.get(ticket.groupId)
         if (earlier != null && earlier.state != PendingState.OPENED && earlier.ticketId.contentEquals(ticket.ticketId())) return OpenResult.Opened(earlier, PreviewState.FOUND)
 
-        val slot = earlier?.keySlot ?: identity.reserveSlot(groups.listGroups().map { it.keySlot } + pending.all().map { it.keySlot })
+        // A new join uses generation 0 of this group's member slots (M11, KeySlots); the next ones are for someone who left and comes back (T11.4).
+        val resolution = resolve(ticket)
+        if (resolution is Resolution.Member) {
+            restoreInto(ticket, resolution.slot)
+            return OpenResult.Restored(ticket.groupId)
+        }
+        val slot = resolution?.slot ?: earlier?.keySlot ?: KeySlots.member(ticket.groupId, 0)
         secrets.saveGroupKey(ticket.groupId, ticket.epoch, ticket.groupKey)
         val base = PendingJoin(
             ticket.groupId, ticket.hostId, ticket.ticketId(), slot, ticket.epoch, ticket.expiresAtSeconds, earlier?.name.orEmpty(), earlier?.phone.orEmpty(),
             PendingState.OPENED, "", "", 0, earlier?.openedAtSeconds ?: clock.nowSeconds(),
         )
         pending.put(base)
-        val state = fetchPreview(base, ticket)
+        // A host that did not answer the question about the key (resolution is null) will not answer a second one now: do not make the person wait
+        // for another timeout. The description is asked for again by "Try again", and the key again when the request is sent.
+        val state = if (resolution == null) PreviewState.HOST_UNREACHABLE else fetchPreview(base, ticket)
         return OpenResult.Opened(pending.get(ticket.groupId) ?: base, state)
     }
 
@@ -162,9 +232,17 @@ class JoinGroup(
 
     /** Sends the request with the name and number the person typed. Can be repeated until the host has it. */
     suspend fun request(group: GroupId, name: String, phone: String): RequestResult {
-        val p = pending.get(group) ?: return RequestResult.NoSuchInvitation
+        var p = pending.get(group) ?: return RequestResult.NoSuchInvitation
         val ticket = ticketOf(p) ?: return RequestResult.NoSuchInvitation
         if (p.state == PendingState.WAITING) return RequestResult.Waiting
+        if (p.state == PendingState.OPENED) {
+            // The host may have been away when the invitation was opened, so the key was only a guess: ask now which key to use.
+            when (val r = resolve(ticket)) {
+                is Resolution.Member -> { restoreInto(ticket, r.slot); return RequestResult.Restored(group) }
+                is Resolution.Free -> if (r.slot != p.keySlot) { p = p.copy(keySlot = r.slot); pending.put(p) }
+                null -> Unit
+            }
+        }
         if (runCatching { EventBody.ProfileUpdated(name.trim(), phone.trim()) }.isFailure) return RequestResult.InvalidDetails
         val me = identity.groupIdentity(p.keySlot) ?: return RequestResult.HostUnreachable
         val link = connect(group, p.keySlot, p.host) ?: return RequestResult.HostUnreachable
@@ -234,23 +312,5 @@ class JoinGroup(
         pending.get(group) ?: return
         pending.delete(group)
         if (groups.group(group) == null) secrets.deleteGroup(group)
-    }
-
-    /**
-     * For a phone restored from a recovery phrase (CRYPTO.md section 2, clarification C8): which of the first [maxSlots] key slots is already
-     * a member of the invitation's group, if any. The slots are tried in order. The host answers for a key only to its holder.
-     */
-    suspend fun findMySlot(ticket: Ticket, maxSlots: Int = 16): Long? {
-        for (slot in 0L until maxSlots) {
-            val me = identity.groupIdentity(slot) ?: return null
-            val link = connect(ticket.groupId, slot, ticket.hostId) ?: return null
-            val status = try {
-                JoinClient(ticket, me, "", "").status(link).status
-            } finally {
-                runCatching { link.close() }
-            }
-            if (status == JoinStatus.APPROVED) return slot
-        }
-        return null
     }
 }

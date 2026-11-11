@@ -1,5 +1,7 @@
 package owntally.ui.onboarding
 
+import owntally.crypto.RecoveryPhrase
+import owntally.crypto.InvalidPhraseException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.random.Random
@@ -40,6 +42,44 @@ class OnboardingViewModel(
         mutable.value = s.copy(step = Step.PHRASE, phrase = s.phrase ?: firstRun.newPhrase(), nameProblem = null, phoneProblem = null)
     }
 
+    /** "I already have a recovery phrase" (M11): checks the name and number as a new start does, then asks for the words. */
+    fun startRestore() {
+        val s = mutable.value
+        if (s.step != Step.WELCOME) return
+        val nameProblem = OnboardingRules.nameProblem(s.name)
+        val phoneProblem = OnboardingRules.phoneProblem(s.phone)
+        if (nameProblem != null || phoneProblem != null) {
+            mutable.value = s.copy(nameProblem = nameProblem, phoneProblem = phoneProblem)
+            return
+        }
+        mutable.value = s.copy(step = Step.RESTORE, nameProblem = null, phoneProblem = null, restoreWords = Answer(""), restoreProblem = null, saveProblem = null)
+    }
+
+    fun onRestoreTextChange(text: String) = mutable.update { it.copy(restoreWords = Answer(text), restoreProblem = null, saveProblem = null) }
+
+    /** Checks the typed words (any case, any spacing or line breaks); if they make a valid phrase, saves it as the identity of this phone and finishes. */
+    fun restore() {
+        val s = mutable.value
+        if (!s.canRestore) return
+        val phrase = try {
+            RecoveryPhrase.fromText(s.restoreWords.text)
+        } catch (e: InvalidPhraseException) {
+            mutable.value = s.copy(restoreProblem = e.problem)
+            return
+        }
+        mutable.value = s.copy(saving = true, restoreProblem = null, saveProblem = null)
+        viewModelScope.launch(io) {
+            try {
+                firstRun.complete(phrase, s.name.trim(), s.phone.trim())
+                mutable.update { it.copy(step = Step.DONE, restoreWords = Answer(""), saving = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                mutable.update { it.copy(saving = false, saveProblem = SaveProblem.COULD_NOT_SAVE) }
+            }
+        }
+    }
+
     /** "I've written it down": asks for three of the words. */
     fun phraseWritten() {
         val s = mutable.value
@@ -64,6 +104,7 @@ class OnboardingViewModel(
         Step.WELCOME, Step.DONE -> false
         Step.PHRASE -> true.also { mutable.update { it.copy(step = Step.WELCOME) } }
         Step.CONFIRM -> true.also { showWordsAgain() }
+        Step.RESTORE -> true.also { mutable.update { it.copy(step = Step.WELCOME, restoreWords = Answer(""), restoreProblem = null, saveProblem = null) } }
     }
 
     fun onAnswerChange(index: Int, text: String) {

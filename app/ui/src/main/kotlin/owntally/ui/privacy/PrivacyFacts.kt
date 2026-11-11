@@ -75,7 +75,7 @@ object PrivacyFacts {
             "backup", "Backups and a lost phone",
             listOf(
                 "Android may back up OwnTally's database to your Google account: the encrypted entries, and the name and phone number you gave when you set up OwnTally, which are kept there as plain text. The keys are never part of a backup, so a backup alone cannot read your groups.",
-                "If you lose your phone, the groups on it are gone unless other members still have them. Your 12-word recovery phrase is your identity; restoring from it on a new phone is not available yet.",
+                "If you lose your phone, the groups on it are gone unless other members still have them. Your 12-word recovery phrase is your identity: on a new phone you type it to get your identity back, and when a friend invites you again you rejoin each group as the same member, with no approval, and its history syncs from the other members. OwnTally does not keep the phrase or send it anywhere.",
             ),
         ),
         PrivacySection("contact", "Questions", listOf("Write to $CONTACT.")),

@@ -58,6 +58,8 @@ data class GroupState(
     val ignored: List<IgnoredEvent>,
     /** Events waiting for something they depend on. */
     val heldBack: List<EventId>,
+    /** For each epoch from 2 on, the accepted `KeyLinked` event that carries the key of the epoch before it (M11, key chaining). Only such an event may deliver that key. */
+    val keyLinks: Map<Long, EventId> = emptyMap(),
 ) {
     val currentMembers: Map<PublicKey, Member> get() = members.filterValues { !it.removed }
 }

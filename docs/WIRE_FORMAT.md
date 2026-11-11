@@ -28,7 +28,7 @@ time    = i64                  wall clock milliseconds
 body    = tag u8 | length u32 | content
 ```
 
-`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 16 are always known events; a body can only be unknown when its tag is 0 or 17 and above.
+`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 17 are always known events; a body can only be unknown when its tag is 0 or 18 and above.
 
 ### Example
 
@@ -65,6 +65,7 @@ That is 34 bytes. The same event always gives these 34 bytes.
 | 14 | `MemberRemoved` | `key` member, `u32` newEpoch, `map<key, sealedKey>` (see CRYPTO.md section 6; `sealedKey` is `u16` length and bytes) |
 | 15 | `KeyRotated` | `u32` newEpoch, `map<key, sealedKey>` |
 | 16 | `OwnershipDeclined` | empty (added 5 Nov 2026; an older decoder keeps it as an unknown body) |
+| 17 | `KeyLinked` | `u32` epoch, 32 bytes `previousKey` (added 11 Nov 2026, M11, decision D1: the key of epoch `epoch - 1`; see CRYPTO.md section 6; an older decoder keeps it as an unknown body) |
 
 `split` is `u8` kind then: kind 1 (`Equal`) `set<key>` participants; kind 2 (`Exact`) `map<key, i64>` amounts.
 

@@ -98,7 +98,7 @@ fun OwnTallyApp(start: AppStart, onboarding: () -> OnboardingViewModel, sessions
             AppStart.Ready -> WithLock(lock) { HomeFlow(sessions(), debugTools, it, joinRequests, sync, invites, joinGroup, nearby, pendingInvites) }
             AppStart.SeedUnreadable -> MessageScreen(
                 "Your saved identity can't be opened on this phone",
-                "This can happen when the app is restored from a backup or moved to another phone. Restoring from your recovery phrase is not available yet.",
+                "This can happen when the app is restored from a backup or moved to another phone. To get your identity back, clear the app's data (Settings, Apps, OwnTally, Storage, Clear data) or reinstall it, open it again and choose \"I already have a recovery phrase\".",
             )
             AppStart.StorageUnavailable -> MessageScreen(
                 "Secure storage isn't available",

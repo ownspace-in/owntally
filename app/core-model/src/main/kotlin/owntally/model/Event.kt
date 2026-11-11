@@ -136,6 +136,18 @@ sealed class EventBody {
         }
     }
 
+    /**
+     * Key chaining (M11, owner decision D1; docs/CRYPTO.md section 6): written by the owner right after a key change, in the new epoch (so
+     * encrypted under the new key), it holds the key of the epoch before. Whoever holds an epoch's key can read back to epoch 1 through these.
+     */
+    data class KeyLinked(val epoch: Long, val previousKey: PreviousKey) : EventBody() {
+        init {
+            require(epoch in 2..0xFFFF_FFFFL) { "only an epoch from 2 on has an epoch before it" }
+        }
+
+        override fun toString() = "KeyLinked(epoch=$epoch, [redacted])"
+    }
+
     /** A type this version does not know. Its tag and content are kept so it can be passed on byte for byte. */
     class Unknown(val tag: Int, content: ByteArray) : EventBody() {
         private val data = content.copyOf()

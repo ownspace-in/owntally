@@ -13,14 +13,21 @@ Rules: no cryptography is written by the project. Every primitive below comes fr
 
 ## 2. Per-group keys
 
-Each group uses a numbered slot `n` (u32, starting at 0). From the master seed, with HKDF-SHA256 (Tink), salt `"owntally/v1"`:
+Each group uses a numbered slot `n` (an integer from 0 to 2^62 - 1; which one a group uses is set out below). From the master seed, with HKDF-SHA256 (Tink), salt `"owntally/v1"`:
 
 | Key | HKDF info string | Use |
 |---|---|---|
 | signing seed (32 bytes) | `"group/<n>/sign"` | Ed25519 key pair; the public key is the member's `PublicKey` in that group |
 | encryption private key (32 bytes) | `"group/<n>/encrypt"` | X25519 key pair; the public key travels as `encryptionKey` in `GroupCreated` and `MemberJoined` |
 
-`<n>` is written as decimal ASCII. Different groups give unrelated keys, so members of different groups cannot link a person (DESIGN.md). The slot used is recorded by the phone; restoring tries slots in order until the group's `PublicKey` matches (DESIGN.md "Recovery").
+`<n>` is written as decimal ASCII. Different groups give unrelated keys, so members of different groups cannot link a person (DESIGN.md).
+
+**Which slot a group uses (M11, owner decision D2, 11 Nov 2026; before this it was a counter that started at 0).** The slot is made from the group's id, so a phone restored from the recovery phrase finds the key it used in a group from an invitation alone: no search, no list of slots used, no key shared by two groups. The slot is the first 62 bits (the first 8 bytes of the SHA-256 digest, as a big-endian number, shifted right by 2) of SHA-256 over:
+
+- for a **member** (anyone who joined the group): the ASCII label `owntally/v1/slot/member`, the 16 bytes of the group id, and the **generation** as 4 bytes big-endian (0, 1, 2, ...). A key that has been removed or has left is never admitted again, so joining a group again uses the next generation.
+- for the group's **creator**: the label `owntally/v1/slot/creator` and the 8 random bytes that begin the group id (`GroupIds`). The creator's key is derived before the id exists, and the id then holds a check of that key (the other 8 bytes), so the same key can be derived again from the id alone, and only for the one who made it.
+
+Independent test vectors (`crypto_vectors.py`) cover both. With 62 bits two groups getting the same slot is practically impossible (2^-62 for a pair), so nothing keeps a list of the slots in use. A restored phone, given an invitation, tries the creator slot (if the id's check holds for the key) and then generations 0, 1, 2, ... of the member slot, asking the host about each until the host knows one as a member (restored), or as nobody (a new join), skipping removed ones.
 
 Why a separate encryption key: Tink cannot convert an Ed25519 signing key into an X25519 key, and using one key for two jobs is worse practice anyway.
 
@@ -61,6 +68,7 @@ Order: encrypt first, then sign the whole envelope. A phone can reject forged ev
 - A phone takes a new epoch's key only from the event that replay accepted as the start of that epoch (`GroupState.epochStarts`), never from an ignored event or one that is not yet in the log. Otherwise a plain member could hand everyone a key of their choosing.
 - The event itself is encrypted under the current (old) epoch key, like any event. It carries the sealed keys in the clear inside that payload, which is fine: only the recipients can open them.
 - Events written from then on use the new epoch. The removed member holds the old key only, so cannot read them.
+- **Key chaining (M11, owner decision D1, 11 Nov 2026).** The event that starts an epoch is itself encrypted under the *old* key, so someone who holds only the new key (a person admitted after the change, or a phone restored from the recovery phrase) cannot read it, and so cannot learn the earlier keys from it. Without more, such a person would see nothing of the group: its creating event is in epoch 1. So the owner's phone writes a `KeyLinked(epoch, previousKey)` event (WIRE_FORMAT.md tag 17) **right after** every key change; it is written in the new epoch, so it is encrypted under the new key, and it holds the key of the epoch before. Whoever holds the key of epoch *n* opens the `KeyLinked` of epoch *n*, learns the key of epoch *n - 1*, opens the `KeyLinked` of that epoch, and so on back to epoch 1. No new cryptography: the new key's encryption is the wrapping. A phone accepts a previous key from a `KeyLinked` it has opened only if the key **opens at least one entry written in that epoch**. That is authenticated decryption, so a wrong key (from a faulty or dishonest author) can only fail to open anything and can never plant a key, and the key that does open an entry is the real one whoever wrote the link. The check cannot wait for replay to accept the link, because a late member lacks the keys for the epochs the link follows, so replay holds the link back until its key has been taken; the replay rules (owner only, one per epoch, `GroupState.keyLinks`) say which link counts for the group's own bookkeeping, not which key is trusted. If the owner's phone stopped between the key change and the `KeyLinked`, it writes the missing one the next time it reads the group; a later key change before that leaves a gap that only a phone that already holds the missing key can close. This lets everyone who is admitted read the whole history, which they receive by sync in any case (DESIGN.md).
 - A remaining member who has not yet synced the removal keeps writing under the old epoch until they see it; those events stay readable by the removed member. This is inherent in the design (DESIGN.md: no forward secrecy in v1) and is accepted.
 - **Leaving.** A member who removes themselves (author and `member` are the same) cannot safely hand out a new key, and an admin may be offline. So a leave does not rotate: `newEpoch` must equal the current epoch and the map must be empty. The app then tells the admins "Dev left, rotate the key?" (owner decision, 3 Nov 2026).
 - **`KeyRotated`** (WIRE_FORMAT.md tag 15) is that rotation. Only the owner or an admin may write it. `newEpoch` must be the current epoch plus 1, and the map must hold a sealed key for **exactly** the current members, the author included. Otherwise it is `INVALID`.

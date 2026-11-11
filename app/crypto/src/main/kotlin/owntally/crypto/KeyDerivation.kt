@@ -34,14 +34,14 @@ class GroupIdentity internal constructor(
 
 object KeyDerivation {
     private val SALT = "owntally/v1".toByteArray()
-    private const val MAX_SLOT = 0xFFFF_FFFFL
+    private const val MAX_SLOT = (1L shl 62) - 1
 
     /**
-     * The keys for numbered [slot] (0 to 2^32 - 1), derived from [seed] with HKDF-SHA256 (Tink). Different slots give unrelated
+     * The keys for numbered [slot] (0 to 2^62 - 1; [KeySlots] says which a group uses), derived from [seed] with HKDF-SHA256 (Tink). Different slots give unrelated
      * keys, so members of different groups cannot be linked.
      */
     fun groupIdentity(seed: MasterSeed, slot: Long): GroupIdentity {
-        require(slot in 0..MAX_SLOT) { "slot must fit in 32 bits" }
+        require(slot in 0..MAX_SLOT) { "slot must fit in 62 bits" }
         val ikm = seed.bytes()
         val signSeed = Hkdf.computeHkdf("HmacSha256", ikm, SALT, "group/$slot/sign".toByteArray(), 32)
         val encryptionPrivate = Hkdf.computeHkdf("HmacSha256", ikm, SALT, "group/$slot/encrypt".toByteArray(), 32)
