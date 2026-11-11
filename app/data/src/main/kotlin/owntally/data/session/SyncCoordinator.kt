@@ -33,6 +33,18 @@ data class SyncConfig(
     /** After the first, second and later failed tries: 1, 5 and 30 minutes (the last is repeated). */
     val retryDelaysMs: List<Long> = listOf(60_000L, 300_000L, 1_800_000L),
     val stallTimeoutMs: Long = 30_000L,
+    /** How long someone who connected has to send a first message (F8): a real phone speaks at once, so a silent connection is not kept long. */
+    val firstMessageWaitMs: Long = 10_000L,
+    /** How many connections from known members (people who are, or were, in the group) may wait for a first message at once; more are closed (F8). */
+    val maxWaiting: Int = 64,
+    /** How many connections from keys this phone does not know may wait for a first message at once; a stranger can never take a member's place (F8). */
+    val maxWaitingUnknown: Int = 16,
+    /** How many join conversations (people holding an invitation, who are not members) may be going at once; more are closed (F8). */
+    val maxJoinConversations: Int = 8,
+    /** How many syncs with members may be going at once for one group; more are closed (a group has at most 20 members) (F8). */
+    val maxMemberSyncs: Int = 16,
+    /** An unknown peer may make this phone look at the group again (to see whether it was just admitted) at most this often (F8). */
+    val strangerLookEverySeconds: Long = 5L,
 )
 
 enum class PeerState { NEVER, SYNCING, OK, UNREACHABLE, FAILED }
@@ -85,8 +97,14 @@ class SyncCoordinator(
         var retry: Job? = null
     }
 
-    private class Group(val id: GroupId, val session: GroupSession, val self: PublicKey, val transport: Transport) {
+    private class Group(val id: GroupId, val session: GroupSession, val self: PublicKey, val transport: Transport, config: SyncConfig) {
         val room: GroupRoom = GroupRoom.fromGroupId(id.bytes())
+        // F8: what people who connect to this phone may use up. Separate pools, so strangers cannot take the places of members.
+        val waiting = java.util.concurrent.Semaphore(config.maxWaiting)
+        val waitingUnknown = java.util.concurrent.Semaphore(config.maxWaitingUnknown)
+        val joins = java.util.concurrent.Semaphore(config.maxJoinConversations)
+        val memberSyncs = java.util.concurrent.Semaphore(config.maxMemberSyncs)
+        @Volatile var lastStrangerLook = Long.MIN_VALUE
         val peers = ConcurrentHashMap<PublicKey, PeerRun>()
         val jobs = ArrayList<Job>()
     }
@@ -119,7 +137,7 @@ class SyncCoordinator(
     private fun open(group: GroupId): Group? = try {
         val session = sessions.session(group)
         val self = session.view.value.me
-        Group(group, session, self, transportFor(group, self))
+        Group(group, session, self, transportFor(group, self), config)
     } catch (e: IllegalStateException) {
         null // no such group, or no usable seed
     }
@@ -345,22 +363,58 @@ class SyncCoordinator(
      * Someone connected. The first message tells a join (a person holding an invitation) from a sync: a join goes to the join host if this
      * phone may invite, anything else to the sync engine. The first message is handed on, so neither side loses it.
      */
+    /**
+     * Whether [peer] is, or was, a member as far as this phone knows (the state includes people who left or were removed: they are still synced with, in
+     * the limited way [MembershipAccess] decides). A peer not in that list may have been admitted a moment ago, so the group is looked at again, but for
+     * unknown peers only once in [SyncConfig.strangerLookEverySeconds], so that strangers cannot make the phone read the group over and over.
+     */
+    private fun knownPeer(g: Group, peer: PublicKey): Boolean {
+        if (peer in g.session.view.value.state.members) return true
+        val t = now()
+        if (t - g.lastStrangerLook < config.strangerLookEverySeconds) return false
+        g.lastStrangerLook = t
+        g.session.refresh()
+        return peer in g.session.view.value.state.members
+    }
+
+    /**
+     * F8: what a connection may cost before it has shown who it is. Only so many may wait for a first message, and only for a short time; a stranger's
+     * sync is refused before anything is read from the database (only a member, or someone who has left or was removed, is synced with, and only so many
+     * at once); a join conversation (an invitation holder, not yet a member) takes a place in a small pool of its own.
+     */
     private suspend fun respond(g: Group, link: Link) {
         val peer = link.peer
+        // The link's key is proved by the transport before anything is said, so a known member waits in a pool of its own: strangers who connect and stay
+        // silent can fill theirs, never the members'.
+        val waitingPool = if (peer in g.session.view.value.state.members) g.waiting else g.waitingUnknown
+        if (!waitingPool.tryAcquire()) { link.close(); return }
+        var waitingReleased = false
+        fun releaseWaiting() { if (!waitingReleased) { waitingReleased = true; waitingPool.release() } }
+        var pool: java.util.concurrent.Semaphore? = null
         val outcome: SyncResult? = try {
             kotlinx.coroutines.coroutineScope {
                 val inbox = kotlinx.coroutines.channels.Channel<ByteArray>(owntally.sync.LinkQueue.CAPACITY)
                 val pump = launch { try { link.received.collect { inbox.send(it) } } finally { inbox.close() } }
                 try {
-                    val first = kotlinx.coroutines.withTimeoutOrNull(config.stallTimeoutMs) { inbox.receiveCatching().getOrNull() }
+                    val first = try {
+                        kotlinx.coroutines.withTimeoutOrNull(minOf(config.firstMessageWaitMs, config.stallTimeoutMs)) { inbox.receiveCatching().getOrNull() }
+                    } finally {
+                        releaseWaiting()
+                    }
                     if (first == null) return@coroutineScope null
                     val wrapped = object : Link by link {
                         override val received = kotlinx.coroutines.flow.flow { emit(first); for (m in inbox) emit(m) }
                     }
                     if (owntally.sync.JoinCodec.isJoin(first)) {
-                        joinBackend(g.id)?.let { owntally.sync.JoinHost(it, g.room, config.stallTimeoutMs).serve(wrapped) }
+                        val backend = joinBackend(g.id) ?: return@coroutineScope null
+                        if (!g.joins.tryAcquire()) return@coroutineScope null
+                        pool = g.joins
+                        owntally.sync.JoinHost(backend, g.room, config.stallTimeoutMs).serve(wrapped)
                         null
                     } else {
+                        if (!knownPeer(g, peer)) return@coroutineScope null // a stranger: nothing is read, nothing is sent
+                        if (!g.memberSyncs.tryAcquire()) return@coroutineScope null
+                        pool = g.memberSyncs
                         val store = RepositorySyncStore(g.id, groups)
                         SyncEngine(g.room, store, config.stallTimeoutMs, access = MembershipAccess(g.session, store)).run(wrapped, SyncRole.RESPONDER)
                     }
@@ -373,6 +427,8 @@ class SyncCoordinator(
         } catch (e: Exception) {
             return
         } finally {
+            pool?.release()
+            releaseWaiting()
             link.close()
         }
         val result = outcome ?: return

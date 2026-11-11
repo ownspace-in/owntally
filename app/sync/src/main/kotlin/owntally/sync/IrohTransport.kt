@@ -83,7 +83,7 @@ class IrohTransport(
 ) : Transport {
     private val started = CompletableDeferred<PublicKey>()
     private val starting = java.util.concurrent.atomic.AtomicBoolean(false)
-    private val inbox = Channel<Link>(Channel.UNLIMITED)
+    private val inbox = Channel<Link>(LinkQueue.INCOMING)
     private val pendingAccepts = java.util.concurrent.Semaphore(config.maxPendingAccepts)
 
     private fun ensureStarted() {
@@ -109,7 +109,7 @@ class IrohTransport(
                         } catch (e: Exception) {
                             null // one that fails to complete must not stop the others being accepted
                         }
-                        if (conn != null) inbox.trySend(IrohLink(conn)) else incoming.abandon()
+                        if (conn == null) incoming.abandon() else if (inbox.trySend(IrohLink(conn)).isFailure) runCatching { conn.close() } // nobody is taking them: close, do not queue (F8)
                     } finally {
                         pendingAccepts.release()
                     }
