@@ -21,6 +21,8 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import owntally.crypto.GroupIdentity
+import owntally.crypto.RelayAuth
 import owntally.model.PublicKey
 
 enum class RelayStatus { CONNECTING, OPEN, RECONNECTING, CLOSED }
@@ -31,13 +33,15 @@ enum class RelayStatus { CONNECTING, OPEN, RECONNECTING, CLOSED }
  * whether the peer is there is learned when it answers.
  */
 class WebSocketTransport(
-    private val self: PublicKey,
+    /** The member's key in this group: its public key is the `id` the relay is told, and its private key signs the relay's challenge (M12). */
+    private val identity: GroupIdentity,
     private val relayUrl: String,
     private val scope: CoroutineScope,
     private val client: OkHttpClient = OkHttpClient(),
     private val backoffMillis: List<Long> = listOf(1_000, 5_000, 30_000),
     private val openTimeoutMillis: Long = 10_000,
 ) : Transport {
+    private val self: PublicKey = identity.publicKey
     private val rooms = ConcurrentHashMap<GroupRoom, RoomConnection>()
 
     override suspend fun connect(room: GroupRoom, peer: PublicKey): Link {
@@ -86,14 +90,37 @@ class WebSocketTransport(
             socket = client.newWebSocket(request, listener)
         }
 
+        // M12 (docs/CRYPTO.md section 7a): the socket is open, but the relay treats this phone as in the room only after it has proved it holds its
+        // key: the relay sends [0x01][nonce], this side answers [0x02][signature], and the relay sends [0x03] (ready). Until then nothing is
+        // forwarded either way, so the status is not OPEN, and a frame that arrives is part of the exchange, not a message from a member.
+        @Volatile private var signedIn = false
+
         private val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                attempt = 0
-                _status.value = RelayStatus.OPEN
+                signedIn = false
             }
 
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) = dispatch(bytes.toByteArray())
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                val frame = bytes.toByteArray()
+                if (signedIn) return dispatch(frame)
+                when {
+                    frame.size == 1 + RelayAuth.NONCE_SIZE && frame[0] == MSG_CHALLENGE ->
+                        webSocket.send((byteArrayOf(MSG_ANSWER) + RelayAuth.sign(identity, room.id, frame.copyOfRange(1, frame.size))).toByteString())
+                    frame.size == 1 && frame[0] == MSG_READY -> {
+                        signedIn = true
+                        attempt = 0
+                        _status.value = RelayStatus.OPEN
+                    }
+                    else -> {
+                        lastError = "the relay sent something unexpected while signing in"
+                        webSocket.close(1002, "unexpected frame")
+                    }
+                }
+            }
+
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                if (code == CLOSE_NOT_HOLDER) lastError = "the relay did not accept this phone's key ($code)"
+                if (code == CLOSE_TOO_SLOW) lastError = "the relay gave up waiting for this phone to sign in ($code)"
                 webSocket.close(1000, null)
                 dropped(webSocket)
             }
@@ -189,6 +216,11 @@ class WebSocketTransport(
 
     companion object {
         const val MAX_FRAME = 64 * 1024
+        private const val MSG_CHALLENGE: Byte = 0x01
+        private const val MSG_ANSWER: Byte = 0x02
+        private const val MSG_READY: Byte = 0x03
+        private const val CLOSE_NOT_HOLDER = 4401
+        private const val CLOSE_TOO_SLOW = 4408
         private const val MODE_BROADCAST: Byte = 0
         private const val MODE_TARGETED: Byte = 1
     }

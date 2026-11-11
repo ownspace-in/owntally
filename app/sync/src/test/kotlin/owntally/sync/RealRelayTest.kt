@@ -1,5 +1,7 @@
 package owntally.sync
 
+import kotlin.test.assertContentEquals
+import okio.ByteString.Companion.toByteString
 import java.net.ServerSocket
 import java.net.URL
 import kotlin.test.Test
@@ -24,8 +26,11 @@ import owntally.model.PublicKey
  */
 class RealRelayTest {
     private val room = GroupRoom(ByteArray(16) { (it + 1).toByte() })
-    private val alice = PublicKey(ByteArray(32) { 0xA1.toByte() })
-    private val bob = PublicKey(ByteArray(32) { 0xB2.toByte() })
+    private val seed0 = owntally.crypto.MasterSeed(ByteArray(64) { 8 })
+    private val aliceId = owntally.crypto.KeyDerivation.groupIdentity(seed0, 11)
+    private val bobId = owntally.crypto.KeyDerivation.groupIdentity(seed0, 12)
+    private val alice = aliceId.publicKey
+    private val bob = bobId.publicKey
 
     private fun startRelay(port: Int): Process {
         val process = ProcessBuilder(System.getenv("RELAY_BIN"), "-addr", "127.0.0.1:$port", "-connects-per-min", "1000")
@@ -50,8 +55,8 @@ class RealRelayTest {
         var relay = startRelay(port)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val url = "ws://127.0.0.1:$port/ws"
-        val a = WebSocketTransport(alice, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
-        val b = WebSocketTransport(bob, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val a = WebSocketTransport(aliceId, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val b = WebSocketTransport(bobId, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
         try {
             runBlocking {
                 withTimeout(60_000) {
@@ -96,8 +101,8 @@ class RealRelayTest {
         val ida = owntally.crypto.KeyDerivation.groupIdentity(seed, 0)
         val idb = owntally.crypto.KeyDerivation.groupIdentity(seed, 1)
         val group = owntally.model.GroupId(ByteArray(16) { 3 })
-        val ra = WebSocketTransport(ida.publicKey, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
-        val rb = WebSocketTransport(idb.publicKey, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val ra = WebSocketTransport(ida, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val rb = WebSocketTransport(idb, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
         val ta = SecureOverCarrier(ra, ida, scope)
         val tb = SecureOverCarrier(rb, idb, scope)
         fun env(n: Int, c: Long): ByteArray = owntally.crypto.EnvelopeSigning.sign(owntally.crypto.KeyDerivation.groupIdentity(seed, 100L + n), 1, group, 1, c, ByteArray(24), ByteArray(300) { (c + it).toByte() }).encode()
@@ -124,6 +129,52 @@ class RealRelayTest {
             }
         } finally {
             ra.close(); rb.close(); scope.cancel(); relay.destroy()
+        }
+    }
+
+    @Test
+    fun someoneWhoKnowsTheRoomAndAMembersKeyButNotTheirPrivateKeyIsRefusedAndCannotKnockTheMemberOff() {
+        assumeTrue(System.getenv("RELAY_BIN") != null, "RELAY_BIN is not set")
+        val port = ServerSocket(0).use { it.localPort }
+        val relay = startRelay(port)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val url = "ws://127.0.0.1:$port/ws"
+        val a = WebSocketTransport(aliceId, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val b = WebSocketTransport(bobId, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val http = okhttp3.OkHttpClient()
+        try {
+            runBlocking {
+                withTimeout(60_000) {
+                    coroutineScope {
+                        val received = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                        val listening = launch { a.incoming(room).collect { link -> launch { link.received.collect { received.send(it) } } } }
+                        a.status(room).first { it == RelayStatus.OPEN }
+                        b.status(room).first { it == RelayStatus.OPEN }
+
+                        // The impostor opens a socket naming alice's key, reads the challenge and answers with bytes that are not alice's signature.
+                        val closed = kotlinx.coroutines.CompletableDeferred<Int>()
+                        val request = okhttp3.Request.Builder().url("$url?room=${room.toString()}&id=${alice.toHex()}").build()
+                        val socket = http.newWebSocket(request, object : okhttp3.WebSocketListener() {
+                            override fun onMessage(webSocket: okhttp3.WebSocket, bytes: okio.ByteString) {
+                                if (bytes.size == 33 && bytes[0].toInt() == 1) webSocket.send((byteArrayOf(2) + ByteArray(64) { 7 }).toByteString())
+                            }
+                            override fun onClosing(webSocket: okhttp3.WebSocket, code: Int, reason: String) { closed.complete(code) }
+                            override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: okhttp3.Response?) { closed.complete(-1) }
+                        })
+                        assertEquals(4401, withTimeout(10_000) { closed.await() }, "the relay refuses the impostor with 4401")
+                        socket.cancel()
+
+                        // Alice was not replaced: her transport is still open and still hears bob.
+                        delay(300)
+                        assertEquals(RelayStatus.OPEN, a.status(room).value)
+                        b.broadcast(room, "still here".toByteArray())
+                        assertContentEquals("still here".toByteArray(), withTimeout(10_000) { received.receive() })
+                        listening.cancel()
+                    }
+                }
+            }
+        } finally {
+            a.close(); b.close(); scope.cancel(); relay.destroy(); http.dispatcher.executorService.shutdown()
         }
     }
 }

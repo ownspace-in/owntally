@@ -26,3 +26,10 @@ What a person must do because a test cannot. Tick each, with the date. The autom
 - [ ] **The privacy page** loads at `https://joinowntally.ownspace.in/privacy`, and the in-app Privacy screen says the same.
 - [ ] **Two real phones over mobile networks:** a sync in both directions through Iroh, and while a third device (or a script) opens an Iroh connection to a phone and sends nothing, the phone still accepts the others (F7's real-device check).
 - [ ] Read Iroh's release notes for the version in use (the vulnerability scan cannot see inside its Rust code).
+
+## Added for M12 (relay sign-in)
+- [ ] **Deploy the new relay and the new app together** (`relay/ws-relay/RUNBOOK.md`, "Updating to the version with sign-in"): build, copy, restart, run `go run ./tools/smoke` against it, then install the app on your phones. An app from before M12 is refused by the new relay (the relay path shows as not reachable; Iroh and the local network still work).
+- [ ] On a phone, open a group over the relay path only (Wi-Fi off, Iroh off if the debug switch allows) and sync with a friend: it works; `sudo journalctl -u ws-relay -n 5` shows `authfail=0` for your phones' connections.
+- [ ] Read `relay/ws-relay/auth.go` and `app/crypto/.../RelayAuth.kt` (small, security-relevant): the message layout in `docs/CRYPTO.md` section 7a must be the same in both.
+- [ ] The Go module's dependencies (`go.mod`) are not covered by `tools/check_vulnerabilities.py`; run `govulncheck ./...` in `relay/ws-relay` when you deploy (see the M12 result).
+
