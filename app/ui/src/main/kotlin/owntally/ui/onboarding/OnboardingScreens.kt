@@ -64,7 +64,7 @@ object OnboardingText {
     const val STEP = "Step 2 of 2"
     const val PHRASE_TITLE = "Save your recovery phrase"
     const val PHRASE_BODY = "These 12 words are your identity in every group. Keep them safe: they are the only proof that you are you. On a new phone, choose \"I already have a recovery phrase\" and type them to get your identity back."
-    const val PHRASE_WARNING = "Write these on paper, not in a notes app or a screenshot. Anyone with them can act as you in every group, and we can't recover them for you."
+    const val PHRASE_WARNING = "Write these on paper, not in a notes app or a screenshot. Anyone who has them can act as you in every group: with an invitation to one of your groups they get in as you and nobody has to approve them. If they leak, the only fix is a new phrase, and we can't recover them for you."
     const val WRITTEN = "I've written it down"
 
     const val CONFIRM_TITLE = "Check you wrote it down"
