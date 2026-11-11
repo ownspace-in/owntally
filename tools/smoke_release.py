@@ -176,8 +176,57 @@ def dump_log():
         print("  log:", l[:220])
 
 
+RESTORE_PHRASE = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  # a valid BIP39 test phrase, not anyone's
+
+
+def restore_flow(a):
+    """The shipped release build restored from a recovery phrase (M11): welcome, "I already have a recovery phrase", eleven words (told how many),
+    twelve words, then the Groups screen; a group is made and opened; the log holds no crash and none of the errors shrinking causes."""
+    signed = sign(a.apk)
+    adb("install", "-r", signed)
+    adb("shell", "pm", "clear", PKG)
+    adb("logcat", "-c")
+    scr = Screen()
+    adb("shell", "am", "start", "-n", ACTIVITY)
+    wait_for(scr, "the welcome screen", contains="Keep your data")
+    type_into(wait_for(scr, "the name field", text="For example, Asha"), "Rohan")
+    type_into(scr.refresh().find(text="+91 98765 43210"), "9876543210")
+    tap(scr.refresh().find(text="I already have a recovery phrase") or fail("no restore link on the welcome screen"))
+    wait_for(scr, "the restore screen", text="Restore with your recovery phrase")
+    shot("restore")
+    field = next((n for n in scr.refresh().nodes if n.get("class", "").endswith("EditText")), None) or fail("no field for the words")
+    type_into(field, " ".join(RESTORE_PHRASE.split()[:11]))
+    tap(wait_for(scr, "Restore", text="Restore"))
+    wait_for(scr, "the count message", contains="You entered 11")
+    ok("eleven words: told how many, still on the restore screen")
+    tap(next(n for n in scr.refresh().nodes if n.get("class", "").endswith("EditText")))
+    adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A")  # select everything in the field,
+    adb("shell", "input", "keyevent", "KEYCODE_DEL")  # delete it,
+    adb("shell", "input", "text", RESTORE_PHRASE.replace(" ", "%s"))  # and type all twelve words
+    hide_keyboard()
+    tap(wait_for(scr, "Restore", text="Restore"))
+    wait_for(scr, "the Groups screen", 40, text="New group")
+    shot("restored")
+    ok("twelve words: restored, on the Groups screen")
+    tap(scr.find(text="New group"))
+    wait_for(scr, "the group name label", text="Group name")
+    type_into(field_below(scr.refresh(), "Group name"), "Goa Trip")
+    tap(wait_for(scr, "Create group", text="Create group"))
+    wait_for(scr, "the group card", text="Goa Trip")
+    tap(scr.find(text="Goa Trip"))
+    wait_for(scr, "the group screen", text="You are the owner")
+    ok("a group was made and opened on the restored phone")
+    problems = log_problems()
+    if problems:
+        for l in problems[:15]: print("  log:", l[:220])
+        fail("the log holds crashes or the errors that shrinking causes")
+    ok("no crash and no shrinking error in the log")
+    print("PASS: the shipped release build restores from a recovery phrase")
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--restore", action="store_true", help="drive the restore-from-recovery-phrase path instead of a new first run")
     ap.add_argument("--apk", default="app/app/build/outputs/apk/release/app-release-unsigned.apk")
     ap.add_argument("--build", action="store_true", help="run ./gradlew :app:app:assembleRelease first")
     ap.add_argument("--screenshots", help="save a screenshot of each main screen into this folder (for looking at a theme)")
@@ -188,6 +237,8 @@ def main():
         subprocess.run(["./gradlew", ":app:app:assembleRelease"], check=True)
     if not os.path.exists(a.apk):
         raise SystemExit("no APK at " + a.apk + " (run with --build)")
+    if a.restore:
+        return restore_flow(a)
     signed = sign(a.apk)
     adb("install", "-r", signed)
     adb("shell", "pm", "clear", PKG)
