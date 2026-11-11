@@ -131,7 +131,7 @@ Restoring on a new phone:
 
 Limits:
 - If every member loses their phone, the group data is gone. The phrase does not back up expenses.
-- Anyone with the phrase can impersonate the user in every group. Keep it offline, not in notes apps or screenshots.
+- Anyone with the phrase can impersonate the user in every group. Since M11 that includes getting back into a group from any invitation to it, as the same member, with no approval, and reading its history. The only remedy is a new phrase (a new identity). Keep it offline, not in notes apps or screenshots. The phrase screen and the privacy text say so (R1).
 
 ## Profile and settling
 

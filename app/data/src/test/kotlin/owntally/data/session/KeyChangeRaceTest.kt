@@ -92,8 +92,11 @@ class KeyChangeRaceTest {
     @Test fun entriesWrittenUnderAKeyThatTheRulesRefusedAreSealedAgainSoEveryMemberReadsThem() {
         var raced = 0
         val variants = listOf<(World) -> Unit>({ w -> w.asha.session.cancelOffer() }, { w -> w.asha.session.offerOwnership(w.ben.key) })
-        repeat(6) { round ->
-            val w = race(replaceBy = variants[round % variants.size]) ?: return@repeat
+        // Each round makes a new group, whose keys are random since M11, so whether the race happens in a round is a coin flip: play rounds until it has
+        // been seen a few times (at most 60) instead of a fixed few, which failed about one run in sixty.
+        for (round in 0 until 60) {
+            if (raced >= 3) break
+            val w = race(replaceBy = variants[round % variants.size]) ?: continue
             val owners = w.all().map { it.view.state.owner }.toSet()
             assertEquals(1, owners.size, "every phone agrees who the owner is")
             val epochs = w.all().filter { it.key in w.asha.view.state.currentMembers }.map { it.view.state.epoch }.toSet()
@@ -113,8 +116,11 @@ class KeyChangeRaceTest {
     @Test fun entriesUnderLaterKeysThatOnlyTheRefusedPhoneStartedAreSealedAgainToo() {
         var raced = 0
         val variants = listOf<(World) -> Unit>({ w -> w.asha.session.cancelOffer() }, { w -> w.asha.session.offerOwnership(w.ben.key) })
-        repeat(6) { round ->
-            val w = race(extraRotationsByDev = 2, replaceBy = variants[round % variants.size]) ?: return@repeat
+        // Each round makes a new group, whose keys are random since M11, so whether the race happens in a round is a coin flip: play rounds until it has
+        // been seen a few times (at most 60) instead of a fixed few, which failed about one run in sixty.
+        for (round in 0 until 60) {
+            if (raced >= 3) break
+            val w = race(extraRotationsByDev = 2, replaceBy = variants[round % variants.size]) ?: continue
             val devIsOwnerInTheEnd = w.dev.view.state.owner == w.dev.key
             if (!devIsOwnerInTheEnd) {
                 for (p in listOf(w.asha, w.dev)) {
@@ -130,8 +136,11 @@ class KeyChangeRaceTest {
     @Test fun aPhoneThatStopsHalfWayThroughTheRepairDoesNotSealTheSameEntryTwice() {
         var twoVersions = 0
         val variants = listOf<(World) -> Unit>({ w -> w.asha.session.cancelOffer() }, { w -> w.asha.session.offerOwnership(w.ben.key) })
-        repeat(8) { round ->
-            val w = race(crashOnce = true, replaceBy = variants[round % variants.size]) ?: return@repeat
+        // Each round makes a new group, whose keys are random since M11, so whether the race happens in a round is a coin flip: play rounds until it has
+        // been seen a few times (at most 60) instead of a fixed few, which failed about one run in sixty.
+        for (round in 0 until 60) {
+            if (twoVersions >= 3) break
+            val w = race(crashOnce = true, replaceBy = variants[round % variants.size]) ?: continue
             val versions = w.dev.env.groups.rawEnvelopes(w.group).map { owntally.model.Envelope.decode(it) }.filter { it.author == w.dev.key }.groupBy { it.counter }.mapValues { it.value.size }
             assertTrue(versions.values.all { it <= 2 }, "an entry has its first envelope and at most one sealed again, not a third: $versions")
             if (versions.values.any { it == 2 }) twoVersions++

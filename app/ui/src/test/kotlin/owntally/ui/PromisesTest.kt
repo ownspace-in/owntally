@@ -52,4 +52,18 @@ class PromisesTest {
         assertTrue("recovery phrase" in note && "same member" in note && "no approval" in note && "not available" !in note, note)
         assertTrue("new member" in note, "without the phrase they join as a new member: $note")
     }
+
+    // R1 (docs/SECURITY_REVIEW.md section 6): since M11 the phrase is also a door into every group, and nothing but a new phrase closes it. Say so.
+    @Test fun theWarningOnThePhraseScreenSaysAGroupInvitationPlusThePhraseGetsInWithoutApprovalAndTheOnlyFixIsANewPhrase() {
+        val warning = Regex("""PHRASE_WARNING = "((?:[^"\\]|\\.)*)"""").find(text)!!.groupValues[1]
+        assertTrue("on paper" in warning && "act as you in every group" in warning, warning)
+        assertTrue("invitation" in warning && "nobody has to approve" in warning, "it must say that an invitation plus the phrase gets in with no approval: $warning")
+        assertTrue("only fix is a new phrase" in warning, "and that a new phrase is the only fix: $warning")
+        assertTrue("blocked" !in warning && "screenshot" in warning.lowercase(), warning)
+    }
+
+    @Test fun thePrivacyTextSaysTheSameAboutALeakedPhrase() {
+        val sentences = Regex("""RECOVERY_LEAK = "((?:[^"\\]|\\.)*)"""").find(text)!!.groupValues[1]
+        assertTrue("invitation" in sentences && "no approval" in sentences && "new phrase" in sentences, sentences)
+    }
 }

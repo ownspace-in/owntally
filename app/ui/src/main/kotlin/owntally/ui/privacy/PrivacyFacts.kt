@@ -18,6 +18,9 @@ object PrivacyFacts {
     const val PLACEHOLDER_MARK = "the owner fills this in before release"
 
     const val RELAY = "relay.ownspace.in"
+
+    /** What a leaked recovery phrase allows (R1, docs/SECURITY_REVIEW.md section 6): said here and on the phrase screen. */
+    const val RECOVERY_LEAK = "Anyone who has your 12 words and an invitation to one of your groups can rejoin it as you, with no approval, and read its history. If the words leak, the only fix is a new phrase, which is a new identity."
     const val PAGE = "https://joinowntally.ownspace.in/privacy"
 
     val sections: List<PrivacySection> = listOf(
@@ -76,6 +79,7 @@ object PrivacyFacts {
             listOf(
                 "Android may back up OwnTally's database to your Google account: the encrypted entries, and the name and phone number you gave when you set up OwnTally, which are kept there as plain text. The keys are never part of a backup, so a backup alone cannot read your groups.",
                 "If you lose your phone, the groups on it are gone unless other members still have them. Your 12-word recovery phrase is your identity: on a new phone you type it to get your identity back, and when a friend invites you again you rejoin each group as the same member, with no approval, and its history syncs from the other members. OwnTally does not keep the phrase or send it anywhere.",
+                RECOVERY_LEAK,
             ),
         ),
         PrivacySection("contact", "Questions", listOf("Write to $CONTACT.")),
