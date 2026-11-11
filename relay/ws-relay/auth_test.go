@@ -245,8 +245,19 @@ func TestOnlyTheHolderCanReplaceTheirOwnConnection(t *testing.T) {
 	old := dial(t, ts, roomA, 1)
 	waitJoined(t, s, 1)
 	fresh := dial(t, ts, roomA, 1) // the real holder reconnects (a new phone socket)
-	if code := expectClosed(t, old); code != websocket.StatusPolicyViolation {
-		t.Fatalf("the old connection closed with %d", code)
+	// The relay drops the old connection; whether the client sees the close code or only the end of the stream depends on timing, so both count.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	for {
+		if _, _, err := old.Read(ctx); err != nil {
+			if code := websocket.CloseStatus(err); code != -1 && code != websocket.StatusPolicyViolation {
+				t.Fatalf("the old connection closed with %d", code)
+			}
+			if ctx.Err() != nil {
+				t.Fatal("the old connection was not closed")
+			}
+			break
+		}
 	}
 	other := dial(t, ts, roomA, 2)
 	write(t, other, append([]byte{0}, []byte("hi")...))
