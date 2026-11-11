@@ -110,6 +110,16 @@ TLS 1.3 from the platform (Java's JSSE, Android's Conscrypt); no cryptography of
 
 **Small-order keys are refused everywhere (found in T6.8).** The Ed25519 verifier accepts a signature of zeros from a key of small order for about a quarter of all messages. Such a key belongs to nobody. `WeakKeys` holds the seven encodings (the list libsodium uses; the sign bit is ignored) and every check of a signature in the app (envelopes, join proofs, link proofs, TLS bindings) refuses them first.
 
+## 7a. Relay sign-in (M12, owner decision 10 Nov 2026; finding N3 of docs/SECURITY_REVIEW.md)
+
+The WebSocket relay (`relay/ws-relay`) forwards frames between the members in a room, stamping each frame with the sender's key. Until M12 it took that key from the address the client gave (`?id=`) and let a new connection with the same key replace the old one, so anyone who knew a room and a member's public key could knock that member off the relay or flood them. Now the relay admits a connection for a key only to the holder of that key, with a signed challenge:
+
+1. The relay sends `[0x01][nonce, 32 bytes]`, a fresh random nonce for this connection.
+2. The client answers `[0x02][signature, 64 bytes]`: an Ed25519 signature, by the member key named in `?id=`, over the ASCII label `owntally/v1/relay-auth`, **one byte for the length of the room**, the room bytes as given in `?room=`, the 32 bytes of the member key, and the nonce.
+3. The relay checks the signature with that key and sends `[0x03]` (ready), or closes the connection with the WebSocket close code **4401** (`not the holder of this key`; **4408** if nothing valid came within 5 seconds). Only then is the client in the room: before it the relay forwards nothing to it and nothing from it.
+
+Why each part is there: the label keeps a signature made for the relay from being taken for any other purpose (every other signature in the app has its own label); the nonce is new for every connection, so a recorded answer is useless on another connection; the room stops an answer being used in another room; the key is in the message so it cannot be moved to another key; the length byte keeps the room and the key from being shifted against each other. Small-order Ed25519 keys (the seven encodings of `WeakKeys`) are refused before the signature is looked at, as everywhere else. The relay uses its language's standard Ed25519 and random number generator and nothing of its own. The signature proves possession of the key to the relay only; end to end, the members still run TLS with member-bound certificates over the relay (section 7 of `docs/tasks/M7-internet-sync.md`, `SecureOverCarrier`), which does not change. Independent test vectors (`crypto_vectors.py`, `relayAuth`) are checked by both the app's tests and the relay's.
+
 ## 8. Never in logs
 
 Key and phrase types print as `[redacted]` in `toString`. Their bytes are copied out only by explicit calls. A test searches the output of every public type's `toString` for the secret bytes in hex and Base64.

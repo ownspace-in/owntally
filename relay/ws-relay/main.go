@@ -37,6 +37,9 @@ type server struct {
 	pingEvery      time.Duration
 	pongWait       time.Duration
 	connectsPerMin int
+	// How long a new connection has to prove it holds its key (M12). Tests shorten it.
+	authTimeout time.Duration
+	auth        authStats
 }
 
 func newServer(maxPerRoom int, trustProxy bool, connectsPerMin int) *server {
@@ -48,6 +51,7 @@ func newServer(maxPerRoom int, trustProxy bool, connectsPerMin int) *server {
 		pingEvery:      pingEvery,
 		pongWait:       pongWait,
 		connectsPerMin: connectsPerMin,
+		authTimeout:    defaultAuthTimeout,
 	}
 }
 
@@ -120,6 +124,10 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(maxFrame)
 
+	// M12: the client says which key it is; it is in the room only once it has proved it holds that key.
+	if !s.signIn(conn, roomBytes, id) {
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &client{id: id, send: make(chan []byte, sendQueue), conn: conn, cancel: cancel}
 	replaced, joined := s.hub.join(room, c)
@@ -224,8 +232,8 @@ func main() {
 	go func() {
 		for range time.Tick(time.Minute) {
 			rooms, clients := s.hub.counts()
-			log.Printf("stats rooms=%d clients=%d forwarded=%d dropped=%d",
-				rooms, clients, s.hub.forwarded.Load(), s.hub.dropped.Load())
+			log.Printf("stats rooms=%d clients=%d forwarded=%d dropped=%d authfail=%d",
+				rooms, clients, s.hub.forwarded.Load(), s.hub.dropped.Load(), s.auth.failed.Load())
 		}
 	}()
 

@@ -177,6 +177,29 @@ def join_vectors():
         "tlsBindingSignature": sign_label(host, b"owntally/v1/tls-binding", spki),
     }
 
+def relay_auth_message(room, key, nonce):
+    # docs/CRYPTO.md "Relay sign-in" (M12): label, the room's length as one byte, the room, the member key, the nonce.
+    return b"owntally/v1/relay-auth" + bytes([len(room)]) + room + key + nonce
+
+def relay_auth_vectors():
+    def sign(slot, room, nonce):
+        k = keys_for(slot)
+        return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(k["signSeed"])).sign(relay_auth_message(room, bytes.fromhex(k["signPub"]), nonce)).hex()
+    room16 = bytes(range(16)); room32 = bytes(range(0x40, 0x60)); nonce = bytes(range(0xA0, 0xC0)); other = bytes(range(0xC0, 0xE0))
+    pub = lambda s: keys_for(s)["signPub"]
+    good = sign(0, room16, nonce)
+    zero = bytes(32).hex(); identity = ("01" + "00" * 31)
+    return [
+        {"name": "good", "id": pub(0), "room": room16.hex(), "nonce": nonce.hex(), "signature": good, "valid": True},
+        {"name": "good-32-byte-room", "id": pub(255), "room": room32.hex(), "nonce": nonce.hex(), "signature": sign(255, room32, nonce), "valid": True},
+        {"name": "another-room", "id": pub(0), "room": room32[:16].hex(), "nonce": nonce.hex(), "signature": good, "valid": False},
+        {"name": "another-nonce-a-replay", "id": pub(0), "room": room16.hex(), "nonce": other.hex(), "signature": good, "valid": False},
+        {"name": "another-key-signed", "id": pub(0), "room": room16.hex(), "nonce": nonce.hex(), "signature": sign(1, room16, nonce), "valid": False},
+        {"name": "small-order-key-zero", "id": zero, "room": room16.hex(), "nonce": nonce.hex(), "signature": "00" * 64, "valid": False},
+        {"name": "small-order-key-identity", "id": identity, "room": room16.hex(), "nonce": nonce.hex(), "signature": identity + "00" * 32, "valid": False},
+        {"name": "short-signature", "id": pub(0), "room": room16.hex(), "nonce": nonce.hex(), "signature": good[:-2], "valid": False},
+    ]
+
 out = {
     "description": "Key derivation and signing vectors for docs/CRYPTO.md, from an independent implementation (Python cryptography + hashlib). The phrase is the well-known all-'abandon' test phrase; never use it for a real group.",
     "phrase": PHRASE, "seed": SEED.hex(),
@@ -197,6 +220,7 @@ out = {
         sealed_event(0, bytes([9]) * 16, 2, 1, bytes(range(32)), bytes(range(0x40, 0x58)), EXAMPLE_PAYLOAD),
     ],
     "join": join_vectors(),
+    "relayAuth": relay_auth_vectors(),
 }
 json.dump(out, open(sys.argv[1], "w"), indent=1)
 print(len(out["slots"]), len(out["envelopes"]), len(out["sealed"]), len(out["keyDeliveries"]), len(T), len(IT))

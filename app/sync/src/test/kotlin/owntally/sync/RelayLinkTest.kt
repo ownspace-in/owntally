@@ -132,7 +132,9 @@ class RelayLinkTest {
         val other = withTimeout(10_000) { incoming.first() }
         link.send(byteArrayOf(1)); assertEquals(1, withTimeout(5_000) { other.received.first() }[0].toInt())
         tamper = true
-        link.send(byteArrayOf(2, 2, 2, 2))
+        // The other end may already be closing the stream when the send finishes, so the send itself can fail ("the stream is closed"): what the test is
+        // about is what is delivered, not whether this call throws (found when it failed once in CI under load).
+        runCatching { link.send(byteArrayOf(2, 2, 2, 2)) }
         // The changed record is refused by TLS: nothing arrives, and the link ends rather than carry on with something altered.
         assertEquals(emptyList(), withTimeout(5_000) { other.received.toList() })
     }

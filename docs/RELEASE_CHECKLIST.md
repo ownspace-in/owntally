@@ -34,3 +34,8 @@ What a person must do because a test cannot. Tick each, with the date. The autom
 - [ ] Read `docs/SECURITY_REVIEW.md` section 6 (R1 to R6), above all **R1**: a leaked phrase lets anyone with an invitation into every group as you, without approval. Decide whether the app should say so in one sentence on the phrase screen.
 - [ ] The human review of the M11 files listed in that section (`KeySlots`, `GroupSession` key chaining, `JoinGroup.resolve`, `AppContainer.identityOf`, the restore screens).
 
+## Added for M12 (relay sign-in)
+- [ ] **Deploy the new relay and the new app together** (`relay/ws-relay/RUNBOOK.md`, "Updating to the version with sign-in"): build, copy, restart, run `go run ./tools/smoke` against it, then install the app on your phones. An app from before M12 is refused by the new relay (the relay path shows as not reachable; Iroh and the local network still work).
+- [ ] On a phone, open a group over the relay path only (Wi-Fi off, Iroh off if the debug switch allows) and sync with a friend: it works; `sudo journalctl -u ws-relay -n 5` shows `authfail=0` for your phones' connections.
+- [ ] Read `relay/ws-relay/auth.go` and `app/crypto/.../RelayAuth.kt` (small, security-relevant): the message layout in `docs/CRYPTO.md` section 7a must be the same in both.
+- [ ] The Go module's dependencies (`go.mod`) are not covered by `tools/check_vulnerabilities.py`; run `govulncheck ./...` in `relay/ws-relay` when you deploy (see the M12 result).

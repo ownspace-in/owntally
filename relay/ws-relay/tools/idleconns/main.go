@@ -3,13 +3,14 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/coder/websocket"
+	"github.com/ownspace-in/owntally/relay/ws-relay/tools/signin"
 )
 
 func main() {
@@ -21,10 +22,10 @@ func main() {
 	ctx := context.Background()
 	for i := 0; i < *n; i++ {
 		room := hex.EncodeToString(make([]byte, 16))
-		id := make([]byte, 32)
-		id[0], id[1] = byte(i>>8), byte(i)
-		room = fmt.Sprintf("%032x", i/20) // 20 clients per room
-		c, _, err := websocket.Dial(ctx, fmt.Sprintf("%s?room=%s&id=%s", *url, room, hex.EncodeToString(id)), nil)
+		seed := make([]byte, 32)
+		seed[0], seed[1] = byte(i>>8), byte(i)
+		room = fmt.Sprintf("%032x", i/20)                                    // 20 clients per room
+		c, err := signin.Dial(ctx, *url, room, ed25519.NewKeyFromSeed(seed)) // a real key for each: the relay checks (M12)
 		if err != nil {
 			log.Fatalf("conn %d: %v", i, err)
 		}

@@ -1,5 +1,7 @@
 // Command responder plays "phone B" for the M0 spike: it joins a room and answers the probe messages
 // that the spike app (or app/sync Probe) sends. It lets one phone be tested without a second phone.
+// RETIRED since M12: this is the responder of the M0 spike, which connected with a fixed id and no key. The relay now admits a connection only to the
+// holder of the key it names (docs/CRYPTO.md section 7a), and the spike app cannot sign, so this tool is refused. Kept for the record of docs/SPIKE_RESULTS.md.
 package main
 
 import (

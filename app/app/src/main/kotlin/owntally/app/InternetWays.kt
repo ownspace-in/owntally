@@ -31,7 +31,7 @@ class InternetWays(
     useRelay: Boolean = true,
 ) {
     private val iroh = if (useIroh) IrohTransport(IrohPortImpl(context, identity, relayHttpUrl), scope, IrohConfig()) else null
-    private val socket = if (useRelay) WebSocketTransport(identity.publicKey, relaySocketUrl, scope) else null
+    private val socket = if (useRelay) WebSocketTransport(identity, relaySocketUrl, scope) else null
     private val relay = socket?.let { SecureOverCarrier(it, identity, scope) }
 
     val transport: Transport = ChainTransport(scope, local, iroh, relay, chain)

@@ -153,6 +153,15 @@ The Iroh relay's own checks are in `relay/iroh-relay/RUNBOOK.md`. Also ask the s
 - nginx and certbot update through `apt`. Check renewal now and then with `sudo certbot renew --dry-run`.
 - Rebuild and redeploy the relay when Go publishes security fixes.
 
+### Updating to the version with sign-in (M12, 11 Nov 2026)
+
+This version admits a connection for a member key only to the holder of that key (docs/CRYPTO.md section 7a). There is **no optional mode**: a client that does not sign in is refused, so the relay and the app have to be updated together (decision D1 of docs/tasks/M12-relay-signin.md; nothing is released yet, so it is only your own phones).
+
+1. Build the new program (step 2) and copy it to the VM; run the smoke test from your laptop against the new program **after** it is running (step 6): the smoke tool signs in with keys it makes for itself.
+2. On the VM: `sudo install -m 0755 ~/ws-relay /usr/local/bin/ws-relay && sudo systemctl restart ws-relay`, then `sudo journalctl -u ws-relay -n 5 --no-pager` (the stats line now ends in `authfail=<count>`: connections refused because the client did not hold the key it named).
+3. Install the new app on your phones. Until you do, an old app build gets "Cannot reach the relay" on the relay path (Iroh and the local network are unaffected).
+4. To check from a phone's side: a second client naming one of your members' keys without holding it is refused (the Go test `TestAnImpostorCannotReplaceOrDisturbTheRealMember` does this against the program itself; the app's `RealRelayTest` does it with the app's code).
+
 ## 10. If something goes wrong
 
 | Symptom | Likely cause | What to do |
@@ -161,6 +170,9 @@ The Iroh relay's own checks are in `relay/iroh-relay/RUNBOOK.md`. Also ask the s
 | Certbot fails | DNS not yet pointing at the VM, port 80 closed, or the temporary config in 4a is not loaded | Fix, check `sudo nginx -t`, then run certbot again |
 | `502 Bad Gateway` from nginx | The relay is not running | `systemctl status ws-relay`, read `journalctl -u ws-relay` |
 | Smoke test says `400` or hangs on connect | nginx is not passing the upgrade headers | Compare the `/ws` block in `relay.ownspace.in.conf` with the repo |
+| Smoke test says `failed ... status 4401` or `not admitted` | The relay is an old build without sign-in, or the smoke tool is old | Rebuild both from the same commit (steps 2 and 6) |
+| Phones show the relay as not reachable, other ways work | The phone has an app build from before M12 (it does not sign in) | Install the current app |
+| `authfail` in the stats line keeps growing | Someone is connecting with keys they do not hold, or an old app is trying | Harmless to members (they are not affected); look at `journalctl` for the rate; the per-address limit applies |
 | Smoke test says `429` | Too many new connections from one address in a minute (the service file allows 300) | Wait a minute; if real phones are held back, raise `-connects-per-min` in the service file |
 | Clients get `503 room full` | A room already has 40 clients (the service file's limit; a group has at most 20 members) | Unusual: many stale members or someone abusing a room. Look at `journalctl -u ws-relay`; ask the owner before raising `-max-per-room` further |
 | Memory grows | Many stuck connections | Restart the service and report it; `MemoryMax=300M` in the unit protects the VM |

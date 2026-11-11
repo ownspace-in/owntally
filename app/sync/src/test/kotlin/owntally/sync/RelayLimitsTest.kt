@@ -55,8 +55,8 @@ class RelayLimitsTest {
         val url = "ws://127.0.0.1:$port/ws"
         val ida = KeyDerivation.groupIdentity(seed, 0); val idb = KeyDerivation.groupIdentity(seed, 1)
         val group = GroupId(ByteArray(16) { 3 }); val room = GroupRoom.fromGroupId(group.bytes())
-        val ra = WebSocketTransport(ida.publicKey, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
-        val rb = WebSocketTransport(idb.publicKey, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val ra = WebSocketTransport(ida, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
+        val rb = WebSocketTransport(idb, url, scope, backoffMillis = listOf(100), openTimeoutMillis = 5_000)
         val ta = SecureOverCarrier(ra, ida, scope); val tb = SecureOverCarrier(rb, idb, scope)
         // A realistic envelope: an expense with a description and a split is a few hundred bytes after signing and sealing.
         val authors = (1..5).map { KeyDerivation.groupIdentity(seed, 100L + it) }
@@ -96,7 +96,7 @@ class RelayLimitsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val url = "ws://127.0.0.1:$port/ws"
         val groups = 40
-        val phone = WebSocketTransport(key(1), url, scope, backoffMillis = listOf(1_000, 5_000, 30_000), openTimeoutMillis = 2_000)
+        val phone = WebSocketTransport(KeyDerivation.groupIdentity(seed, 1), url, scope, backoffMillis = listOf(1_000, 5_000, 30_000), openTimeoutMillis = 2_000)
         try {
             runBlocking {
                 withTimeout(150_000) {
@@ -126,7 +126,7 @@ class RelayLimitsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val url = "ws://127.0.0.1:$port/ws"
         val room = GroupRoom(ByteArray(16) { 9 })
-        val phones = (1..21).map { WebSocketTransport(key(it), url, scope, backoffMillis = listOf(200), openTimeoutMillis = 2_000) }
+        val phones = (1..21).map { WebSocketTransport(KeyDerivation.groupIdentity(seed, it.toLong()), url, scope, backoffMillis = listOf(200), openTimeoutMillis = 2_000) }
         try {
             runBlocking {
                 withTimeout(60_000) {
