@@ -42,6 +42,10 @@ class InMemoryEventStore : EventStore {
     private val rows = LinkedHashMap<GroupId, GroupRow>()
     private val entries = HashMap<GroupId, MutableList<Entry>>()
 
+    /** Test hook: how many times the stored envelopes of a group were read (F8: a stranger must not make a phone read a group's history). */
+    @Volatile
+    var envelopeReads = 0
+
     /** Test hook: the next [addGroup] fails as a database error would. */
     @Volatile
     var failNextAddGroup = false
@@ -73,7 +77,7 @@ class InMemoryEventStore : EventStore {
     }
 
     @Synchronized
-    override fun envelopes(groupId: GroupId): List<ByteArray> = entries[groupId].orEmpty().map { it.bytes.copyOf() }
+    override fun envelopes(groupId: GroupId): List<ByteArray> { envelopeReads++; return entries[groupId].orEmpty().map { it.bytes.copyOf() } }
 
     @Synchronized
     override fun deleteGroup(groupId: GroupId) {

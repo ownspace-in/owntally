@@ -94,6 +94,10 @@ private class FakeRelay(
 
     fun url() = server.url("/ws").toString().replace("http://", "ws://")
 
+    /** Sends a frame to one signed-in client as if the relay had forwarded it (F8 tests: many senders). */
+    fun push(room: String, id: String, frame: ByteArray) { rooms[room]?.get(id)?.send(frame.toByteString()) }
+    fun roomsAndIds() = rooms.mapValues { it.value.keys.toList() }
+
     /** Closes every socket from the relay side, like a restart would. */
     fun dropAll() {
         rooms.values.forEach { room -> room.values.forEach { it.close(1001, "restart") } }
@@ -286,5 +290,23 @@ class WebSocketTransportTest {
                 t.close(); scope.cancel()
             }
         }
+    }
+
+    // ---- F8: senders nobody asked for cannot make a transport keep links without limit ------------------------------------------------
+
+    @Test
+    fun aRoomKeepsLinksForOnlyAFewDozenSendersAndIgnoresTheRest() = withTransports { relay, a, _ ->
+        a.status(room).first { it == RelayStatus.OPEN }
+        val roomHex = relay.roomsAndIds().keys.first()
+        val id = relay.roomsAndIds().getValue(roomHex).first()
+        val links = Channel<owntally.sync.Link>(Channel.UNLIMITED)
+        val collector = launch { a.incoming(room).collect { links.send(it) } }
+        // 300 different senders, one frame each (the relay stamps frames with the sender's key; what a stranger with fresh keys can do since M12).
+        repeat(300) { n -> relay.push(roomHex, id, ByteArray(32) { _ -> (n % 250 + 1).toByte() }.also { it[1] = (n / 250).toByte() } + byteArrayOf(1)) }
+        delay(800)
+        collector.cancel()
+        var count = 0
+        while (links.tryReceive().isSuccess) count++
+        assertTrue(count in 1..WebSocketTransport.MAX_PEERS_PER_ROOM, "$count links were made for 300 senders (limit ${WebSocketTransport.MAX_PEERS_PER_ROOM})")
     }
 }

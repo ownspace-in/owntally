@@ -98,6 +98,7 @@ class IrohTransportTest {
         override fun incoming(): Flow<IncomingIroh> = accepted.receiveAsFlow()
         /** Someone who connects and never opens the stream (F7). */
         fun silentStranger(): Silent = Silent().also { accepted.trySend(it) }
+        fun offer(i: IncomingIroh) { accepted.trySend(i) }
         override suspend fun stop() { stopped = true; world.ports.remove(key) }
     }
 
@@ -271,5 +272,27 @@ class IrohTransportTest {
         delay(500)
         assertEquals(3, strangers.count { it.abandoned }, "two wait, the other three are dropped without waiting")
         assertEquals(2, strangers.count { it.opened })
+    }
+
+    // ---- F8: a flood of connections nobody reads is bounded, and the extra ones are closed ---------------------------------------------
+
+    private class CountingConnection(override val remote: PublicKey) : IrohConnection {
+        @Volatile var closed = false
+        override val isDirect = true
+        override suspend fun write(bytes: ByteArray) {}
+        override suspend fun readExact(n: Int): ByteArray = kotlinx.coroutines.awaitCancellation()
+        override suspend fun close() { closed = true }
+    }
+
+    @Test fun aFloodOfIncomingConnectionsNobodyIsReadingIsBoundedAndTheExtraOnesAreClosed() = run {
+        val pb = FakePort(b, world)
+        val flood = (1..300).map { CountingConnection(PublicKey(ByteArray(32) { _ -> (it % 250 + 1).toByte() })) }
+        flood.forEach { pb.offer(Ready(it)) }
+        val tb = IrohTransport(pb, scope, IrohConfig(maxPendingAccepts = 400))
+        tb.incoming(room) // starts listening; nobody collects the links
+        delay(1_000)
+        val queued = flood.count { !it.closed }
+        assertTrue(queued <= LinkQueue.INCOMING, "$queued connections are being kept for a reader that is not there (limit ${LinkQueue.INCOMING})")
+        assertTrue(flood.count { it.closed } >= 300 - LinkQueue.INCOMING, "the rest were closed, not queued for ever")
     }
 }

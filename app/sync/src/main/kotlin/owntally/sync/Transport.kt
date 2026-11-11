@@ -60,4 +60,10 @@ object LinkQueue {
 
     /** For transports that are called back by a library and cannot make the sender wait: frames there are at most 64 KB. */
     const val CALLBACK_CAPACITY = 256
+
+    /**
+     * How many new connections may wait for the code that takes them (F8). Connections come from outside, from anyone who knows a member's key, so a queue
+     * nobody reads must not grow: when it is full the new connection is closed. A real phone takes them as fast as they come.
+     */
+    const val INCOMING = 64
 }

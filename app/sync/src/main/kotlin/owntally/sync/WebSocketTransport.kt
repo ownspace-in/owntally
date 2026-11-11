@@ -73,7 +73,7 @@ class WebSocketTransport(
 
     private inner class RoomConnection(private val room: GroupRoom) {
         private val links = ConcurrentHashMap<PublicKey, RelayLink>()
-        private val inbound = Channel<Link>(Channel.UNLIMITED)
+        private val inbound = Channel<Link>(LinkQueue.INCOMING)
         val incoming: Flow<Link> = inbound.receiveAsFlow()
 
         private val _status = MutableStateFlow(RelayStatus.CONNECTING)
@@ -151,12 +151,15 @@ class WebSocketTransport(
         private fun dispatch(frame: ByteArray) {
             if (frame.size < KEY_SIZE) return
             val sender = PublicKey(frame.copyOfRange(0, KEY_SIZE))
+            // F8: a room keeps links for only so many different senders (a group has at most 20 members, and a few who have gone); frames from more
+            // are ignored, so keys made up by someone who is in the room cannot make this phone keep a link for each.
+            if (links.size >= MAX_PEERS_PER_ROOM && !links.containsKey(sender)) return
             var created = false
             val link = links.computeIfAbsent(sender) {
                 created = true
                 RelayLink(sender, this)
             }
-            if (created) inbound.trySend(link)
+            if (created && inbound.trySend(link).isFailure) { links.remove(sender); return } // nobody is taking new links: drop this one
             link.deliver(frame.copyOfRange(KEY_SIZE, frame.size))
         }
 
@@ -216,6 +219,7 @@ class WebSocketTransport(
 
     companion object {
         const val MAX_FRAME = 64 * 1024
+        const val MAX_PEERS_PER_ROOM = 64
         private const val MSG_CHALLENGE: Byte = 0x01
         private const val MSG_ANSWER: Byte = 0x02
         private const val MSG_READY: Byte = 0x03
