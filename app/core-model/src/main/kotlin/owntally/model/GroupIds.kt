@@ -20,6 +20,9 @@ object GroupIds {
         return GroupId(random + check(creator, random))
     }
 
+    /** The 8 random bytes that begin the id: from them the creator's key is derived again (M11, `KeySlots.creator`). */
+    fun randomPart(id: GroupId): ByteArray = id.bytes().copyOfRange(0, RANDOM)
+
     /** True if [id] was made for [creator]. */
     fun isCreatedBy(id: GroupId, creator: PublicKey): Boolean {
         val bytes = id.bytes()

@@ -37,6 +37,45 @@
    "signPub": "f2cd901c9263affcab0b7b5a62b8c4d9517ad9281f0f4d884923617f0760ed11",
    "encPriv": "e708d37c28f558f282889106d181ca9ee776bad8e4b653efade01272fe2b522b",
    "encPub": "ca6fb18a0160fa137f3b125526385e5c660b9e807d22646a426f626713e06f12"
+  },
+  {
+   "slot": 4294967296,
+   "signSeed": "41348b22d7e22934df76b580e208737876784508d72244e202b820099be168b5",
+   "signPub": "1571c6de84f302683d968c060450ff99369dbd72b39817143f802ca7ea045f0d",
+   "encPriv": "6cf239aea8c75be8cacea90981be94e2d1f6c0ce476d46016fbe684ad08153da",
+   "encPub": "d0f58021a98b4373f11a9d0494c1f13fab54403f5814dfb797dfaccf57f55e4f"
+  },
+  {
+   "slot": 4611686018427387903,
+   "signSeed": "d3aad7a11c4b90d1b8d0150fc7a4c7e733f5b9d6494f74b5fa412d9a65b93b2f",
+   "signPub": "2f5a6697149a0e9645de90293ce3051ef6d33c2d3c56d89bfd25034fe0a58fe5",
+   "encPriv": "3f43fe1a1eccf1cfa515ee312032a89e5e4fa966dd79c34b3c762404834525f5",
+   "encPub": "fff9a1a8b7551c523fab835a9f1b5029e5a281b350ee399fc9abd7c558123172"
+  }
+ ],
+ "slotNumbers": [
+  {
+   "kind": "member",
+   "groupId": "0102030405060708090a0b0c0d0e0f10",
+   "generation": 0,
+   "slot": 86051835139248934
+  },
+  {
+   "kind": "member",
+   "groupId": "0102030405060708090a0b0c0d0e0f10",
+   "generation": 1,
+   "slot": 938596637201651929
+  },
+  {
+   "kind": "member",
+   "groupId": "0102030405060708090a0b0c0d0e0f10",
+   "generation": 4294967295,
+   "slot": 3047046543863766475
+  },
+  {
+   "kind": "creator",
+   "random": "1011121314151617",
+   "slot": 53173500316782800
   }
  ],
  "envelopes": [

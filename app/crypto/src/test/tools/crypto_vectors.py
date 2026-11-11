@@ -19,6 +19,18 @@ def hkdf(ikm, salt, info, n):
         t = hmac.new(prk, t + info + bytes([i]), hashlib.sha256).digest(); out += t; i += 1
     return out[:n]
 
+def slot_number(label, data):
+    return int.from_bytes(hashlib.sha256(label + data).digest()[:8], "big") >> 2
+
+def slot_numbers():
+    gid = bytes(range(1, 17)); rnd = bytes(range(0x10, 0x18))
+    return [
+        {"kind": "member", "groupId": gid.hex(), "generation": 0, "slot": slot_number(b"owntally/v1/slot/member", gid + (0).to_bytes(4, "big"))},
+        {"kind": "member", "groupId": gid.hex(), "generation": 1, "slot": slot_number(b"owntally/v1/slot/member", gid + (1).to_bytes(4, "big"))},
+        {"kind": "member", "groupId": gid.hex(), "generation": 4294967295, "slot": slot_number(b"owntally/v1/slot/member", gid + (4294967295).to_bytes(4, "big"))},
+        {"kind": "creator", "random": rnd.hex(), "slot": slot_number(b"owntally/v1/slot/creator", rnd)},
+    ]
+
 def keys_for(slot):
     sign_seed = hkdf(SEED, b"owntally/v1", f"group/{slot}/sign".encode(), 32)
     enc_priv = hkdf(SEED, b"owntally/v1", f"group/{slot}/encrypt".encode(), 32)
@@ -168,7 +180,9 @@ def join_vectors():
 out = {
     "description": "Key derivation and signing vectors for docs/CRYPTO.md, from an independent implementation (Python cryptography + hashlib). The phrase is the well-known all-'abandon' test phrase; never use it for a real group.",
     "phrase": PHRASE, "seed": SEED.hex(),
-    "slots": [keys_for(n) for n in (0, 1, 2, 255, 4294967295)],
+    "slots": [keys_for(n) for n in (0, 1, 2, 255, 4294967295, 4294967296, 2**62 - 1)],
+    # docs/CRYPTO.md section 2, "which slot a group uses" (M11): the slot is the first 62 bits of SHA-256(label, group id [, generation]).
+    "slotNumbers": slot_numbers(),
     "envelopes": [
         signed_envelope(0, 1, bytes([9]) * 16, 2, 5, bytes(range(1, 25)), bytes(range(0xA0, 0xB4))),
         signed_envelope(1, 1, bytes([7]) * 16, 4294967295, 1099511627776, bytes(24), b""),

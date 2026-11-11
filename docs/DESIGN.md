@@ -124,7 +124,7 @@ First run:
 **Status (owner decision X1, 9 Nov 2026): restoring from the phrase is NOT built; it is milestone M11.** Until then the app, its How it works text, the privacy text and the store text say plainly that restoring is not available yet. What follows is the design for M11.
 
 Restoring on a new phone:
-1. Enter the 12 words. The master seed and all per-group keypairs are re-derived (group keys come from numbered slots of the seed; `MemberJoined` records which slot a group used).
+1. Enter the 12 words. The master seed is re-derived, and with it every per-group keypair: a group's key comes from the seed and the group's id (CRYPTO.md section 2), so the phone needs only the id, which an invitation carries.
 2. The phone does not yet know its groups or the group keys, because those are random and not derived from the seed.
 3. A member of each group sends a fresh ticket. Because the restored public key is already a member, the group recognises it without an approval step, sends the current group key encrypted to that key, and the phone syncs the full history.
 4. If the phrase is lost, the user rejoins as a new member and an admin links the new key to the old name.

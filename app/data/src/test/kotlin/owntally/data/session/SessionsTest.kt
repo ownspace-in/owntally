@@ -2,6 +2,7 @@ package owntally.data.session
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -214,7 +215,7 @@ class SessionsTest {
         assertEquals(2, restored.summaries.value.size)
         val slots = groups.listGroups().map { it.keySlot }
         assertEquals(slots.size, slots.toSet().size)
-        assertTrue(groups.listGroups().first { it.groupId == fresh }.keySlot > oldSlot, "a slot is never reused")
+        assertNotEquals(oldSlot, groups.listGroups().first { it.groupId == fresh }.keySlot, "a slot is never reused: it is made from the new group's own id")
         assertEquals(true, restored.summaries.value.first { it.groupId == fresh }.readable)
     }
 

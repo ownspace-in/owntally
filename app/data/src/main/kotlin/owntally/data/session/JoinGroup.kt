@@ -4,6 +4,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import owntally.crypto.Clock
+import owntally.crypto.KeySlots
 import owntally.crypto.Ticket
 import owntally.data.repo.GroupRepository
 import owntally.data.repo.IdentityRepository
@@ -125,7 +126,8 @@ class JoinGroup(
         val earlier = pending.get(ticket.groupId)
         if (earlier != null && earlier.state != PendingState.OPENED && earlier.ticketId.contentEquals(ticket.ticketId())) return OpenResult.Opened(earlier, PreviewState.FOUND)
 
-        val slot = earlier?.keySlot ?: identity.reserveSlot(groups.listGroups().map { it.keySlot } + pending.all().map { it.keySlot })
+        // A new join uses generation 0 of this group's member slots (M11, KeySlots); the next ones are for someone who left and comes back (T11.4).
+        val slot = earlier?.keySlot ?: KeySlots.member(ticket.groupId, 0)
         secrets.saveGroupKey(ticket.groupId, ticket.epoch, ticket.groupKey)
         val base = PendingJoin(
             ticket.groupId, ticket.hostId, ticket.ticketId(), slot, ticket.epoch, ticket.expiresAtSeconds, earlier?.name.orEmpty(), earlier?.phone.orEmpty(),

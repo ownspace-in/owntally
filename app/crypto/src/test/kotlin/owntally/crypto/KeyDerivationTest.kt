@@ -79,10 +79,11 @@ class KeyDerivationTest {
     }
 
     @Test
-    fun theSlotMustFitInThirtyTwoBits() {
+    fun theSlotMustFitInSixtyTwoBits() { // widened from 32 bits in M11 (D2: a slot is made from a group id, see KeySlots)
         assertFailsWith<IllegalArgumentException> { KeyDerivation.groupIdentity(seed, -1) }
-        assertFailsWith<IllegalArgumentException> { KeyDerivation.groupIdentity(seed, 4_294_967_296L) }
-        KeyDerivation.groupIdentity(seed, 4_294_967_295L)
+        assertFailsWith<IllegalArgumentException> { KeyDerivation.groupIdentity(seed, 1L shl 62) }
+        KeyDerivation.groupIdentity(seed, 4_294_967_296L)
+        KeyDerivation.groupIdentity(seed, (1L shl 62) - 1)
     }
 
     @Test

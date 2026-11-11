@@ -64,7 +64,7 @@ class GroupRepositoryTest {
         val second = env.groups.createGroup("Flat 4B")
         val list = env.groups.listGroups()
         assertEquals(listOf(first, second), list.map { it.groupId })
-        assertEquals(listOf(0L, 1L), list.map { it.keySlot })
+        assertEquals(listOf(first, second).map { owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(it)) }, list.map { it.keySlot }, "the slot is made from the group's id (M11), not counted")
         assertEquals(listOf(1_800_000_100L, 1_800_000_200L), list.map { it.createdAtSeconds })
     }
 
@@ -74,8 +74,8 @@ class GroupRepositoryTest {
         val b = env.groups.createGroup("B")
         assertNotEquals(state(a).owner, state(b).owner)
         val seed = (env.secrets.loadMasterSeed() as owntally.data.secrets.SecretLoad.Found).value
-        assertEquals(KeyDerivation.groupIdentity(seed, 0).publicKey, state(a).owner)
-        assertEquals(KeyDerivation.groupIdentity(seed, 1).publicKey, state(b).owner)
+        assertEquals(KeyDerivation.groupIdentity(seed, owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(a))).publicKey, state(a).owner)
+        assertEquals(KeyDerivation.groupIdentity(seed, owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(b))).publicKey, state(b).owner)
     }
 
     @Test
@@ -135,9 +135,9 @@ class GroupRepositoryTest {
         assertFailsWith<IllegalStateException> { env.groups.createGroup("Goa Trip") }
         assertEquals(emptyList(), env.groups.listGroups())
         assertEquals(emptyList(), env.blobs.list("key-"), "no orphan key is left behind")
-        // The failed attempt used up slot 0 (never reused, see below), so the next group takes slot 1.
+        // Nothing was used up: the next group is made from its own id as usual.
         val id = env.groups.createGroup("Goa Trip")
-        assertEquals(1L, env.groups.listGroups().single { it.groupId == id }.keySlot)
+        assertEquals(owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(id)), env.groups.listGroups().single { it.groupId == id }.keySlot)
     }
 
     @Test
@@ -146,7 +146,7 @@ class GroupRepositoryTest {
         try {
             val ids = (1..16).map { n -> pool.submit<GroupId> { env.groups.createGroup("Group $n") } }.map { it.get() }
             assertEquals(16, ids.toSet().size)
-            assertEquals((0L..15L).toList(), env.groups.listGroups().map { it.keySlot }.sorted())
+            assertEquals(16, env.groups.listGroups().map { it.keySlot }.toSet().size, "sixteen different keys")
         } finally {
             pool.shutdown()
         }
@@ -246,18 +246,39 @@ class GroupRepositoryTest {
     }
 
     @Test
-    fun aDeletedGroupsSlotIsNeverReusedEvenIfItWasTheHighest() {
-        // A reused slot would give the new group the same member key as the deleted one, and anyone who was in both could link them.
+    fun aDeletedGroupsKeyIsNotGivenToANewGroup() {
+        // The same member key in two groups would let anyone who was in both link them. A slot made from a random group id does not repeat.
         val a = env.groups.createGroup("A")
         val b = env.groups.createGroup("B")
         val keyOfB = state(b).owner
-        env.groups.deleteGroup(b) // the highest slot
+        env.groups.deleteGroup(b)
         val c = env.groups.createGroup("C")
-        assertEquals(2L, env.groups.listGroups().single { it.groupId == c }.keySlot)
         assertNotEquals(keyOfB, state(c).owner)
         env.groups.deleteGroup(a)
         val d = env.groups.createGroup("D")
-        assertEquals(3L, env.groups.listGroups().single { it.groupId == d }.keySlot)
+        assertNotEquals(state(c).owner, state(d).owner)
+    }
+
+    @Test
+    fun aPhoneRestoredFromTheSamePhraseFindsTheCreatorsKeyFromTheGroupIdAlone() {
+        val phrase = owntally.crypto.Bip39.fromEntropy(ByteArray(16) { 4 })
+        val old = TestEnv().also { it.identity.completeFirstRun(phrase, "Asha", "98765 43210") }
+        val id = old.groups.createGroup("Goa Trip")
+        val creatorKey = old.identity.groupIdentity(old.groups.group(id)!!.keySlot)!!.publicKey
+        // A new phone with the same phrase and nothing else: id in, key out, and the id vouches for it.
+        val restored = TestEnv().also { it.identity.completeFirstRun(phrase, "Asha", "98765 43210") }
+        val found = restored.identity.groupIdentity(owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(id)))!!
+        assertEquals(creatorKey, found.publicKey)
+        assertTrue(owntally.model.GroupIds.isCreatedBy(id, found.publicKey))
+        // Another person's phrase does not.
+        val other = TestEnv().also { it.identity.completeFirstRun(owntally.crypto.Bip39.fromEntropy(ByteArray(16) { 5 }), "Eve", "98765 43211") }
+        assertFalse(owntally.model.GroupIds.isCreatedBy(id, other.identity.groupIdentity(owntally.crypto.KeySlots.creator(owntally.model.GroupIds.randomPart(id)))!!.publicKey))
+    }
+
+    @Test
+    fun noCounterIsKeptAnyMore() {
+        env.groups.createGroup("A")
+        assertNull(env.settings.get("next_slot"))
     }
 
     @Test

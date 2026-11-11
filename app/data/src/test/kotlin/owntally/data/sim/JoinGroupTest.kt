@@ -105,6 +105,7 @@ class JoinGroupTest {
         val a = assertIs<OpenResult.Opened>(rohan().open(text)).join
         val b = assertIs<OpenResult.Opened>(rohan().open(text)).join
         assertEquals(a.keySlot, b.keySlot)
+        assertEquals(owntally.crypto.KeySlots.member(group, 0), a.keySlot, "a first join uses generation 0 of the member slots of this group")
     }
 
     @Test fun anInviteForAGroupAlreadyOnThisPhoneIsRecognised() = runTest {
