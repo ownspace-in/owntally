@@ -127,12 +127,12 @@ dependencies {
     implementation(project(":app:sync"))
     // Nearby Connections (same-room sync, M6): Google Play services' client library for it. It adds only ACCESS_NETWORK_STATE to the manifest and no
     // reporting library (checked on 8 Nov 2026); NetworkUseGuardTest allows this one Play services library and no other.
-    implementation("com.google.android.gms:play-services-nearby:19.3.0")
+    implementation("com.google.android.gms:play-services-nearby:19.5.1")
     // Iroh (decision I1/I2, M7): direct phone-to-phone connections with our relay as the home relay. MIT or Apache-2.0; a Rust library, so about 14 MB
     // for each phone architecture (see the ABI filter above) and the vulnerability check cannot see inside it (docs/tasks/M7-internet-sync.md, T7.4).
-    implementation("computer.iroh:iroh-android:1.1.0")
+    implementation("computer.iroh:iroh-android:1.2.0")
     // The background sync job (decision B1, M7): AndroidX WorkManager, Apache-2.0. It adds the permissions listed in ManifestRulesTest and runs only our worker.
-    implementation("androidx.work:work-runtime:2.11.1")
+    implementation("androidx.work:work-runtime:2.12.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
@@ -143,7 +143,7 @@ dependencies {
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.09.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation(kotlin("test"))
-    androidTestImplementation("androidx.work:work-testing:2.11.1")
+    androidTestImplementation("androidx.work:work-testing:2.12.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
