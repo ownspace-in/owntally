@@ -248,4 +248,31 @@ class KeyRotationTest {
         assertTrue(removal.id in state.epochStarts.values)
     }
 
+    // --- keys for a member who joins after a key change (R7, 12 Nov 2026): the host seals them over the join channel ------------------
+
+    @Test
+    fun aChainKeyOpensOnlyForItsRecipientSenderGroupAndEpochAndIsNeverARotationKey() {
+        val k = GroupKey(ByteArray(32) { 5 })
+        val sealed = KeyRotation.sealChainKey(a.publicKey, group, 1, k, b.encryptionKey) // epoch 1 is allowed here: it is the oldest key a joiner needs
+        assertEquals(k, KeyRotation.openChainKey(sealed, b, a.publicKey, group, 1))
+        assertNull(KeyRotation.openChainKey(sealed, KeyDerivation.groupIdentity(seed, 7), a.publicKey, group, 1), "another recipient")
+        assertNull(KeyRotation.openChainKey(sealed, b, b.publicKey, group, 1), "another sender")
+        assertNull(KeyRotation.openChainKey(sealed, b, a.publicKey, GroupId(ByteArray(16) { 8 }), 1), "another group")
+        assertNull(KeyRotation.openChainKey(sealed, b, a.publicKey, group, 2), "another epoch")
+        // Its own context: a chain key is not a rotation's sealed key and the other way round, even for the same recipient, sender, group and epoch.
+        assertNull(KeyRotation.open(sealed, b, a.publicKey, group, 1), "a chain key taken for a rotation key")
+        val rotation = KeyRotation.seal(a.publicKey, group, 2, k, mapOf(b.publicKey to b.encryptionKey)).getValue(b.publicKey)
+        assertNull(KeyRotation.openChainKey(rotation, b, a.publicKey, group, 2), "a rotation key taken for a chain key")
+    }
+
+    @Test
+    fun chainKeysSealedByAnIndependentRfc9180ImplementationOpen() {
+        val list = vectors.getValue("chainKeys").jsonArray.map { it.jsonObject }
+        assertTrue(list.size >= 2)
+        for (v in list) {
+            val who = KeyDerivation.groupIdentity(seed, v.getValue("recipientSlot").jsonPrimitive.long)
+            val opened = KeyRotation.openChainKey(SealedKey(v.getValue("sealed").jsonPrimitive.content.hex()), who, PublicKey.fromHex(v.getValue("sender").jsonPrimitive.content), GroupId(v.getValue("groupId").jsonPrimitive.content.hex()), v.getValue("epoch").jsonPrimitive.long)
+            assertEquals(GroupKey(v.getValue("groupKey").jsonPrimitive.content.hex()), opened, v.toString())
+        }
+    }
 }

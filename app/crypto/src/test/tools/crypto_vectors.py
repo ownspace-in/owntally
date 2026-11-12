@@ -106,6 +106,13 @@ def key_delivery(slot, sender_slot, group_id, epoch, group_key, eph_sk):
     sealed = hpke_seal(bytes.fromhex(keys_for(slot)["encPub"]), eph_sk, info, group_key)
     return {"recipientSlot": slot, "senderSlot": sender_slot, "sender": sender.hex(), "groupId": group_id.hex(), "epoch": epoch, "groupKey": group_key.hex(), "info": info.hex(), "sealed": sealed.hex()}
 
+def chain_key(slot, sender_slot, group_id, epoch, group_key, eph_sk):
+    # docs/CRYPTO.md section 6, keys for a member who joins after a key change (R7): the same HPKE as a key delivery, under its own context.
+    sender = bytes.fromhex(keys_for(sender_slot)["signPub"])
+    info = b"owntally/v1/key-chain" + sender + group_id + epoch.to_bytes(4, "big")
+    sealed = hpke_seal(bytes.fromhex(keys_for(slot)["encPub"]), eph_sk, info, group_key)
+    return {"recipientSlot": slot, "senderSlot": sender_slot, "sender": sender.hex(), "groupId": group_id.hex(), "epoch": epoch, "groupKey": group_key.hex(), "info": info.hex(), "sealed": sealed.hex()}
+
 # --- tickets, docs/CRYPTO.md section 7
 def ticket_bytes(ticket_id, host_id, group_id, epoch, group_key, expires, hint_bytes, version=1, hint_len=None):
     body = (bytes([version]) + ticket_id + host_id + group_id + epoch.to_bytes(4, "big") + group_key + expires.to_bytes(8, "big")
@@ -212,6 +219,10 @@ out = {
     ],
     "tickets": T,
     "invalidTickets": IT,
+    "chainKeys": [
+        chain_key(1, 0, bytes([9]) * 16, 1, bytes(range(32, 64)), bytes(range(0x10, 0x30))),
+        chain_key(2, 0, bytes([9]) * 16, 3, bytes(range(64, 96)), bytes(range(0x30, 0x50))),
+    ],
     "keyDeliveries": [
         key_delivery(1, 0, bytes([9]) * 16, 2, bytes(range(32, 64)), bytes([9]) * 32),
         key_delivery(2, 0, bytes([9]) * 16, 3, bytes(range(64, 96)), bytes([5]) * 32),

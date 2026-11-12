@@ -37,10 +37,12 @@ class JoinProtocolTest {
         override val group = this@JoinProtocolTest.group
         val submitted = ArrayList<JoinRequestBody>()
         val statuses = HashMap<PublicKey, JoinStatus>()
+        /** The keys the backend would hand an approved member (R7); a careless backend may list them for anyone, the host must still withhold them. */
+        val chain = HashMap<PublicKey, List<EpochKey>>()
         override fun issued(ticketId: ByteArray) = registry.find(ticketId)
         override fun consume(ticket: Ticket) = leaky || registry.accept(ticket)
         override fun submit(request: JoinRequestBody): Boolean { if (accepts) submitted += request; return accepts }
-        override fun statusOf(joinerKey: PublicKey) = statuses[joinerKey] ?: JoinStatus.UNKNOWN
+        override fun statusOf(joinerKey: PublicKey) = JoinStatusAnswer(statuses[joinerKey] ?: JoinStatus.UNKNOWN, chain[joinerKey].orEmpty())
         override fun preview() = GroupPreview("Goa Trip", "Asha", 5)
     }
 
@@ -176,7 +178,8 @@ class JoinProtocolTest {
                     a.send(JoinCodec.encode(JoinMessage.StatusHello(room, claimed)))
                     val c = JoinCodec.decode(a.received.first()) as JoinMessage.StatusChallenge
                     a.send(JoinCodec.encode(JoinMessage.StatusProof(JoinCrypto.signStatus(who, group, host.publicKey, c.nonce))))
-                    JoinStatusResult(null, (JoinCodec.decode(a.received.first()) as JoinMessage.StatusReply).status)
+                    val reply = JoinCodec.decode(a.received.first()) as JoinMessage.StatusReply
+                    JoinStatusResult(null, reply.status, reply.keys)
                 }
                 served.join(); r
             }
@@ -188,6 +191,23 @@ class JoinProtocolTest {
         assertEquals(JoinStatus.PENDING, ask(joiner).status)
         backend.statuses[joiner.publicKey] = JoinStatus.DECLINED
         assertEquals(JoinStatus.DECLINED, ask(joiner).status)
+
+        // R7: the group's epoch keys go with an APPROVED answer, to the holder of the key, and to nobody else whatever the backend lists.
+        val k1 = GroupKey(ByteArray(32) { 1 }); val k2 = GroupKey(ByteArray(32) { 2 })
+        backend.chain[joiner.publicKey] = listOf(
+            EpochKey(1, KeyRotation.sealChainKey(host.publicKey, group, 1, k1, joiner.encryptionKey)),
+            EpochKey(2, KeyRotation.sealChainKey(host.publicKey, group, 2, k2, joiner.encryptionKey)),
+        )
+        backend.chain[intruder.publicKey] = backend.chain.getValue(joiner.publicKey) // a careless backend
+        backend.statuses[joiner.publicKey] = JoinStatus.APPROVED
+        val approved = ask(joiner)
+        assertEquals(listOf(1L, 2L), approved.keys.map { it.epoch })
+        assertEquals(k1, KeyRotation.openChainKey(approved.keys[0].sealed, joiner, host.publicKey, group, 1))
+        assertEquals(k2, KeyRotation.openChainKey(approved.keys[1].sealed, joiner, host.publicKey, group, 2))
+        assertTrue(ask(intruder).keys.isEmpty(), "not approved: no keys, whatever the backend listed")
+        assertTrue(ask(intruder, claimed = joiner.publicKey).keys.isEmpty(), "claiming the approved key without holding it: no keys")
+        backend.statuses[joiner.publicKey] = JoinStatus.PENDING
+        assertTrue(ask(joiner).keys.isEmpty(), "the holder, but not approved yet: no keys")
     }
 
     @Test fun aSilentHostTimesOutTheJoinerAndASilentJoinerReleasesTheHost() = runTest {

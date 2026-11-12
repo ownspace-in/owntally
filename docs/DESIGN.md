@@ -126,7 +126,7 @@ First run:
 Restoring on a new phone:
 1. Enter the 12 words. The master seed is re-derived, and with it every per-group keypair: a group's key comes from the seed and the group's id (CRYPTO.md section 2), so the phone needs only the id, which an invitation carries.
 2. The phone does not yet know its groups or the group keys, because those are random and not derived from the seed.
-3. A member of each group sends a fresh ticket. The ticket names the group id, from which the phone derives the keys it used there (CRYPTO.md section 2); the host recognises one of them as a member, so there is no approval step, the ticket carries the current group key, the earlier keys follow from the `KeyLinked` events (key chaining, CRYPTO.md section 6), and the phone syncs the full history.
+3. A member of each group sends a fresh ticket. The ticket names the group id, from which the phone derives the keys it used there (CRYPTO.md section 2); the host recognises one of them as a member, so there is no approval step, the ticket carries the current group key, the host hands over the earlier epoch keys sealed to that member over the same join channel (CRYPTO.md section 6), and the phone syncs the full history.
 4. If the phrase is lost, the user rejoins as a new member and an admin links the new key to the old name.
 
 Limits:

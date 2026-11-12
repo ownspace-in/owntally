@@ -23,7 +23,26 @@ class JoinMessagesTest {
         JoinMessage.StatusChallenge(bytes(32, 7)),
         JoinMessage.StatusProof(bytes(64, 8)),
         JoinMessage.StatusReply(JoinStatus.PENDING), JoinMessage.StatusReply(JoinStatus.APPROVED),
+        // An approved member is also handed the group's epoch keys, sealed to them (R7).
+        JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(EpochKey(1, owntally.model.SealedKey(bytes(80, 9))), EpochKey(4_294_967_295L, owntally.model.SealedKey(bytes(1, 1))))),
     )
+
+    @Test fun keysTravelOnlyWithAnApprovedStatusAndWithinTheirLimits() {
+        val k = EpochKey(2, owntally.model.SealedKey(bytes(80, 9)))
+        for (s in listOf(JoinStatus.UNKNOWN, JoinStatus.PENDING, JoinStatus.DECLINED)) {
+            assertFailsWith<IllegalArgumentException>("$s") { JoinMessage.StatusReply(s, listOf(k)) }
+            // The same on the wire: an approved reply with keys, re-labelled pending, must not decode.
+            val b = JoinCodec.encode(JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(k)))
+            b[4] = s.code.toByte()
+            assertNull(JoinCodec.decode(b), "keys with status $s")
+        }
+        assertFailsWith<IllegalArgumentException> { EpochKey(0, owntally.model.SealedKey(bytes(80, 9))) }
+        assertFailsWith<IllegalArgumentException> { JoinMessage.StatusReply(JoinStatus.APPROVED, List(JoinLimits.MAX_CHAIN_KEYS + 1) { k }) }
+        val oversize = JoinCodec.encode(JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(k))).also { it[7] = 0x05; it[8] = 0x00 } // length 1280 > 1024
+        assertNull(JoinCodec.decode(oversize))
+        val countOff = JoinCodec.encode(JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(k))).also { it[6] = 2 } // says two keys, carries one
+        assertNull(JoinCodec.decode(countOff))
+    }
 
     @Test fun everyMessageRoundTripsAndOnlyExactBytesDecode() {
         for (m in all) {

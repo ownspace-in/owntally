@@ -28,7 +28,7 @@ time    = i64                  wall clock milliseconds
 body    = tag u8 | length u32 | content
 ```
 
-`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 17 are always known events; a body can only be unknown when its tag is 0 or 18 and above.
+`length` is the byte length of `content`. A decoder that does not know a `tag` skips `length` bytes and returns an unknown body (PROTOCOL.md section 3) that keeps its tag and its content, so old apps keep newer events in their log without understanding them and can write them back byte for byte. Tags 1 to 16 are always known events; a body can only be unknown when its tag is 0 or 17 and above. Tag 17 was `KeyLinked` for one day in M11 (11 Nov 2026) and was withdrawn before any release (finding R7); it is not reused, so a build of that day's event decodes as an unknown body.
 
 ### Example
 
@@ -65,7 +65,7 @@ That is 34 bytes. The same event always gives these 34 bytes.
 | 14 | `MemberRemoved` | `key` member, `u32` newEpoch, `map<key, sealedKey>` (see CRYPTO.md section 6; `sealedKey` is `u16` length and bytes) |
 | 15 | `KeyRotated` | `u32` newEpoch, `map<key, sealedKey>` |
 | 16 | `OwnershipDeclined` | empty (added 5 Nov 2026; an older decoder keeps it as an unknown body) |
-| 17 | `KeyLinked` | `u32` epoch, 32 bytes `previousKey` (added 11 Nov 2026, M11, decision D1: the key of epoch `epoch - 1`; see CRYPTO.md section 6; an older decoder keeps it as an unknown body) |
+| 17 | *retired* | was `KeyLinked` (M11, 11 Nov 2026), withdrawn on 12 Nov 2026 before any release (docs/SECURITY_REVIEW.md R7); never reused |
 
 `split` is `u8` kind then: kind 1 (`Equal`) `set<key>` participants; kind 2 (`Exact`) `map<key, i64>` amounts.
 
@@ -170,7 +170,7 @@ Status: **draft for the M6 plan (docs/tasks/M6-nearby-invites.md).** A person wh
 | 20 | `StatusHello` (joiner, later connection) | room `bytes(16)`, joiner key `bytes(32)` |
 | 21 | `StatusChallenge` (host) | nonce `bytes(32)` |
 | 22 | `StatusProof` (joiner) | signature `bytes(64)` |
-| 23 | `StatusReply` (host) | `u8`: 0 unknown, 1 pending, 2 approved, 3 declined |
+| 23 | `StatusReply` (host) | `u8`: 0 unknown, 1 pending, 2 approved, 3 declined; then `u16` count and count × (`u32` epoch, `u16` length, sealed key). The keys are the group's epoch keys, each sealed with HPKE to the member's `encryptionKey` under the context `owntally/v1/key-chain` (CRYPTO.md section 6); **count is 0 unless the status is approved** (a decoder refuses keys with any other status), and the host sends them only to the holder of a key that is a current member (R7, 12 Nov 2026). At most 4096 keys, each 1 to 1024 bytes. |
 | 24 | `PreviewRequest` (joiner, after the host's proof) | empty |
 | 25 | `Preview` (host) | `u16` length, sealed preview (decision J1) |
 

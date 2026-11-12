@@ -122,31 +122,6 @@ class GroupSession(
             if (result is AddResult.Added) dutyRotations++
             dutyBlockedAt = if (result is AddResult.Added) -1 else seen.size
         }
-        if (seen.size != linkBlockedAt) {
-            val before = seen.size
-            writeLinkForCurrentEpoch()
-            // Writing one adds an envelope; if nothing was written and the link is still missing, do not try again until something new arrives.
-            linkBlockedAt = if (replay(log).let { it.epoch >= 2 && it.epoch !in it.keyLinks && it.owner == me.publicKey }) before else -1
-        }
-    }
-
-    private var linkBlockedAt = -1
-
-    /**
-     * Owner only (M11, key chaining): the current epoch (from 2 on) has no accepted `KeyLinked` yet, for example because the phone stopped between
-     * the key change and the link. Writes it, from the keys this phone holds. A failure is not tried again until something new has arrived.
-     */
-    private fun writeLinkForCurrentEpoch() {
-        val st = replay(log)
-        if (st.groupId == null || st.owner != me.publicKey || st.epoch < 2 || st.epoch in st.keyLinks) return
-        val previous = ring[st.epoch - 1] ?: return
-        if (ring[st.epoch] == null) return
-        val bytes = previous.bytes()
-        try {
-            append(EventBody.KeyLinked(st.epoch, owntally.model.PreviousKey(bytes)))
-        } finally {
-            bytes.fill(0)
-        }
     }
 
     /** How many envelopes had been read when the owner's key change was last refused (-1: not blocked). */
@@ -279,9 +254,6 @@ class GroupSession(
             throw e
         }
         if (result !is AddResult.Added) secrets.deleteGroupKey(groupId, epoch)
-        // Key chaining (M11): the key change is followed at once by a link, written in the new epoch, that hands the key before to whoever holds
-        // the new one. If this fails the owner's phone writes it the next time it reads the group.
-        if (result is AddResult.Added) writeLinkForCurrentEpoch()
         // Take in the new key and publish, but do not run the owner's duty again from here: refresh() calls this, and a rotation the
         // rules keep refusing would otherwise call itself without end.
         sync()
@@ -414,7 +386,6 @@ class GroupSession(
                     changed = true
                 }
             }
-            if (adoptLinkedKeys()) changed = true
             if (dropRefusedOwnKeys(st)) changed = true
             if (!changed || (waiting.isEmpty() && rejected.isEmpty())) return
             // A key was replaced: what failed to open with the old one, and what was waiting, may open now.
@@ -424,34 +395,6 @@ class GroupSession(
             rejected.clear()
             process(again)
         }
-    }
-
-    /**
-     * Key chaining (M11): for every epoch whose key this phone holds but whose previous epoch's key it does not, look in the `KeyLinked` events
-     * this phone has opened for that epoch and take the previous key from the first that **opens an entry written in the previous epoch**.
-     * Authenticated decryption is the whole check: a wrong key, from a faulty or dishonest author, can only fail to open anything, and a key that
-     * does open an entry is the real one, so it does not matter who wrote the link. It cannot wait for replay to accept the link: a late member
-     * has no key for the epochs the link follows, so replay holds the link back until the key it carries has been taken. Each key found lets the
-     * link of the epoch below be read in turn.
-     */
-    private fun adoptLinkedKeys(): Boolean {
-        val links = log.allEvents().mapNotNull { e -> (e.body as? EventBody.KeyLinked)?.let { it.epoch to it.previousKey } }.groupBy({ it.first }, { it.second })
-        var any = false
-        for (epoch in links.keys.sortedDescending()) {
-            val below = epoch - 1
-            if (below < 1 || ring[epoch] == null || ring[below] != null) continue
-            for (previous in links.getValue(epoch)) {
-                val bytes = previous.bytes()
-                val candidate = try { GroupKey(bytes) } finally { bytes.fill(0) }
-                val probe = GroupKeyring(groupId).also { it.add(below, candidate) }
-                if ((waiting + rejected).none { it.epoch == below && EventSealing.open(it, probe) is OpenResult.Opened }) continue
-                secrets.saveGroupKey(groupId, below, candidate)
-                ring.add(below, candidate)
-                any = true
-                break
-            }
-        }
-        return any
     }
 
     /**

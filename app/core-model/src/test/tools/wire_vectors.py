@@ -47,7 +47,6 @@ def body(b):
     if t == "OwnershipDeclined": return 16, b""
     if t == "MemberRemoved": return 14, key(b["member"]) + u32(b["newEpoch"]) + kmap({k: sealed(v) for k, v in b["sealedKeys"].items()})
     if t == "KeyRotated": return 15, u32(b["newEpoch"]) + kmap({k: sealed(v) for k, v in b["sealedKeys"].items()})
-    if t == "KeyLinked": return 17, u32(b["epoch"]) + bytes.fromhex(b["previousKey"])
     if t == "Unknown": return b["tag"], bytes.fromhex(b["content"])
     raise SystemExit("unknown body " + t)
 
@@ -86,7 +85,6 @@ V = [
     ev("key-rotated", "asha", 15, {"asha": 14}, 1016, {"type": "KeyRotated", "newEpoch": 3, "sealedKeys": {"asha": SEALED(1), "ben": SEALED(2)}}),
     ev("unknown-tag", "asha", 16, {"asha": 15}, 1017, {"type": "Unknown", "tag": 200, "content": "0102"}),
     ev("unknown-tag-empty", "asha", 17, {"asha": 16}, 1018, {"type": "Unknown", "tag": 18, "content": ""}),
-    ev("key-linked", "asha", 18, {"asha": 17}, 1020, {"type": "KeyLinked", "epoch": 3, "previousKey": "ab" * 32}),
     ev("large-numbers", "fay", 1099511627777, {"fay": 1099511627776, "asha": 4294967296}, -1, {"type": "ExpenseAdded", "description": "Big", "total": 10000000000, "paidBy": "fay", "day": -1, "split": {"type": "Equal", "participants": ["fay"]}}),
     ev("unicode-name", "asha", 2, {"asha": 1}, 1019, {"type": "ProfileUpdated", "name": "अशोक ☃", "phone": "+91 98765"}),
 ]
