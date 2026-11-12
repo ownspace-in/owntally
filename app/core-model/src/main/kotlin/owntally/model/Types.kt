@@ -71,28 +71,6 @@ class EncryptionKey(bytes: ByteArray) : ByteId(bytes, 32) {
     }
 }
 
-/**
- * The key of an earlier epoch, carried by a `KeyLinked` event (M11, key chaining). A secret: [toString] shows nothing. The event is encrypted
- * under the next epoch's key, which is what protects it.
- */
-class PreviousKey(bytes: ByteArray) {
-    private val data: ByteArray
-
-    init {
-        require(bytes.size == SIZE) { "a key is $SIZE bytes" }
-        data = bytes.copyOf()
-    }
-
-    fun bytes(): ByteArray = data.copyOf()
-    override fun equals(other: Any?) = other is PreviousKey && java.security.MessageDigest.isEqual(data, other.data)
-    override fun hashCode() = 0
-    override fun toString() = "PreviousKey([redacted])"
-
-    companion object {
-        const val SIZE = 32
-    }
-}
-
 /** A group key sealed to one member (an HPKE output). Opaque to the core: only the crypto module opens it. */
 class SealedKey(bytes: ByteArray) {
     private val data: ByteArray

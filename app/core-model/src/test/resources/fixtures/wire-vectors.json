@@ -388,22 +388,6 @@
    "hex": "00010100000000000000000000000000000000000000000000000000000000000000000000000000001000000000000003fa1200000000"
   },
   {
-   "name": "key-linked",
-   "author": "asha",
-   "counter": 18,
-   "version": 1,
-   "after": {
-    "asha": 17
-   },
-   "time": 1020,
-   "body": {
-    "type": "KeyLinked",
-    "epoch": 3,
-    "previousKey": "abababababababababababababababababababababababababababababababab"
-   },
-   "hex": "00010100000000000000000000000000000000000000000000000000000000000000000000000000001100000000000003fc110000002400000003abababababababababababababababababababababababababababababababab"
-  },
-  {
    "name": "large-numbers",
    "author": "fay",
    "counter": 1099511627777,

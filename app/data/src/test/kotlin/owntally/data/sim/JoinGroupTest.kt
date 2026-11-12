@@ -244,7 +244,7 @@ class JoinGroupTest {
         // A host phone that lost its list: ask a backend with no requests.
         net.transportFor(asha.key)
         val lost = JoinRequests(InMemoryJoinRequestStore(), hostSessions, asha.env.clock)
-        assertEquals(owntally.sync.JoinStatus.UNKNOWN, GroupJoinBackend(group, asha.env.identity.groupIdentity(asha.slot)!!, invites, lost, hostSessions).statusOf(rohanEnv.identity.groupIdentity(pendingStore.get(group)!!.keySlot)!!.publicKey))
+        assertEquals(owntally.sync.JoinStatus.UNKNOWN, GroupJoinBackend(group, asha.env.identity.groupIdentity(asha.slot)!!, invites, lost, hostSessions).statusOf(rohanEnv.identity.groupIdentity(pendingStore.get(group)!!.keySlot)!!.publicKey).status)
         assertNotNull(fresh)
     }
 
@@ -294,11 +294,11 @@ class JoinGroupTest {
         val ben = SimDevice.joined(21, 1, "Ben", asha)
         val kate = SimDevice.joined(21, 2, "Kate", asha)
         val stranger = rohanEnv.identity.groupIdentity(40)!!.publicKey
-        assertEquals(owntally.sync.JoinStatus.APPROVED, b.statusOf(ben.key), "a member")
+        assertEquals(owntally.sync.JoinStatus.APPROVED, b.statusOf(ben.key).status, "a member")
         assertTrue(asha.session.removeMember(kate.key) is owntally.data.session.AddResult.Added)
         hostSessions.session(group).refresh() // the host phone's own session reads the log again after the change
-        assertEquals(owntally.sync.JoinStatus.DECLINED, b.statusOf(kate.key), "someone who was removed")
-        assertEquals(owntally.sync.JoinStatus.UNKNOWN, b.statusOf(stranger), "someone never heard of")
+        assertEquals(owntally.sync.JoinStatus.DECLINED, b.statusOf(kate.key).status, "someone who was removed")
+        assertEquals(owntally.sync.JoinStatus.UNKNOWN, b.statusOf(stranger).status, "someone never heard of")
     }
 
     @Test fun theHostRefusesARequestWithDetailsTheGroupWouldNotAcceptOrFromSomeoneAlreadyInside() = runTest {

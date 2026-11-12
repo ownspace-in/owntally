@@ -30,6 +30,9 @@ import owntally.model.SealedKey
 object KeyRotation {
     private val INFO_PREFIX = "owntally/v1/key-delivery".toByteArray()
 
+    /** The context of a chain key (R7, 12 Nov 2026): the same HPKE, but its own label, so a chain key and a rotation key never stand in for each other. */
+    private val CHAIN_PREFIX = "owntally/v1/key-chain".toByteArray()
+
     private val parameters: HpkeParameters by lazy {
         HybridConfig.register()
         HpkeParameters.builder()
@@ -41,8 +44,8 @@ object KeyRotation {
     }
 
     /** label, then the sender's public key (32 bytes), the group id (16 bytes) and the epoch (4 bytes, big-endian). */
-    private fun info(sender: PublicKey, groupId: GroupId, epoch: Long): ByteArray =
-        INFO_PREFIX + sender.bytes() + groupId.bytes() + byteArrayOf((epoch ushr 24).toByte(), (epoch ushr 16).toByte(), (epoch ushr 8).toByte(), epoch.toByte())
+    private fun info(sender: PublicKey, groupId: GroupId, epoch: Long, prefix: ByteArray = INFO_PREFIX): ByteArray =
+        prefix + sender.bytes() + groupId.bytes() + byteArrayOf((epoch ushr 24).toByte(), (epoch ushr 16).toByte(), (epoch ushr 8).toByte(), epoch.toByte())
 
     /** The current members (minus [excluding]) and the encryption key each published when they joined. */
     fun recipients(state: GroupState, excluding: Set<PublicKey> = emptySet()): Map<PublicKey, EncryptionKey> =
@@ -102,5 +105,40 @@ object KeyRotation {
         val key = open(mine, me, event.author, keyring.groupId, epoch) ?: return false
         keyring.add(epoch, key)
         return true
+    }
+
+    /**
+     * An earlier epoch's key for a member who joins after a key change, sealed by the host to the member's encryption key over the join channel
+     * (docs/CRYPTO.md section 6, R7). Its own context ([CHAIN_PREFIX]) so it is never accepted as a rotation key, or the other way round.
+     */
+    fun sealChainKey(sender: PublicKey, groupId: GroupId, epoch: Long, key: GroupKey, recipient: EncryptionKey): SealedKey {
+        require(epoch >= 1) { "an epoch starts at 1" }
+        val keyBytes = key.bytes()
+        try {
+            val publicKey = HpkePublicKey.create(parameters, Bytes.copyFrom(recipient.bytes()), null)
+            val encrypt = KeysetHandle.newBuilder().addEntry(KeysetHandle.importKey(publicKey).withFixedId(1).makePrimary()).build()
+                .getPrimitive(RegistryConfiguration.get(), HybridEncrypt::class.java)
+            return SealedKey(encrypt.encrypt(keyBytes, info(sender, groupId, epoch, CHAIN_PREFIX)))
+        } finally {
+            keyBytes.fill(0)
+        }
+    }
+
+    /** The chain key, or null if it was not sealed to [me] by [sender] for this group and epoch. */
+    fun openChainKey(sealed: SealedKey, me: GroupIdentity, sender: PublicKey, groupId: GroupId, epoch: Long): GroupKey? {
+        val privateBytes = me.encryptionPrivateKey()
+        return try {
+            val publicKey = HpkePublicKey.create(parameters, Bytes.copyFrom(X25519.publicFromPrivate(privateBytes)), null)
+            val privateKey = HpkePrivateKey.create(publicKey, SecretBytes.copyFrom(privateBytes, InsecureSecretKeyAccess.get()))
+            val decrypt = KeysetHandle.newBuilder().addEntry(KeysetHandle.importKey(privateKey).withFixedId(1).makePrimary()).build()
+                .getPrimitive(RegistryConfiguration.get(), HybridDecrypt::class.java)
+            GroupKey(decrypt.decrypt(sealed.bytes(), info(sender, groupId, epoch, CHAIN_PREFIX)))
+        } catch (e: GeneralSecurityException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        } finally {
+            privateBytes.fill(0)
+        }
     }
 }

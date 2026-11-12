@@ -15,6 +15,8 @@ object JoinLimits {
     const val MAX_PHONE_BYTES = 64
     const val MAX_SEALED_BYTES = 1024
     const val MAX_GROUP_NAME_BYTES = 240
+    /** The most epoch keys one answer carries (a group has at most a few dozen key changes; the rest is a bound against abuse). */
+    const val MAX_CHAIN_KEYS = 4096
 
 }
 
@@ -104,6 +106,17 @@ class GroupPreview(val groupName: String, val ownerName: String, val memberCount
     }
 }
 
+/** One earlier epoch's key, sealed to the member it is for (docs/CRYPTO.md section 6; R7). Only an approved member is ever sent any. */
+class EpochKey(val epoch: Long, val sealed: owntally.model.SealedKey) {
+    init {
+        require(epoch in 1..0xFFFF_FFFFL) { "an epoch starts at 1 and fits 32 bits" }
+        require(sealed.bytes().size in 1..JoinLimits.MAX_SEALED_BYTES) { "a sealed key is 1 to ${JoinLimits.MAX_SEALED_BYTES} bytes here" }
+    }
+}
+
+/** What the host answers about a joiner: its status, and for an approved member the group's epoch keys sealed to that member. */
+class JoinStatusAnswer(val status: JoinStatus, val keys: List<EpochKey> = emptyList())
+
 sealed class JoinMessage {
     /** The joiner opens: the group's room and the ticket's id (not the ticket: the group key never leaves the joiner's phone). */
     class Hello(val room: GroupRoom, ticketId: ByteArray) : JoinMessage() {
@@ -146,7 +159,16 @@ sealed class JoinMessage {
         val signature: ByteArray = signature.copyOf()
         init { require(this.signature.size == JoinLimits.SIGNATURE_SIZE) { "wrong size" } }
     }
-    data class StatusReply(val status: JoinStatus) : JoinMessage()
+    /** The host's answer. [keys] are present only with [JoinStatus.APPROVED] (checked here and on the wire). */
+    class StatusReply(val status: JoinStatus, keys: List<EpochKey> = emptyList()) : JoinMessage() {
+        val keys: List<EpochKey> = keys.toList()
+        init {
+            require(this.keys.isEmpty() || status == JoinStatus.APPROVED) { "keys are only sent to an approved member" }
+            require(this.keys.size <= JoinLimits.MAX_CHAIN_KEYS) { "at most ${JoinLimits.MAX_CHAIN_KEYS} keys" }
+        }
+        override fun equals(other: Any?) = other is StatusReply && status == other.status && keys.map { it.epoch to it.sealed.bytes().toList() } == other.keys.map { it.epoch to it.sealed.bytes().toList() }
+        override fun hashCode() = status.hashCode()
+    }
 }
 
 /** Bytes of the join messages. Same two-byte start and version as the sync messages, types from 16, so one first byte tells them apart. */
@@ -177,7 +199,16 @@ object JoinCodec {
             is JoinMessage.StatusHello -> { out.write(T_STATUS_HELLO); out.write(m.room.id); out.write(m.joinerKey.bytes()) }
             is JoinMessage.StatusChallenge -> { out.write(T_STATUS_CHALLENGE); out.write(m.nonce) }
             is JoinMessage.StatusProof -> { out.write(T_STATUS_PROOF); out.write(m.signature) }
-            is JoinMessage.StatusReply -> { out.write(T_STATUS_REPLY); out.write(m.status.code) }
+            is JoinMessage.StatusReply -> {
+                out.write(T_STATUS_REPLY); out.write(m.status.code)
+                out.write(ByteBuffer.allocate(2).putShort(m.keys.size.toShort()).array())
+                for (k in m.keys) {
+                    out.write(ByteBuffer.allocate(4).putInt(k.epoch.toInt()).array())
+                    val s = k.sealed.bytes()
+                    out.write(ByteBuffer.allocate(2).putShort(s.size.toShort()).array())
+                    out.write(s)
+                }
+            }
             JoinMessage.PreviewRequest -> out.write(T_PREVIEW_REQUEST)
             is JoinMessage.Preview -> { out.write(T_PREVIEW); out.write(ByteBuffer.allocate(2).putShort(m.sealed.size.toShort()).array()); out.write(m.sealed) }
         }
@@ -202,7 +233,22 @@ object JoinCodec {
                 T_STATUS_HELLO -> { val r = take(16); val k = take(32); if (r == null || k == null) null else JoinMessage.StatusHello(GroupRoom(r), PublicKey(k)) }
                 T_STATUS_CHALLENGE -> take(JoinLimits.NONCE_SIZE)?.let { JoinMessage.StatusChallenge(it) }
                 T_STATUS_PROOF -> take(JoinLimits.SIGNATURE_SIZE)?.let { JoinMessage.StatusProof(it) }
-                T_STATUS_REPLY -> take(1)?.let { c -> JoinStatus.fromCode(c[0].toInt() and 0xff)?.let { JoinMessage.StatusReply(it) } }
+                T_STATUS_REPLY -> {
+                    val status = take(1)?.let { JoinStatus.fromCode(it[0].toInt() and 0xff) }
+                    val count = take(2)?.let { ((it[0].toInt() and 0xff) shl 8) or (it[1].toInt() and 0xff) }
+                    if (status == null || count == null) null else {
+                        val keys = ArrayList<EpochKey>(count)
+                        var ok = true
+                        repeat(count) {
+                            if (!ok) return@repeat
+                            val e = take(4)?.let { ByteBuffer.wrap(it).int.toLong() and 0xFFFF_FFFFL }
+                            val len = take(2)?.let { ((it[0].toInt() and 0xff) shl 8) or (it[1].toInt() and 0xff) }
+                            val sealed = len?.let { take(it) }
+                            if (e == null || sealed == null) ok = false else keys += EpochKey(e, owntally.model.SealedKey(sealed))
+                        }
+                        if (!ok) null else JoinMessage.StatusReply(status, keys)
+                    }
+                }
                 T_PREVIEW_REQUEST -> JoinMessage.PreviewRequest
                 T_PREVIEW -> {
                     val len = take(2)?.let { ((it[0].toInt() and 0xff) shl 8) or (it[1].toInt() and 0xff) }

@@ -29,7 +29,7 @@ interface JoinHostBackend {
     /** Keeps the request for the host's person to approve or decline. False if it cannot be kept (for example the person is already a member). */
     fun submit(request: JoinRequestBody): Boolean
 
-    fun statusOf(joinerKey: PublicKey): JoinStatus
+    fun statusOf(joinerKey: PublicKey): JoinStatusAnswer
 
     /** What the group looks like to someone invited (decision J1): its name, the owner's name and how many people are in it. */
     fun preview(): GroupPreview
@@ -97,7 +97,8 @@ class JoinHost(
                 if (!send(link, JoinMessage.StatusChallenge(nonce))) return
                 val proof = next(inbox) as? JoinMessage.StatusProof ?: return
                 val ok = JoinCrypto.verifyStatus(first.joinerKey, backend.group, backend.host.publicKey, nonce, proof.signature)
-                send(link, JoinMessage.StatusReply(if (ok) backend.statusOf(first.joinerKey) else JoinStatus.UNKNOWN))
+                val answer = if (ok) backend.statusOf(first.joinerKey) else JoinStatusAnswer(JoinStatus.UNKNOWN)
+                send(link, JoinMessage.StatusReply(answer.status, if (answer.status == JoinStatus.APPROVED) answer.keys else emptyList()))
             }
             else -> return
         }
@@ -130,7 +131,7 @@ enum class JoinOutcome {
     TIMED_OUT,
 }
 
-class JoinStatusResult(val outcome: JoinOutcome?, val status: JoinStatus?)
+class JoinStatusResult(val outcome: JoinOutcome?, val status: JoinStatus?, val keys: List<EpochKey> = emptyList())
 
 /** What opening an invite found out: the group's description, or why not ([outcome] is REFUSED for a ticket that no longer works). */
 class JoinPreviewResult(val outcome: JoinOutcome?, val preview: GroupPreview?)
@@ -217,7 +218,7 @@ class JoinClient(
             val challenge = next() as? JoinMessage.StatusChallenge ?: throw Ended(JoinOutcome.REFUSED)
             send(JoinMessage.StatusProof(JoinCrypto.signStatus(identity, ticket.groupId, ticket.hostId, challenge.nonce)))
             val reply = next() as? JoinMessage.StatusReply ?: throw Ended(JoinOutcome.REFUSED)
-            JoinStatusResult(null, reply.status)
+            JoinStatusResult(null, reply.status, reply.keys)
         }
     } catch (e: Ended) {
         JoinStatusResult(e.outcome, null)

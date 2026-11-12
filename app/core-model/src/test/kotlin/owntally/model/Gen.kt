@@ -32,7 +32,7 @@ fun randomAnyEvent(rnd: Random): Event {
     fun phone() = listOf("98765 43210", "+91 98765 00002", "12345").random(rnd)
     fun sealedMap() = keys.shuffled(rnd).take(rnd.nextInt(0, 7)).associateWith { SealedKey(ByteArray(rnd.nextInt(1, 100)) { rnd.nextInt(256).toByte() }) }
     fun id() = EventId(k(), rnd.nextLong(1, 1_000_000_000_000L))
-    val body: EventBody = when (rnd.nextInt(18)) {
+    val body: EventBody = when (rnd.nextInt(17)) {
         0 -> EventBody.GroupCreated(GroupId(ByteArray(16) { rnd.nextInt(256).toByte() }), name(), listOf("INR", "USD", "JPY").random(rnd), enc())
         1 -> EventBody.MemberJoined(k(), enc(), name(), phone())
         2 -> EventBody.ProfileUpdated(name(), phone())
@@ -54,8 +54,7 @@ fun randomAnyEvent(rnd: Random): Event {
         13 -> EventBody.MemberRemoved(k(), rnd.nextLong(1, 0xFFFF_FFFFL), sealedMap())
         14 -> EventBody.KeyRotated(rnd.nextLong(1, 0xFFFF_FFFFL), sealedMap())
         15 -> EventBody.OwnershipDeclined
-        16 -> EventBody.KeyLinked(rnd.nextLong(2, 0xFFFF_FFFFL), PreviousKey(ByteArray(32) { rnd.nextInt(256).toByte() }))
-        else -> EventBody.Unknown(listOf(0, 18, 19, 200, 255).random(rnd), ByteArray(rnd.nextInt(0, 30)) { rnd.nextInt(256).toByte() })
+        else -> EventBody.Unknown(listOf(0, 17, 18, 200, 255).random(rnd), ByteArray(rnd.nextInt(0, 30)) { rnd.nextInt(256).toByte() })
     }
     val author = k()
     val counter = if (rnd.nextBoolean()) rnd.nextLong(1, 20) else rnd.nextLong(1, Long.MAX_VALUE / 2)

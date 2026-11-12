@@ -7,9 +7,14 @@ import owntally.model.EventBody
 import owntally.model.GroupId
 import owntally.model.PublicKey
 import owntally.sync.GroupPreview
+import owntally.crypto.KeyRotation
+import owntally.model.Member
+import owntally.sync.EpochKey
 import owntally.sync.JoinHostBackend
+import owntally.sync.JoinLimits
 import owntally.sync.JoinRequestBody
 import owntally.sync.JoinStatus
+import owntally.sync.JoinStatusAnswer
 
 /**
  * What a host phone gives the join protocol for one group (M6, T6.5 and T6.6): its tickets, the join requests list, and what the group
@@ -32,14 +37,28 @@ class GroupJoinBackend(
         return joinRequests.receive(group, request.joinerKey, request.encryptionKey, request.name.trim(), request.phone.trim()) != ReceiveResult.AlreadyMember
     }
 
-    override fun statusOf(joinerKey: PublicKey): JoinStatus {
+    /**
+     * An approved member is sent every epoch key this phone holds, each sealed to that member's encryption key (R7: the joiner trusts the host for
+     * these exactly as for the current key in the ticket). Anyone else gets only a status.
+     */
+    override fun statusOf(joinerKey: PublicKey): JoinStatusAnswer {
         val state = sessions.session(group).view.value.state
-        state.members[joinerKey]?.let { return if (it.removed) JoinStatus.DECLINED else JoinStatus.APPROVED }
-        return when (joinRequests.stateOf(group, joinerKey)) {
+        state.members[joinerKey]?.let { member ->
+            return if (member.removed) JoinStatusAnswer(JoinStatus.DECLINED) else JoinStatusAnswer(JoinStatus.APPROVED, chainKeysFor(member))
+        }
+        val status = when (joinRequests.stateOf(group, joinerKey)) {
             JoinState.WAITING -> JoinStatus.PENDING
             JoinState.APPROVED -> JoinStatus.APPROVED
             JoinState.DECLINED -> JoinStatus.DECLINED
             null -> JoinStatus.UNKNOWN
+        }
+        return JoinStatusAnswer(status)
+    }
+
+    private fun chainKeysFor(member: Member): List<EpochKey> {
+        val keyring = sessions.epochKeys(group)
+        return keyring.epochs().take(JoinLimits.MAX_CHAIN_KEYS).map { epoch ->
+            EpochKey(epoch, KeyRotation.sealChainKey(host.publicKey, group, epoch, keyring[epoch]!!, member.encryptionKey))
         }
     }
 
