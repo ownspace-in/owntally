@@ -1,5 +1,6 @@
 package owntally.data.session
 
+import owntally.crypto.GroupKeyring
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import owntally.crypto.Clock
@@ -56,6 +57,10 @@ class Sessions(
     private val clock: Clock,
     private val settings: SettingsStore,
 ) {
+
+    /** The epoch keys this phone holds for [group] (the join host seals them to approved members, R7). */
+    fun epochKeys(group: GroupId): GroupKeyring = secrets.loadKeyring(group).keyring
+
     private val sessions = LinkedHashMap<GroupId, GroupSession>()
     private val mutableSummaries = MutableStateFlow<List<GroupSummary>>(emptyList())
     private var batching = false

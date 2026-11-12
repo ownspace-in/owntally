@@ -1,5 +1,8 @@
 package owntally.data.session
 
+import owntally.sync.JoinStatusResult
+import owntally.sync.EpochKey
+import owntally.crypto.KeyRotation
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
@@ -133,8 +136,8 @@ class JoinGroup(
 
     /** What asking the host about this phone's candidate keys for a group found (M11, docs/CRYPTO.md section 2). */
     private sealed class Resolution(val slot: Long) {
-        /** The host knows this key as a member: a restored phone. */
-        class Member(slot: Long) : Resolution(slot)
+        /** The host knows this key as a member: a restored phone. [keys] are the epoch keys the host sent with its approval (R7). */
+        class Member(slot: Long, val keys: List<EpochKey>) : Resolution(slot)
 
         /** Nobody the host knows has used this key: it is the one to ask to join with. */
         class Free(slot: Long) : Resolution(slot)
@@ -156,13 +159,14 @@ class JoinGroup(
             val me = identity.groupIdentity(slot) ?: return null
             if (slot == KeySlots.creator(GroupIds.randomPart(group)) && !GroupIds.isCreatedBy(group, me.publicKey)) continue // not this group's creator
             val link = connect(group, slot, ticket.hostId) ?: return null
-            val status = try {
-                JoinClient(ticket, me, "", "").status(link).status
+            val answer = try {
+                JoinClient(ticket, me, "", "").status(link)
             } finally {
                 runCatching { link.close() }
-            } ?: return null
+            }
+            val status = answer.status ?: return null
             when (status) {
-                JoinStatus.APPROVED -> return Resolution.Member(slot)
+                JoinStatus.APPROVED -> return Resolution.Member(slot, answer.keys)
                 JoinStatus.UNKNOWN, JoinStatus.PENDING -> return Resolution.Free(slot)
                 JoinStatus.DECLINED -> continue
             }
@@ -171,8 +175,9 @@ class JoinGroup(
     }
 
     /** A restored phone is already a member: make the group on this phone with that key, keep the invitation's key, and start the sync with the host. */
-    private fun restoreInto(ticket: Ticket, slot: Long) {
+    private fun restoreInto(ticket: Ticket, slot: Long, keys: List<EpochKey>) {
         secrets.saveGroupKey(ticket.groupId, ticket.epoch, ticket.groupKey)
+        storeEpochKeys(ticket.groupId, slot, ticket.hostId, keys)
         groups.joinGroup(ticket.groupId, slot)
         pending.delete(ticket.groupId)
         sessions.refresh()
@@ -190,7 +195,7 @@ class JoinGroup(
         // A new join uses generation 0 of this group's member slots (M11, KeySlots); the next ones are for someone who left and comes back (T11.4).
         val resolution = resolve(ticket)
         if (resolution is Resolution.Member) {
-            restoreInto(ticket, resolution.slot)
+            restoreInto(ticket, resolution.slot, resolution.keys)
             return OpenResult.Restored(ticket.groupId)
         }
         val slot = resolution?.slot ?: earlier?.keySlot ?: KeySlots.member(ticket.groupId, 0)
@@ -238,7 +243,7 @@ class JoinGroup(
         if (p.state == PendingState.OPENED) {
             // The host may have been away when the invitation was opened, so the key was only a guess: ask now which key to use.
             when (val r = resolve(ticket)) {
-                is Resolution.Member -> { restoreInto(ticket, r.slot); return RequestResult.Restored(group) }
+                is Resolution.Member -> { restoreInto(ticket, r.slot, r.keys); return RequestResult.Restored(group) }
                 is Resolution.Free -> if (r.slot != p.keySlot) { p = p.copy(keySlot = r.slot); pending.put(p) }
                 null -> Unit
             }
@@ -257,7 +262,7 @@ class JoinGroup(
                 RequestResult.Waiting
             }
             // The host did not take it. Maybe it did take an earlier try whose answer got lost: ask before giving up.
-            JoinOutcome.REFUSED -> when (statusOf(p, ticket)) {
+            JoinOutcome.REFUSED -> when (statusOf(p, ticket)?.status) {
                 JoinStatus.PENDING -> { pending.put(p.copy(name = name.trim(), phone = phone.trim(), state = PendingState.WAITING)); RequestResult.Waiting }
                 JoinStatus.APPROVED -> { pending.put(p.copy(name = name.trim(), phone = phone.trim(), state = PendingState.WAITING)); RequestResult.Waiting }
                 else -> RequestResult.NoLongerValid
@@ -267,13 +272,28 @@ class JoinGroup(
         }
     }
 
-    private suspend fun statusOf(p: PendingJoin, ticket: Ticket): JoinStatus? {
+    private suspend fun statusOf(p: PendingJoin, ticket: Ticket): JoinStatusResult? {
         val me = identity.groupIdentity(p.keySlot) ?: return null
         val link = connect(p.group, p.keySlot, p.host) ?: return null
         return try {
-            JoinClient(ticket, me, p.name, p.phone).status(link).status
+            JoinClient(ticket, me, p.name, p.phone).status(link)
         } finally {
             runCatching { link.close() }
+        }
+    }
+
+    /**
+     * Takes in the epoch keys an approval came with (R7): each is opened with this phone's key for the group, as sent by the host, and kept if this
+     * phone does not have that epoch yet. A key that does not open is simply not kept.
+     */
+    private fun storeEpochKeys(group: GroupId, keySlot: Long, host: owntally.model.PublicKey, keys: List<EpochKey>) {
+        if (keys.isEmpty()) return
+        val me = identity.groupIdentity(keySlot) ?: return
+        val have = secrets.loadKeyring(group).keyring
+        for (k in keys) {
+            if (have[k.epoch] != null) continue
+            val key = KeyRotation.openChainKey(k.sealed, me, host, group, k.epoch) ?: continue
+            secrets.saveGroupKey(group, k.epoch, key)
         }
     }
 
@@ -282,12 +302,14 @@ class JoinGroup(
         val p = pending.get(group) ?: return CheckResult.NoSuchInvitation
         if (p.state == PendingState.OPENED) return CheckResult.StillWaiting
         val ticket = ticketOf(p) ?: return CheckResult.NoSuchInvitation
-        return when (statusOf(p, ticket)) {
+        val answer = statusOf(p, ticket)
+        return when (answer?.status) {
             null -> CheckResult.HostUnreachable
             JoinStatus.PENDING -> CheckResult.StillWaiting
             JoinStatus.UNKNOWN -> CheckResult.Unknown
             JoinStatus.DECLINED -> { pending.put(p.copy(state = PendingState.DECLINED)); CheckResult.Declined }
             JoinStatus.APPROVED -> {
+                storeEpochKeys(group, p.keySlot, p.host, answer.keys)
                 groups.joinGroup(group, p.keySlot)
                 pending.put(p.copy(state = PendingState.APPROVED))
                 sessions.refresh()

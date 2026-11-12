@@ -1,5 +1,6 @@
 package owntally.sync
 
+import owntally.crypto.KeyRotation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

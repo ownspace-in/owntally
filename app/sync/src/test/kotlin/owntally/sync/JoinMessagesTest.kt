@@ -1,5 +1,6 @@
 package owntally.sync
 
+import kotlin.test.assertFailsWith
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -38,7 +39,7 @@ class JoinMessagesTest {
         }
         assertFailsWith<IllegalArgumentException> { EpochKey(0, owntally.model.SealedKey(bytes(80, 9))) }
         assertFailsWith<IllegalArgumentException> { JoinMessage.StatusReply(JoinStatus.APPROVED, List(JoinLimits.MAX_CHAIN_KEYS + 1) { k }) }
-        val oversize = JoinCodec.encode(JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(k))).also { it[7] = 0x05; it[8] = 0x00 } // length 1280 > 1024
+        val oversize = JoinCodec.encode(JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(k))).also { it[11] = 0x05; it[12] = 0x00 } // length 1280 > 1024
         assertNull(JoinCodec.decode(oversize))
         val countOff = JoinCodec.encode(JoinMessage.StatusReply(JoinStatus.APPROVED, listOf(k))).also { it[6] = 2 } // says two keys, carries one
         assertNull(JoinCodec.decode(countOff))

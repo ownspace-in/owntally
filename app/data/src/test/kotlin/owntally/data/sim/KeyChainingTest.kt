@@ -145,16 +145,16 @@ class KeyChainingTest {
         val mallory = SimDevice.joined(21, 1, "Mallory", asha)
         assertTrue(ashaSession.addExpense("Dinner", Money(30_000), asha.key, 20_000, Split.Equal(setOf(asha.key))) is AddResult.Added)
         assertTrue(ashaSession.rotateKey() is AddResult.Added)
+        // Mallory syncs with Asha first: she holds k1 and k2. (Before the join host listens, so the two do not compete for Asha's connections.)
+        syncPair(mallory, asha)
         val server = hostServes()
         rohanAsks()
         val member = requests.waiting(group).single().member
         requests.approve(group, member, "Rohan V")
-        // Mallory syncs with Asha: she holds k1 and k2 and sees Rohan's admission.
-        syncPair(mallory, asha)
         val malloryId = mallory.env.identity.groupIdentity(mallory.slot)!!
         val wrong = GroupKey.generate()
         val c = (mallory.env.groups.envelopes(group).envelopes.filter { it.author == mallory.key }.maxOfOrNull { it.counter } ?: 0L) + 1
-        val bait = Event(1, mallory.key, c, if (c > 1) mapOf(mallory.key to c - 1) else emptyMap(), 0, EventBody.ProfileUpdated("Mallory", "98765 00001"))
+        val bait = Event(1, mallory.key, c, if (c > 1) mapOf(mallory.key to c - 1) else emptyMap(), 0, EventBody.ProfileUpdated("Bait", "98765 99999"))
         mallory.env.groups.appendEnvelope(group, EventSealing.seal(malloryId, group, 1, wrong, bait)) // "epoch 1", but under WRONG
 
         assertEquals(CheckResult.Approved, rohan().check(group)) // the host's answer carries the real k1 and k2
@@ -164,7 +164,7 @@ class KeyChainingTest {
         assertTrue(rohanKeyring()[1]!!.bytes().contentEquals(realK1.bytes()), "epoch 1's key is the host's, not Mallory's")
         assertEquals(1, rohanView().state.expenses.size, "Dinner is read")
         assertEquals(1, rohanView().counts.unreadable, "the bait is the one thing that cannot be read")
-        assertNull(rohanView().state.members[mallory.key]?.takeIf { it.phone == "98765 00001" }, "and it changed nothing")
+        assertEquals("Mallory", rohanView().state.members[mallory.key]?.name, "the bait's profile never took effect")
     }
 
     private suspend fun syncPair(a: SimDevice, b: SimDevice) {
