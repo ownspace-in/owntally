@@ -78,7 +78,9 @@ dependencies {
     implementation(project(":app:sync"))
     // Nearby Connections (same-room sync, M6): Google Play services' client library for it. It adds only ACCESS_NETWORK_STATE to the manifest and no
     // reporting library (checked on 8 Nov 2026); NetworkUseGuardTest allows this one Play services library and no other.
-    implementation("com.google.android.gms:play-services-nearby:19.5.1")
+    // Held at 19.3.0: 19.5.1 is built with Kotlin 2.4 metadata, which the Kotlin 2.2 toolchain refuses ("binary version ... 2.4.0, expected 2.2.0").
+    // It waits for the AGP 9 migration, like the Kotlin plugins (.github/dependabot.yml).
+    implementation("com.google.android.gms:play-services-nearby:19.3.0")
     // Iroh (decision I1/I2, M7): direct phone-to-phone connections with our relay as the home relay. MIT or Apache-2.0; a Rust library, so about 14 MB
     // for each phone architecture (see the ABI filter above) and the vulnerability check cannot see inside it (docs/tasks/M7-internet-sync.md, T7.4).
     implementation("computer.iroh:iroh-android:1.2.0")
