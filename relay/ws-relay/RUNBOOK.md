@@ -1,5 +1,7 @@
 # Runbook: deploy the WebSocket relay on a fresh VM
 
+**Step by step with a check after each step:** `docs/DEPLOY_VM.md` section 5b.
+
 **Scripted version:** `docs/DEPLOY_VM.md` and `deploy/vm/` do the steps below (and the Iroh relay's) with scripts. This runbook stays the explanation of what each step is for.
 
 Goal: `wss://relay.ownspace.in/ws` accepts connections, restarts if it crashes, and starts at boot. The same nginx also serves the static invite page at `joinowntally.ownspace.in` (see `site/README.md`). Written so someone who has not seen the project can follow it. If a step fails, fix the runbook as part of the same change.
@@ -131,7 +133,7 @@ cd relay/ws-relay && go run ./tools/smoke        # prints: OK  connect=...  roun
 | See relay logs | `sudo journalctl -u ws-relay -f` |
 | See how many clients are connected | `sudo journalctl -u ws-relay -n 5 --no-pager` (a stats line is logged every minute) |
 | Restart | `sudo systemctl restart ws-relay` |
-| Update the program | build as in step 2, `scp` the file, then `sudo install -m 0755 ~/ws-relay /usr/local/bin/ws-relay && sudo systemctl restart ws-relay` |
+| Update the program | build as in step 2, `scp` the file, save the old one (`sudo cp -a /usr/local/bin/ws-relay /usr/local/bin/ws-relay.prev`), then `sudo install -m 0755 ~/ws-relay /usr/local/bin/ws-relay && sudo systemctl restart ws-relay` |
 | Change limits | edit the `ExecStart` line in `/etc/systemd/system/ws-relay.service` (flags are listed in `README.md`; the repo's file has the production values `-connects-per-min 300 -max-per-room 40`, decision R3), then `sudo systemctl daemon-reload && sudo systemctl restart ws-relay`. Connected phones reconnect by themselves within seconds. |
 | Check the certificate | `echo | openssl s_client -connect relay.ownspace.in:443 -servername relay.ownspace.in 2>/dev/null | openssl x509 -noout -dates` |
 
@@ -160,7 +162,7 @@ The Iroh relay's own checks are in `relay/iroh-relay/RUNBOOK.md`. Also ask the s
 This version admits a connection for a member key only to the holder of that key (docs/CRYPTO.md section 7a). There is **no optional mode**: a client that does not sign in is refused, so the relay and the app have to be updated together (decision D1 of docs/tasks/M12-relay-signin.md; nothing is released yet, so it is only your own phones).
 
 1. Build the new program (step 2) and copy it to the VM; run the smoke test from your laptop against the new program **after** it is running (step 6): the smoke tool signs in with keys it makes for itself.
-2. On the VM: `sudo install -m 0755 ~/ws-relay /usr/local/bin/ws-relay && sudo systemctl restart ws-relay`, then `sudo journalctl -u ws-relay -n 5 --no-pager` (the stats line now ends in `authfail=<count>`: connections refused because the client did not hold the key it named).
+2. On the VM: first save the old program (`sudo cp -a /usr/local/bin/ws-relay /usr/local/bin/ws-relay.prev`), and **check that the unit has the production limits** (`systemctl cat ws-relay | grep ExecStart` must end in `-connects-per-min 300 -max-per-room 40`; on 16 Nov 2026 the VM's did not, because the unit of 20 Oct had never been replaced: copy the repo's `deploy/ws-relay.service` over, `sudo systemctl daemon-reload`). Then `sudo install -m 0755 ~/ws-relay /usr/local/bin/ws-relay && sudo systemctl restart ws-relay`, then `sudo journalctl -u ws-relay -n 5 --no-pager` (the stats line now ends in `authfail=<count>`: connections refused because the client did not hold the key it named).
 3. Install the new app on your phones. Until you do, an old app build gets "Cannot reach the relay" on the relay path (Iroh and the local network are unaffected).
 4. To check from a phone's side: a second client naming one of your members' keys without holding it is refused (the Go test `TestAnImpostorCannotReplaceOrDisturbTheRealMember` does this against the program itself; the app's `RealRelayTest` does it with the app's code).
 

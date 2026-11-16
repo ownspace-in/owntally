@@ -51,4 +51,10 @@ fi
 # The access-line guard: the config in the repo must not have an active access line.
 if grep -q '^access' "$HERE/../../relay/iroh-relay/config.toml"; then bad "repo config.toml has an active access line"; else ok "repo config.toml has no active access line"; fi
 
+# status.sh warns about the unit flags it names: those must still be in the repo's unit, or the warning would be wrong.
+for flag in '-trust-proxy' '-connects-per-min 300' '-max-per-room 40'; do
+    grep -q -- "$flag" "$HERE/../../relay/ws-relay/deploy/ws-relay.service" && grep -q -- "$flag" "$HERE/remote/status.sh" \
+        && ok "status.sh and the repo's unit agree on '$flag'" || bad "status.sh and the repo's unit disagree on '$flag'"
+done
+
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
