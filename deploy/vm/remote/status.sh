@@ -6,6 +6,14 @@ for u in ws-relay iroh-relay nginx; do printf '  %-12s %s\n' "$u" "$(systemctl i
 echo "== listeners (expected: 80 and 443 public; 8080, 3340, 8443 on 127.0.0.1; UDP 7842)"
 ss -ltn 2>/dev/null | grep -E ':(80|443|8080|3340|8443)[[:space:]]' | sed 's/^/  /'
 ss -lun 2>/dev/null | grep ':7842' | sed 's/^/  /'
+echo "== ws-relay unit limits (owner decision R3: 300 new connections a minute, 40 clients a room; relay/ws-relay/deploy/ws-relay.service)"
+exec_line="$(systemctl cat ws-relay 2>/dev/null | grep '^ExecStart=')"
+for flag in '-trust-proxy' '-connects-per-min 300' '-max-per-room 40'; do
+    case "$exec_line" in
+        *"$flag"*) printf '  ok       %s\n' "$flag" ;;
+        *) printf '  MISSING  %s  <-- the unit on this VM is older than the repo'"'"'s (docs/DEPLOY_VM.md section 5b, step 4)\n' "$flag" ;;
+    esac
+done
 echo "== relay health on loopback"
 printf '  ws-relay /healthz        %s\n' "$(curl -s --max-time 3 http://127.0.0.1:8080/healthz || echo unreachable)"
 printf '  iroh-relay /generate_204 %s\n' "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3340/generate_204 || echo unreachable)"
