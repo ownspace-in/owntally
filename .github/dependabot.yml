@@ -42,6 +42,10 @@ updates:
         update-types: ["version-update:semver-minor"]
       - dependency-name: "com.google.devtools.ksp"
         update-types: ["version-update:semver-minor"]
+      # play-services-nearby 19.5.x is built with Kotlin 2.4 metadata (the android job failed with "binary version ... 2.4.0, expected
+      # 2.2.0"), so it waits for the AGP 9 migration, like the Kotlin entries above. Its patch updates are still proposed.
+      - dependency-name: "com.google.android.gms:play-services-nearby"
+        update-types: ["version-update:semver-minor"]
       - dependency-name: "org.jetbrains.kotlinx:kotlinx-coroutines-*"
         update-types: ["version-update:semver-minor"]
       - dependency-name: "org.jetbrains.kotlinx:kotlinx-serialization-*"
