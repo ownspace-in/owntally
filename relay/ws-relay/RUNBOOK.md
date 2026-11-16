@@ -1,5 +1,7 @@
 # Runbook: deploy the WebSocket relay on a fresh VM
 
+**Scripted version:** `docs/DEPLOY_VM.md` and `deploy/vm/` do the steps below (and the Iroh relay's) with scripts. This runbook stays the explanation of what each step is for.
+
 Goal: `wss://relay.ownspace.in/ws` accepts connections, restarts if it crashes, and starts at boot. The same nginx also serves the static invite page at `joinowntally.ownspace.in` (see `site/README.md`). Written so someone who has not seen the project can follow it. If a step fails, fix the runbook as part of the same change.
 
 **What has been run, and when.** On the real VM on 20 Oct 2026: the program was installed under systemd, nginx and certbot were set up **by the shortcut at the end of step 4** (not by steps 4a to 4c), and the smoke test passed (step 6). The security headers of the invite site were added by hand on 3 Nov 2026 and checked from outside. Phones used the relay on mobile data on 2 Nov 2026. **Not run on a real VM:** steps 4a to 4c as written (they were checked on a development machine with a self-signed certificate: routing, the WebSocket upgrade, redirects, content types), and a run of the whole runbook from a fresh VM, which is the owner's check of M9. The program, its tests, the smoke tool and the unit file's syntax are verified on a development machine; the limits of step 7 were measured against the real program in M7 (T7.9).

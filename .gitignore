@@ -32,3 +32,7 @@ __pycache__/
 
 # Kotlin compiler session files
 .kotlin/
+
+# VM deploy scripts: local settings and build output (deploy/vm/README.md)
+deploy/vm/config.env
+deploy/vm/dist/
